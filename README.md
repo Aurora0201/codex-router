@@ -20,7 +20,7 @@ npm start
 chatgpt_base_url = "http://127.0.0.1:8317/backend-api/codex"
 ```
 
-然后正常运行 Codex。新 thread 使用当前默认账号；已有 thread、WebSocket 与 compact 请求继续使用最初绑定的账号。切换默认账号不会迁移已有会话。
+然后正常运行 Codex。**添加账号后不会自动选中当前账号**：授权完成后在 Admin UI 手动选择 Current Account，新 thread 才会使用它。已有 thread、WebSocket 与 compact 请求继续使用最初绑定的账号；切换当前账号不会迁移已有会话。
 
 开发模式同时启动 Gateway 与 Vite：
 
@@ -30,12 +30,12 @@ npm run dev
 
 ## 管理功能
 
-- Accounts：官方 Browser OAuth、认证刷新、额度刷新、启用/禁用、默认账号和安全移除。
-- Sessions：查看 routing key 哈希、transport、账号与活跃状态；仅空闲会话可释放。
-- Settings：metadata 日志开关与主题；Prompt/工具内容日志永久关闭。
+- Accounts：官方 Browser OAuth（无标签输入，以 ChatGPT Account ID 标记账号）、手动选择当前账号、认证刷新、额度刷新、启用/禁用和安全移除。
+- Sessions：查看 routing key 哈希、Account ID、transport、账号与活跃状态；仅空闲会话可释放。
+- Settings：metadata 日志开关与主题；Prompt/工具内容日志永久关闭。当前账号不在 Settings 中，属于运行状态，位于 Accounts 页面顶部与全局 Header。
 - Dashboard：运行时间、活跃 session/WS、请求与错误统计。
 
-账号认证只写入 `data/accounts/<id>/codex-home/`。SQLite 只保存标签、状态、额度和路由 metadata，不包含 access/refresh/id token。FedRAMP 账号在本版本会被识别、禁用并显示“不支持”，不会静默忽略路由要求。
+账号认证只写入 `data/accounts/<id>/codex-home/`。登录过程中的临时工作区位于 `data/login-staging/`，成功后移入 accounts，失败则清理且不写数据库。SQLite 只保存 Account ID、状态、额度和路由 metadata，不包含 access/refresh/id token。FedRAMP 账号在本版本会被识别、禁用并显示“不支持”，不会静默忽略路由要求。
 
 ## 主账号隔离核验
 
@@ -53,7 +53,7 @@ npm run hash:main-auth
 |---|---|---|
 | `GATEWAY_HOST` | `127.0.0.1` | 只接受 `127.0.0.1` 或 `::1` |
 | `GATEWAY_PORT` | `8317` | 本地 Gateway/Admin 端口 |
-| `GATEWAY_DATA_DIR` | `<repo>/data` | DB 与隔离账号目录 |
+| `GATEWAY_DATA_DIR` | `<repo>/data` | DB、隔离账号与登录暂存目录 |
 | `CODEX_GATEWAY_CLI` | 锁定的官方 npm CLI | 可显式指定 Codex 可执行文件 |
 | `GATEWAY_LOG_LEVEL` | `info` | Fastify/Pino 日志级别 |
 
