@@ -1,8 +1,9 @@
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { AppServerClient } from "../src/accounts/app-server-client.js";
+import { AccountService } from "../src/accounts/account-service.js";
 import { CredentialReader } from "../src/accounts/credential-reader.js";
 import { loadConfig } from "../src/config.js";
 import { GatewayDatabase } from "../src/db/database.js";
@@ -75,7 +76,7 @@ describe("Codex app-server adapter", () => {
     const client = new AppServerClient(process.execPath, home, [script]);
     await client.start();
     expect(await client.call("account/login/start", { type: "chatgpt" })).toMatchObject({ loginId: "login-1", authUrl: expect.stringContaining("openai.test") });
-    expect(await client.call("account/rateLimits/read", {})).toMatchObject({ primary: { usedPercent: 25 } });
+    expect(await client.call("account/rateLimits/read", {})).toMatchObject({ rateLimits: { primary: { usedPercent: 25 } } });
     expect(client.codexHome).toBe(home);
     await client.close();
   });
@@ -88,5 +89,31 @@ describe("Codex app-server adapter", () => {
     await client.start();
     expect(await client.call("account/read", { refreshToken: false })).toMatchObject({ requiresOpenaiAuth: true });
     await client.close();
+  });
+
+  it("completes isolated browser-login metadata, limits and official refresh flow", async () => {
+    const root = await tempDir();
+    const config = loadConfig({
+      dataDir: path.join(root, "data"),
+      accountsDir: path.join(root, "data", "accounts"),
+      databasePath: path.join(root, "data", "gateway.db"),
+      codexCliPath: process.execPath,
+      codexCliArgs: [path.resolve("test/fake-app-server.mjs")],
+      developerMode: true,
+    });
+    const database = new GatewayDatabase(config.databasePath);
+    const accounts = new AccountService(config, database);
+    const login = await accounts.startBrowserLogin("Personal");
+    expect(login.authUrl).toMatch(/^https:\/\/auth\.openai\.test/);
+    expect((await accounts.getLoginStatus(login.loginId)).status).toBe("complete");
+    const account = database.getAccount(login.accountId)!;
+    expect(account).toMatchObject({ authStatus: "ready", email: "owner@example.test", planType: "plus", primaryUsedPercent: 25, secondaryUsedPercent: 10 });
+    expect(account.codexHome).toContain(path.join("data", "accounts", login.accountId, "codex-home"));
+    await accounts.refreshAuth(login.accountId);
+    const rpcLog = await readFile(path.join(account.codexHome, "rpc.log"), "utf8");
+    expect(rpcLog).toContain('"method":"account/read","params":{"refreshToken":true}');
+    expect(JSON.stringify(database.listAccounts())).not.toContain("isolated-access");
+    await accounts.close();
+    database.close();
   });
 });
