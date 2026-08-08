@@ -1,0 +1,126 @@
+import { Transform } from "node:stream";
+import { pipeline } from "node:stream/promises";
+import type { FastifyReply, FastifyRequest } from "fastify";
+import { request as undiciRequest, type Dispatcher } from "undici";
+import type { Transport } from "../types.js";
+import { AccountService } from "../accounts/account-service.js";
+import { GatewayDatabase } from "../db/database.js";
+import { AccountSelector } from "../routing/account-selector.js";
+import { resolveSession } from "../routing/session-resolver.js";
+import { hasBrowserOrigin } from "../security/origin-guard.js";
+import { buildUpstreamHeaders, copyResponseHeaders } from "./headers.js";
+
+interface HttpProxyOptions {
+  upstreamBaseUrl: string;
+  accounts: AccountService;
+  selector: AccountSelector;
+  database: GatewayDatabase;
+}
+
+function errorStatus(error: unknown): number {
+  switch ((error as Error).message) {
+    case "no_authenticated_account": return 503;
+    case "bound_account_disabled":
+    case "bound_account_not_ready":
+    case "fedramp_accounts_not_supported": return 409;
+    default: return 502;
+  }
+}
+
+function responseHeaders(headers: Record<string, string | string[] | undefined>): Record<string, string | string[] | undefined> {
+  return headers;
+}
+
+export class HttpProxy {
+  constructor(private readonly options: HttpProxyOptions) {}
+
+  async handle(request: FastifyRequest, reply: FastifyReply, path: "/responses" | "/responses/compact" | "/models"): Promise<void> {
+    if (hasBrowserOrigin(request)) {
+      await reply.code(403).send({ error: "browser_origin_not_allowed" });
+      return;
+    }
+
+    const startedAt = Date.now();
+    const rawBody = request.method === "GET" ? Buffer.alloc(0) : this.rawBody(request.body);
+    const transport: Transport = path === "/models" ? "models" : path === "/responses/compact" ? "compact" : "http";
+    const identity = path === "/models" ? null : resolveSession(request.headers, rawBody, transport);
+    let finishActivity: () => void = () => {};
+
+    try {
+      const account = path === "/models" ? this.options.selector.selectCatalog() : this.options.selector.select(identity!, transport);
+      if (identity) finishActivity = this.options.database.beginActivity(identity.routingKey);
+      let credential = await this.options.accounts.getCredential(account.id);
+      const controller = new AbortController();
+      const abort = () => {
+        if (!reply.raw.writableEnded) controller.abort();
+      };
+      request.raw.once("aborted", abort);
+      reply.raw.once("close", abort);
+
+      const send = (): Promise<Dispatcher.ResponseData> => undiciRequest(`${this.options.upstreamBaseUrl}${path}`, {
+        method: request.method as Dispatcher.HttpMethod,
+        headers: buildUpstreamHeaders(request.headers, credential, request.method === "GET" ? undefined : rawBody.byteLength),
+        body: request.method === "GET" ? undefined : rawBody,
+        signal: controller.signal,
+        headersTimeout: 120_000,
+        bodyTimeout: 0,
+      });
+
+      let upstream = await send();
+      if (upstream.statusCode === 401) {
+        await upstream.body.dump();
+        credential = await this.options.accounts.refreshAuth(account.id);
+        upstream = await send();
+      }
+      if (upstream.statusCode === 429) {
+        this.options.database.updateAccount(account.id, { authStatus: "rate_limited" });
+        void this.options.accounts.refreshRateLimits(account.id).catch(() => undefined);
+      }
+
+      copyResponseHeaders(responseHeaders(upstream.headers), reply.raw);
+      reply.hijack();
+      reply.raw.writeHead(upstream.statusCode);
+      let bytesOut = 0;
+      const counter = new Transform({
+        transform(chunk: Buffer, _encoding, callback) {
+          bytesOut += chunk.byteLength;
+          callback(null, chunk);
+        },
+      });
+      await pipeline(upstream.body, counter, reply.raw);
+      this.options.database.logRequest({
+        requestId: request.id,
+        route: path,
+        transport,
+        accountId: account.id,
+        routingKey: identity?.routingKey,
+        statusCode: upstream.statusCode,
+        durationMs: Date.now() - startedAt,
+        bytesIn: rawBody.byteLength,
+        bytesOut,
+      });
+    } catch (error) {
+      const status = errorStatus(error);
+      this.options.database.logRequest({
+        requestId: request.id,
+        route: path,
+        transport,
+        routingKey: identity?.routingKey,
+        statusCode: status,
+        durationMs: Date.now() - startedAt,
+        bytesIn: rawBody.byteLength,
+        errorCode: (error as Error).message,
+      });
+      if (!reply.raw.headersSent) await reply.code(status).send({ error: (error as Error).message });
+      else reply.raw.destroy(error as Error);
+    } finally {
+      finishActivity();
+    }
+  }
+
+  private rawBody(body: unknown): Buffer {
+    if (Buffer.isBuffer(body)) return body;
+    if (body === undefined || body === null) return Buffer.alloc(0);
+    throw new Error("raw_request_body_unavailable");
+  }
+}
