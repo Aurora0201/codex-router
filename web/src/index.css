@@ -5,57 +5,87 @@
   --font-mono: "Roboto Mono", ui-monospace, Consolas, monospace;
   --color-background: var(--background);
   --color-card: var(--card);
-  --color-card-raised: var(--card-raised);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
   --color-foreground: var(--foreground);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
   --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
 }
 
 :root {
   color-scheme: dark;
   --background: #07131f;
   --card: #0c1b29;
-  --card-raised: #102334;
+  --card-foreground: #e8f2f5;
+  --popover: #0c1b29;
+  --popover-foreground: #e8f2f5;
   --foreground: #e8f2f5;
   --muted: #132838;
   --muted-foreground: #8ea4b2;
   --border: #20394a;
+  --input: #20394a;
+  --ring: #35d4c7;
   --primary: #35d4c7;
   --primary-foreground: #042421;
+  --secondary: #132838;
+  --secondary-foreground: #e8f2f5;
+  --accent: #132838;
+  --accent-foreground: #e8f2f5;
   --destructive: #f07178;
+  --destructive-foreground: #ffffff;
 }
 
 :root[data-theme="light"] {
   color-scheme: light;
   --background: #eef5f6;
   --card: #ffffff;
-  --card-raised: #f7fbfb;
+  --card-foreground: #102631;
+  --popover: #ffffff;
+  --popover-foreground: #102631;
   --foreground: #102631;
   --muted: #e3edef;
   --muted-foreground: #607984;
   --border: #cedde1;
+  --input: #cedde1;
+  --ring: #087f78;
   --primary: #087f78;
   --primary-foreground: #ffffff;
+  --secondary: #e3edef;
+  --secondary-foreground: #102631;
+  --accent: #e3edef;
+  --accent-foreground: #102631;
   --destructive: #b63742;
+  --destructive-foreground: #ffffff;
 }
 
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
     color-scheme: light;
-    --background: #eef5f6; --card: #ffffff; --card-raised: #f7fbfb; --foreground: #102631;
-    --muted: #e3edef; --muted-foreground: #607984; --border: #cedde1; --primary: #087f78;
-    --primary-foreground: #ffffff; --destructive: #b63742;
+    --background: #eef5f6; --card: #ffffff; --card-foreground: #102631;
+    --popover: #ffffff; --popover-foreground: #102631; --foreground: #102631;
+    --muted: #e3edef; --muted-foreground: #607984; --border: #cedde1;
+    --input: #cedde1; --ring: #087f78; --primary: #087f78; --primary-foreground: #ffffff;
+    --secondary: #e3edef; --secondary-foreground: #102631; --accent: #e3edef;
+    --accent-foreground: #102631; --destructive: #b63742; --destructive-foreground: #ffffff;
   }
 }
 
 * { border-color: var(--border); }
 body { margin: 0; min-width: 320px; min-height: 100vh; background: var(--background); color: var(--foreground); font-family: var(--font-sans); }
 button, input, select { font: inherit; }
-button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 
 .transport-trace {
   background-image: linear-gradient(90deg, transparent, color-mix(in srgb, var(--primary) 75%, transparent), transparent);
