@@ -126,6 +126,11 @@ beforeAll(async () => {
   await writeFile(path.join(accountHome, "auth.json"), JSON.stringify({ tokens: { access_token: "top-secret", account_id: "upstream-account", refresh_token: "never-log" } }));
   gateway.database.accounts.insert({ id: "local", codexHome: accountHome });
   gateway.database.accounts.update("local", { authStatus: "ready", email: "test@example.test", planType: "plus", chatgptAccountId: "upstream-account" });
+  const secondHome = path.join(root, "data", "accounts", "second", "codex-home");
+  await mkdir(secondHome, { recursive: true });
+  await writeFile(path.join(secondHome, "auth.json"), JSON.stringify({ tokens: { access_token: "second-secret", account_id: "upstream-account-2", refresh_token: "never-log-2" } }));
+  gateway.database.accounts.insert({ id: "second", codexHome: secondHome });
+  gateway.database.accounts.update("second", { authStatus: "ready", email: "second@example.test", planType: "plus", chatgptAccountId: "upstream-account-2" });
   gateway.activeAccounts.select("local");
   gatewayUrl = await gateway.app.listen({ host: "127.0.0.1", port: 0 });
 });
@@ -155,7 +160,7 @@ describe("HTTP, SSE, compact and models", () => {
     expect(request.headers.cookie).toBeUndefined();
   });
 
-  it("proxies compact on the original sticky account and models on catalog account", async () => {
+  it("proxies compact and models on the currently selected active account", async () => {
     const compact = Buffer.from('{"client_metadata":{"thread_id":"http-thread"},"opaque":"unchanged"}');
     const compactResult = await streamRequest(`${gatewayUrl}/backend-api/codex/responses/compact`, compact);
     expect(compactResult.status).toBe(200);
@@ -164,8 +169,13 @@ describe("HTTP, SSE, compact and models", () => {
     expect(models.status).toBe(200);
     expect(await models.json()).toEqual({ data: [{ id: "mock-codex" }] });
     expect(models.headers.get("x-models-etag")).toBe("models-1");
-    const sessions = gateway.database.sessions.list().filter((session) => session.threadId === "http-thread");
-    expect(new Set(sessions.map((session) => session.accountId))).toEqual(new Set(["local"]));
+    expect(received.findLast((entry) => entry.url.endsWith("/responses/compact"))!.headers.authorization).toBe("Bearer top-secret");
+
+    gateway.activeAccounts.select("second");
+    const switched = await streamRequest(`${gatewayUrl}/backend-api/codex/responses/compact`, compact);
+    expect(switched.status).toBe(200);
+    expect(received.findLast((entry) => entry.url.endsWith("/responses/compact"))!.headers.authorization).toBe("Bearer second-secret");
+    gateway.activeAccounts.select("local");
   });
   it("refreshes the same account once on a pre-stream 401", async () => {
     const refresh = vi.spyOn(gateway.auth, "refresh").mockImplementation((id) => gateway.auth.getCredential(id));

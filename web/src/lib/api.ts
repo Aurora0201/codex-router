@@ -20,19 +20,6 @@ export interface AccountsResponse {
   activeAccountId: string | null;
   accounts: Account[];
 }
-export interface Session {
-  routingKey: string;
-  routingKeyHash: string;
-  accountId: string;
-  accountChatgptId: string | null;
-  threadId: string | null;
-  sessionId: string | null;
-  transport: string;
-  status: string;
-  createdAt: number;
-  lastSeenAt: number;
-  activeRequests: number;
-}
 export interface Settings {
   gatewayAddress: string;
   gatewayPort: number;
@@ -43,8 +30,6 @@ export interface Settings {
 }
 export interface Stats {
   uptimeSeconds: number;
-  activeSessions: number;
-  activeWebSockets: number;
   requestsToday: number;
   errorsToday: number;
   accountsReady: number;
@@ -96,7 +81,6 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   health: async () => { const health = await request<Health>("/api/health"); csrfToken = health.csrfToken; return health; },
   accounts: () => request<AccountsResponse>("/api/accounts"),
-  sessions: () => request<Session[]>("/api/sessions"),
   settings: () => request<Settings>("/api/settings"),
   stats: () => request<Stats>("/api/stats"),
   startLogin: () => request<Login>("/api/account-logins", { method: "POST", body: "{}" }),
@@ -108,7 +92,6 @@ export const api = {
   clearActive: () => request<void>("/api/active-account", { method: "DELETE" }),
   refreshAuth: (id: string) => request<Account>(`/api/accounts/${id}/refresh-auth`, { method: "POST", body: "{}" }),
   refreshLimits: (id: string) => request<Account>(`/api/accounts/${id}/refresh-limits`, { method: "POST", body: "{}" }),
-  releaseSession: (key: string) => request<void>(`/api/sessions/${encodeURIComponent(key)}/release`, { method: "POST", body: "{}" }),
   updateSettings: (values: Partial<Settings>) => request<Settings>("/api/settings", { method: "PATCH", body: JSON.stringify(values) }),
   codexStatus: () => request<CodexStatus>("/api/codex/status"),
   codexApplyConfig: () => request<CodexStatus>("/api/codex/apply-config", { method: "POST", body: "{}" }),

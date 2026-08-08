@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
 import type { Transport } from "../../types.js";
 import type { SettingsRepository } from "./settings-repository.js";
@@ -10,7 +10,6 @@ export interface RequestLogEntry {
   route: string;
   transport: Transport;
   accountId?: string;
-  routingKey?: string;
   statusCode?: number;
   durationMs?: number;
   bytesIn?: number;
@@ -27,11 +26,10 @@ export class RequestLogRepository {
   log(input: RequestLogEntry): void {
     if (!this.settings.requestMetadataLoggingEnabled()) return;
     this.db.prepare(`
-      INSERT INTO request_log(id, request_id, route, transport, account_id, routing_key_hash, status_code, duration_ms, bytes_in, bytes_out, error_code, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO request_log(id, request_id, route, transport, account_id, status_code, duration_ms, bytes_in, bytes_out, error_code, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       randomUUID(), input.requestId ?? null, input.route, input.transport, input.accountId ?? null,
-      input.routingKey ? createHash("sha256").update(input.routingKey).digest("hex").slice(0, 16) : null,
       input.statusCode ?? null, input.durationMs ?? null, input.bytesIn ?? null, input.bytesOut ?? null,
       input.errorCode ?? null, Date.now(),
     );

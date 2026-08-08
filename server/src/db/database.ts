@@ -3,7 +3,6 @@ import path from "node:path";
 import Database from "better-sqlite3";
 import { migrate } from "./migrations.js";
 import { AccountRepository } from "./repositories/account-repository.js";
-import { SessionRepository } from "./repositories/session-repository.js";
 import { SettingsRepository } from "./repositories/settings-repository.js";
 import { RequestLogRepository } from "./repositories/request-log-repository.js";
 
@@ -12,7 +11,6 @@ type SqliteDatabase = Database.Database;
 export class GatewayDatabase {
   readonly raw: SqliteDatabase;
   readonly accounts: AccountRepository;
-  readonly sessions: SessionRepository;
   readonly settings: SettingsRepository;
   readonly requestLog: RequestLogRepository;
 
@@ -26,7 +24,6 @@ export class GatewayDatabase {
     this.raw.pragma("busy_timeout = 5000");
     migrate(this.raw);
     this.accounts = new AccountRepository(this.raw);
-    this.sessions = new SessionRepository(this.raw);
     this.settings = new SettingsRepository(this.raw);
     this.requestLog = new RequestLogRepository(this.raw, this.settings);
     this.activeAccountId = this.readActiveAccountId();

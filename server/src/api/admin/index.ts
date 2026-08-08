@@ -4,7 +4,6 @@ import { registerHealthRoutes } from "./health-routes.js";
 import { registerAccountRoutes } from "./account-routes.js";
 import { registerAccountLoginRoutes } from "./account-login-routes.js";
 import { registerActiveAccountRoutes } from "./active-account-routes.js";
-import { registerSessionRoutes } from "./session-routes.js";
 import { registerSettingsRoutes } from "./settings-routes.js";
 import { registerStatsRoutes } from "./stats-routes.js";
 import { registerCodexRoutes } from "./codex-routes.js";
@@ -13,16 +12,14 @@ import { CodexConfigService } from "../../codex/codex-config.js";
 export async function registerAdminApi(
   app: FastifyInstance,
   ctx: AdminContext,
-  activity: { count(key: string): number },
   codexConfig: CodexConfigService,
 ): Promise<void> {
   registerHealthRoutes(app, ctx);
   registerAccountRoutes(app, ctx);
   registerAccountLoginRoutes(app, ctx);
   registerActiveAccountRoutes(app, ctx);
-  registerSessionRoutes(app, ctx, activity);
   registerSettingsRoutes(app, ctx);
-  registerStatsRoutes(app, ctx, activity);
+  registerStatsRoutes(app, ctx);
   registerCodexRoutes(app, ctx, codexConfig);
 }
 

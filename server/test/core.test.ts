@@ -12,11 +12,7 @@ import { CredentialReader } from "../src/accounts/credential-reader.js";
 import { loadConfig } from "../src/config.js";
 import { GatewayDatabase } from "../src/db/database.js";
 import { buildUpstreamHeaders } from "../src/proxy/headers.js";
-import { resolveSession } from "../src/routing/session-resolver.js";
 import { ActiveAccountService } from "../src/routing/active-account-service.js";
-import { SessionAccountResolver } from "../src/routing/session-account-resolver.js";
-import { SessionBindingService } from "../src/routing/session-binding-service.js";
-import { SessionActivityRegistry } from "../src/routing/session-activity-registry.js";
 import { parseRateLimitResponse } from "../src/accounts/rate-limit-parser.js";
 import Database from "better-sqlite3";
 
@@ -52,47 +48,40 @@ describe("security and routing core", () => {
     expect(headers).not.toHaveProperty("x-openai-fedramp");
   });
 
-  it("inspects routing metadata without changing raw payload bytes", () => {
+  it("keeps data-plane payload bytes untouched", () => {
     const raw = Buffer.from('{ "client_metadata": { "thread_id": "t-1" }, "future_item": [1, 2] }');
-    expect(resolveSession({}, raw).routingKey).toBe("thread:t-1");
     expect(raw.toString()).toBe('{ "client_metadata": { "thread_id": "t-1" }, "future_item": [1, 2] }');
   });
 
-  it("keeps bindings sticky, stores no credential columns and persists active account", async () => {
+  it("routes every request to the current active account, stores no credential columns and persists active account", async () => {
     const root = await tempDir();
     await mkdir(path.join(root, "accounts", "a", "codex-home"), { recursive: true });
     await mkdir(path.join(root, "accounts", "b", "codex-home"), { recursive: true });
     const database = new GatewayDatabase(path.join(root, "gateway.db"));
     const activeAccounts = new ActiveAccountService(database);
-    const bindings = new SessionBindingService(database);
-    const resolver = new SessionAccountResolver(database, activeAccounts, bindings);
     database.accounts.insert({ id: "a", codexHome: path.join(root, "accounts", "a", "codex-home") });
     database.accounts.insert({ id: "b", codexHome: path.join(root, "accounts", "b", "codex-home") });
     database.accounts.update("a", { authStatus: "ready" });
     database.accounts.update("b", { authStatus: "ready" });
     activeAccounts.select("a");
-    const identity = resolveSession({ "thread-id": "sticky" }, null);
-    expect(resolver.resolve(identity, "http").id).toBe("a");
+    expect(activeAccounts.get()!.id).toBe("a");
     activeAccounts.select("b");
-    expect(resolver.resolve(identity, "compact").id).toBe("a");
+    expect(activeAccounts.get()!.id).toBe("b");
     const columns = database.raw.prepare("PRAGMA table_info(accounts)").all() as { name: string }[];
     expect(columns.map((column) => column.name)).not.toEqual(expect.arrayContaining(["access_token", "refresh_token", "id_token", "password", "browser_cookie"]));
-    database.sessions.release(identity.routingKey);
     const accounts = new AccountService({ accountsDir: path.join(root, "accounts") } as never, database);
     await accounts.remove("a");
     expect(database.accounts.get("a")).toBeNull();
     database.close();
   });
 
-  it("rejects new sessions without a manually selected active account", async () => {
+  it("rejects requests without a manually selected active account", async () => {
     const root = await tempDir();
     const database = new GatewayDatabase(path.join(root, "gateway.db"));
     database.accounts.insert({ id: "a", codexHome: path.join(root, "a") });
     database.accounts.update("a", { authStatus: "ready" });
     const activeAccounts = new ActiveAccountService(database);
-    const resolver = new SessionAccountResolver(database, activeAccounts, new SessionBindingService(database));
-    const identity = resolveSession({ "thread-id": "no-active" }, null);
-    expect(() => resolver.resolve(identity, "http")).toThrow("no_active_account_selected");
+    expect(activeAccounts.get()).toBeNull();
     database.close();
   });
 
@@ -124,26 +113,6 @@ describe("security and routing core", () => {
     const snake = parseRateLimitResponse({ rate_limits: { primary: { used_percent: 10, resets_at: 2, window_duration_mins: 60 }, secondary: { used_percent: 5 } } });
     expect(snake.primary).toMatchObject({ usedPercent: 10, resetsAt: 2, windowDurationMins: 60 });
     expect(snake.secondary).toMatchObject({ usedPercent: 5 });
-  });
-
-  it("tracks in-memory session activity separately from the database", async () => {
-    const root = await tempDir();
-    const database = new GatewayDatabase(path.join(root, "gateway.db"));
-    const activity = new SessionActivityRegistry();
-    database.accounts.insert({ id: "a", codexHome: path.join(root, "a") });
-    database.accounts.update("a", { authStatus: "ready" });
-    const identity = resolveSession({ "thread-id": "activity" }, null);
-    const bindings = new SessionBindingService(database);
-    const resolver = new SessionAccountResolver(database, new ActiveAccountService(database), bindings);
-    const activeAccounts = new ActiveAccountService(database);
-    activeAccounts.select("a");
-    resolver.resolve(identity, "http");
-    expect(activity.count(identity.routingKey)).toBe(0);
-    const finish = activity.begin(identity.routingKey);
-    expect(activity.count(identity.routingKey)).toBe(1);
-    finish();
-    expect(activity.count(identity.routingKey)).toBe(0);
-    database.close();
   });
 });
 
@@ -181,6 +150,8 @@ describe("database migration v2", () => {
     expect(account.chatgptAccountId).toBeNull();
     expect(database.getActiveAccountId()).toBeNull();
     expect(database.settings.get().requestMetadataLogging).toBe(true);
+    const tables = database.raw.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as { name: string }[];
+    expect(tables.map((row) => row.name)).not.toContain("session_bindings");
     database.accounts.update("legacy-1", { chatgptAccountId: "acct-upgraded", authStatus: "ready" });
     expect(database.accounts.get("legacy-1")!.chatgptAccountId).toBe("acct-upgraded");
     database.setActiveAccountId("legacy-1");

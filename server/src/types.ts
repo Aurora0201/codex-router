@@ -55,29 +55,6 @@ export interface RateLimitSnapshot {
   loadedAt: number;
 }
 
-export interface RoutingIdentity {
-  routingKey: string;
-  threadId: string | null;
-  sessionId: string | null;
-  previousResponseId: string | null;
-  temporary: boolean;
-}
-
-export interface SessionRecord {
-  routingKey: string;
-  routingKeyHash: string;
-  accountId: string;
-  accountChatgptId: string | null;
-  threadId: string | null;
-  sessionId: string | null;
-  transport: Transport;
-  status: "active" | "closed" | "expired";
-  createdAt: number;
-  lastSeenAt: number;
-  expiresAt: number | null;
-  activeRequests: number;
-}
-
 export interface GatewayConfig {
   host: "127.0.0.1" | "::1";
   port: number;

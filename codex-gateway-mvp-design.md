@@ -7,6 +7,22 @@
 
 ---
 
+> ## 修订记录（2026-08-08）：移除 Session 绑定
+>
+> 本基线早期章节中的 **会话粘性绑定（Session Sticky Routing / session_bindings）** 机制已移除。
+> 新路由语义以本节为准，与下文冲突时以本节为准：
+>
+> - 不存在"会话 → 账号"绑定；每个请求一律使用当前手动选中的 active 账号。
+> - 切换 active 账号在下一个请求立即生效，不迁移、不粘滞、不自动路由。
+> - 未选中 active 账号时，所有数据面请求失败并返回 `no_active_account_selected`。
+> - 网关不再解析请求正文中的 thread_id/session_id，数据面 payload 保持完全不透明。
+> - `session_bindings` 表、Sessions API/页面、会话活动统计、`routing_key_hash` 均已删除。
+>
+> 下文中残留的 "Session Binding"、"sticky"、"默认账号只影响新会话" 等表述均为过期设计，
+> 一律以上述新语义为准。
+
+---
+
 ## 0. 文档目的
 
 本文用于指导第一版 **Codex Gateway** 的实际开发。
@@ -19,7 +35,7 @@
 4. 保持 Codex 工具调用、Reasoning、流式输出、远端上下文压缩等能力不被破坏；
 5. 提供 React 管理页面；
 6. 尽可能使用官方现成组件与成熟库，不重复造轮子；
-7. 将账号认证、请求转发、会话绑定、管理 UI 明确分层。
+7. 将账号认证、请求转发、账号选择、管理 UI 明确分层。
 
 本文特别区分：
 
@@ -34,7 +50,7 @@
 
 ## 1.1 MVP 的一句话目标
 
-> 在不修改 Codex 核心代码、不重新实现 Responses API、不重新实现工具运行时的前提下，构建一个本地透明 Gateway，使 Codex 的 HTTP/SSE、WebSocket、工具调用、远端上下文压缩和模型发现能够正常通过 Gateway，并允许用户通过官方 ChatGPT OAuth 登录多个独立账号，由 Gateway 对新会话进行明确的账号选择与会话粘性绑定。
+> 在不修改 Codex 核心代码、不重新实现 Responses API、不重新实现工具运行时的前提下，构建一个本地透明 Gateway，使 Codex 的 HTTP/SSE、WebSocket、工具调用、远端上下文压缩和模型发现能够正常通过 Gateway，并允许用户通过官方 ChatGPT OAuth 登录多个独立账号，由 Gateway 使用用户手动选中的当前账号处理所有请求。
 
 ---
 
@@ -206,25 +222,30 @@ Gateway 所谓“刷新额度”是：
 
 ---
 
-### P0-10：会话粘性路由
+### P0-10：账号选择路由（原"会话粘性路由"）
 
-一个已经建立的 Codex thread/session 必须绑定同一账号：
+不引入会话/线程粘性绑定。所有请求使用当前 active 账号：
 
 ```text
-Thread A -> Account 2
+Active = Account 2
 
-Turn 1 -> Account 2
-Turn 2 -> Account 2
+请求 1 -> Account 2
+请求 2 -> Account 2
 WS     -> Account 2
 Compact-> Account 2
 ```
 
-第一版不允许：
+切换 active 后：
 
 ```text
-同一 Thread：
-Turn 1 -> A
-Turn 2 -> B
+Active = Account 3
+请求 3 -> Account 3
+```
+
+第一版明确不做：
+
+```text
+同一 Thread 的账号粘滞 / 会话级路由
 ```
 
 ---
@@ -1432,26 +1453,21 @@ POST /backend-api/codex/responses/compact
 
 ---
 
-## 15.2 Session consistency
+## 15.2 账号选择一致性
 
-Compact 请求必须：
-
-```text
-同一个 routing key
-        ↓
-同一个 Account
-```
-
-例如：
+所有请求（`responses`、`responses/compact`、`models`、WebSocket）使用当前
+active 账号：
 
 ```text
-Thread 123 -> Account B
+Active = Account B
 
 responses        -> B
 responses        -> B
 responses/compact-> B
 responses        -> B
 ```
+
+切换 active 后，后续请求立即使用新账号；不依赖任何路由 key。
 
 ---
 
@@ -1600,41 +1616,44 @@ expired
 第一版：
 
 ```text
-default account
+active account
 ```
 
 为主。
 
-UI 可以允许：
+UI 允许：
 
 ```text
-Set as default
+Set as active
 ```
 
-默认账号只影响：
+active 账号决定：
 
-> 尚未建立绑定的新 session/thread。
+> 所有请求使用的账号；切换 active 在下一个请求立即生效。
 
 ---
 
-## 19.2 Existing Session
+## 19.2 无会话绑定
+
+不存在"会话/线程 → 账号"的绑定。任意两个请求（无论是否携带相同
+thread_id / session_id）都独立使用当前 active 账号。
 
 若：
 
 ```text
-Thread X -> Account A
+请求 1 -> Account A
 ```
 
-即使：
+切换到：
 
 ```text
-Default -> B
+Active -> B
 ```
 
-Thread X 仍然：
+请求 2 直接使用：
 
 ```text
-A
+B
 ```
 
 ---
@@ -2787,10 +2806,12 @@ Gateway request/response body mutation = 0
 
 ## J. Session Sticky
 
-- [ ] Thread -> stable account
-- [ ] Compact -> same account
-- [ ] WS -> same account
-- [ ] Default switch 不迁移已有 thread
+> **已废弃**：会话粘性绑定已移除，本清单作废。
+
+- [x] ~~Thread -> stable account~~
+- [x] ~~Compact -> same account~~
+- [x] ~~WS -> same account~~
+- [x] ~~Default switch 不迁移已有 thread~~
 
 ---
 
@@ -2904,13 +2925,13 @@ CredentialSnapshotReader
 
 ## 风险 4：账号状态与 Session state 不一致
 
-解决：
+> **已废弃**：会话绑定机制已移除，本风险不适用。
 
 ```text
-Session Binding is authoritative
+Active account is authoritative
 ```
 
-已有 session 不随 default account 变化。
+所有请求使用当前 active 账号，无会话状态需要与账号对齐。
 
 ---
 

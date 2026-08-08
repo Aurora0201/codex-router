@@ -1,22 +1,20 @@
 import { useCallback, useEffect, useState } from "react";
-import { Activity, CircleGauge, Settings as SettingsIcon, UsersRound } from "lucide-react";
+import { CircleGauge, Settings as SettingsIcon, UsersRound } from "lucide-react";
 import { toast } from "sonner";
-import { api, type AccountsResponse, type Health, type Session, type Settings, type Stats } from "./lib/api";
+import { api, type AccountsResponse, type Health, type Settings, type Stats } from "./lib/api";
 import { Toaster } from "@/components/ui/sonner";
 import { TransportTrace } from "./components/TransportTrace";
 import { AccountsPage } from "./pages/AccountsPage";
-import { SessionsPage } from "./pages/SessionsPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
-type Page = "accounts" | "sessions" | "settings";
-const nav = [{ id: "accounts", label: "Accounts", icon: UsersRound }, { id: "sessions", label: "Sessions", icon: Activity }, { id: "settings", label: "Settings", icon: SettingsIcon }] as const;
+type Page = "accounts" | "settings";
+const nav = [{ id: "accounts", label: "Accounts", icon: UsersRound }, { id: "settings", label: "Settings", icon: SettingsIcon }] as const;
 
 export function App() {
   const [page, setPage] = useState<Page>("accounts");
   const [health, setHealth] = useState<Health | null>(null);
   const [accounts, setAccounts] = useState<AccountsResponse | null>(null);
-  const [sessions, setSessions] = useState<Session[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [stats, setStats] = useState<Stats | null>(null);
   const [error, setError] = useState("");
@@ -52,18 +50,8 @@ export function App() {
     return () => window.clearInterval(timer);
   }, [page]);
 
-  useEffect(() => {
-    if (page !== "sessions") return;
-    void api.sessions().then(setSessions).catch(() => undefined);
-    const timer = window.setInterval(() => void api.sessions().then(setSessions).catch(() => undefined), 3_000);
-    return () => window.clearInterval(timer);
-  }, [page]);
-
   const reloadAccounts = useCallback(async () => {
     try { setAccounts(await api.accounts()); setError(""); } catch (reason) { setError((reason as Error).message); }
-  }, []);
-  const reloadSessions = useCallback(async () => {
-    try { setSessions(await api.sessions()); setError(""); } catch (reason) { setError((reason as Error).message); }
   }, []);
 
   const activeAccount = accounts?.accounts.find((item) => item.id === accounts.activeAccountId);
@@ -101,7 +89,7 @@ export function App() {
       </header>
       {stats ? (
         <div className="my-4 grid grid-cols-2 gap-2 text-xs text-muted-foreground sm:grid-cols-5">
-          {[["Ready", stats.accountsReady], ["Active sessions", stats.activeSessions], ["Active WS", stats.activeWebSockets], ["Requests today", stats.requestsToday], ["Errors today", stats.errorsToday]].map(([label, value]) => (
+          {[["Ready", stats.accountsReady], ["Requests today", stats.requestsToday], ["Errors today", stats.errorsToday]].map(([label, value]) => (
             <div key={label} className="rounded-lg border bg-card px-3 py-2"><span>{label}</span><strong className="ml-2 font-mono text-foreground">{value}</strong></div>
           ))}
         </div>
@@ -112,8 +100,6 @@ export function App() {
       <main className="py-4">
         {page === "accounts" ? (
           <AccountsPage data={accounts} onChanged={() => void reloadAccounts()} />
-        ) : page === "sessions" ? (
-          <SessionsPage sessions={sessions} reload={reloadSessions} />
         ) : settings ? (
           <SettingsPage settings={settings} reload={loadSettings} />
         ) : null}

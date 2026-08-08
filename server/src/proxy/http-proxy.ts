@@ -6,26 +6,23 @@ import type { Transport } from "../types.js";
 import { AccountAuthService } from "../accounts/account-auth-service.js";
 import { AccountUsageService } from "../accounts/account-usage-service.js";
 import { GatewayDatabase } from "../db/database.js";
-import { SessionAccountResolver } from "../routing/session-account-resolver.js";
-import { SessionActivityRegistry } from "../routing/session-activity-registry.js";
-import { resolveSession } from "../routing/session-resolver.js";
+import { ActiveAccountService } from "../routing/active-account-service.js";
 import { hasBrowserOrigin } from "../security/origin-guard.js";
 import { buildUpstreamHeaders, copyResponseHeaders } from "./headers.js";
 
 interface HttpProxyOptions {
   upstreamBaseUrl: string;
-  resolver: SessionAccountResolver;
+  activeAccounts: ActiveAccountService;
   auth: AccountAuthService;
   usage: AccountUsageService;
   database: GatewayDatabase;
-  activity: SessionActivityRegistry;
 }
 
 function errorStatus(error: unknown): number {
   switch ((error as Error).message) {
     case "no_active_account_selected": return 503;
-    case "bound_account_disabled":
-    case "bound_account_not_ready":
+    case "account_disabled":
+    case "account_not_ready":
     case "fedramp_accounts_not_supported": return 409;
     default: return 502;
   }
@@ -47,12 +44,11 @@ export class HttpProxy {
     const startedAt = Date.now();
     const rawBody = request.method === "GET" ? Buffer.alloc(0) : this.rawBody(request.body);
     const transport: Transport = path === "/models" ? "models" : path === "/responses/compact" ? "compact" : "http";
-    const identity = path === "/models" ? null : resolveSession(request.headers, rawBody, transport);
-    let finishActivity: () => void = () => {};
 
     try {
-      const account = path === "/models" ? this.options.resolver.selectCatalog() : this.options.resolver.resolve(identity!, transport);
-      if (identity) finishActivity = this.options.activity.begin(identity.routingKey);
+      const account = this.options.activeAccounts.get();
+      if (!account) throw new Error("no_active_account_selected");
+      if (account.fedRamp) throw new Error("fedramp_accounts_not_supported");
       let credential = await this.options.auth.getCredential(account.id);
       const controller = new AbortController();
       const abort = () => {
@@ -97,7 +93,6 @@ export class HttpProxy {
         route: path,
         transport,
         accountId: account.id,
-        routingKey: identity?.routingKey,
         statusCode: upstream.statusCode,
         durationMs: Date.now() - startedAt,
         bytesIn: rawBody.byteLength,
@@ -109,7 +104,6 @@ export class HttpProxy {
         requestId: request.id,
         route: path,
         transport,
-        routingKey: identity?.routingKey,
         statusCode: status,
         durationMs: Date.now() - startedAt,
         bytesIn: rawBody.byteLength,
@@ -117,8 +111,6 @@ export class HttpProxy {
       });
       if (!reply.raw.headersSent) await reply.code(status).send({ error: (error as Error).message });
       else reply.raw.destroy(error as Error);
-    } finally {
-      finishActivity();
     }
   }
 

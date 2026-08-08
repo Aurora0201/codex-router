@@ -2,7 +2,7 @@ import type Database from "better-sqlite3";
 
 type SqliteDatabase = Database.Database;
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -35,19 +35,6 @@ CREATE TABLE IF NOT EXISTS accounts (
   updated_at INTEGER NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS session_bindings (
-  routing_key TEXT PRIMARY KEY,
-  account_id TEXT NOT NULL,
-  thread_id TEXT,
-  session_id TEXT,
-  transport TEXT NOT NULL,
-  status TEXT NOT NULL,
-  created_at INTEGER NOT NULL,
-  last_seen_at INTEGER NOT NULL,
-  expires_at INTEGER,
-  FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE RESTRICT
-);
-
 CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value_json TEXT NOT NULL
@@ -59,7 +46,6 @@ CREATE TABLE IF NOT EXISTS request_log (
   route TEXT NOT NULL,
   transport TEXT NOT NULL,
   account_id TEXT,
-  routing_key_hash TEXT,
   status_code INTEGER,
   duration_ms INTEGER,
   bytes_in INTEGER,
@@ -69,8 +55,6 @@ CREATE TABLE IF NOT EXISTS request_log (
   FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE SET NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_sessions_account ON session_bindings(account_id);
-CREATE INDEX IF NOT EXISTS idx_sessions_last_seen ON session_bindings(last_seen_at DESC);
 CREATE INDEX IF NOT EXISTS idx_request_log_created ON request_log(created_at DESC);
 `;
 
@@ -108,6 +92,11 @@ export function migrate(db: SqliteDatabase): void {
     if (!accountColumns.has("rate_limit_reached_type")) adds.push("rate_limit_reached_type TEXT");
     for (const column of adds) db.exec(`ALTER TABLE accounts ADD COLUMN ${column}`);
     db.exec(V2_STATEMENTS);
+  }
+  if (version < 3) {
+    const logColumns = tableColumns(db, "request_log");
+    if (logColumns.has("routing_key_hash")) db.exec("ALTER TABLE request_log DROP COLUMN routing_key_hash");
+    db.exec("DROP TABLE IF EXISTS session_bindings");
   }
 
   db.prepare("INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (?, ?)").run(SCHEMA_VERSION, Date.now());

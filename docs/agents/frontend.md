@@ -34,7 +34,7 @@
 
 ## Page composition
 
-- Keep Accounts, Sessions, and Settings as separate page components selected by the top-level app shell.
+- Keep Accounts and Settings as separate page components selected by the top-level app shell.
 - Desktop layouts may use dense tables and side panels; below tablet width, switch to readable stacked cards without horizontal scrolling.
 - The transport trace is the sole signature visual and must encode live Gateway-to-account flow, not serve as decoration.
 
@@ -42,7 +42,7 @@
 
 - The account identity shown first is the real ChatGPT Account ID (`chatgptAccountId`) in a monospace font, with email and plan as auxiliary information.
 - Never show a user-entered account label input; add-account dialog starts official Codex Browser OAuth with no label.
-- The current account is selected via the shadcn Select at the top of the Accounts page; switching only affects new sessions.
+- The current account is selected via the shadcn Select at the top of the Accounts page; switching takes effect on the next request for all traffic.
 - Usage is shown as "已使用 X%" with the shadcn Progress component, driven by the upstream `usedPercent`; `null` usage renders as "Not reported", never as 0%.
 - Destructive actions (remove account) use shadcn AlertDialog instead of native `confirm()`.
 - Icon-only actions get a shadcn Tooltip; account actions beyond the primary one live in a shadcn DropdownMenu.

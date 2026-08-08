@@ -2,12 +2,10 @@ import type { IncomingMessage } from "node:http";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import websocket from "@fastify/websocket";
 import WebSocket, { type RawData } from "ws";
-import type { AccountRecord, CredentialSnapshot, RoutingIdentity } from "../types.js";
+import type { AccountRecord, CredentialSnapshot } from "../types.js";
 import { AccountAuthService } from "../accounts/account-auth-service.js";
 import { GatewayDatabase } from "../db/database.js";
-import { SessionAccountResolver } from "../routing/session-account-resolver.js";
-import { SessionActivityRegistry } from "../routing/session-activity-registry.js";
-import { resolveFirstWebSocketFrame, resolveSession } from "../routing/session-resolver.js";
+import { ActiveAccountService } from "../routing/active-account-service.js";
 import { hasBrowserOrigin } from "../security/origin-guard.js";
 import { IMPORTANT_WS_RESPONSE_HEADERS, websocketUpgradeHeaders } from "./headers.js";
 
@@ -16,10 +14,9 @@ const MAX_PENDING_BYTES = 2 * 1024 * 1024;
 
 interface WsProxyOptions {
   upstreamBaseUrl: string;
-  resolver: SessionAccountResolver;
+  activeAccounts: ActiveAccountService;
   auth: AccountAuthService;
   database: GatewayDatabase;
-  activity: SessionActivityRegistry;
 }
 
 interface UpstreamConnection {
@@ -29,9 +26,7 @@ interface UpstreamConnection {
 
 interface PreparedConnection {
   upstream: WebSocket;
-  identity: RoutingIdentity;
   account: AccountRecord;
-  finishActivity: () => void;
   startedAt: number;
 }
 
@@ -112,23 +107,43 @@ export async function registerWebSocketProxy(app: FastifyInstance, options: WsPr
         return;
       }
       const startedAt = Date.now();
-      const identity = resolveSession(request.headers, null, "ws");
-      const account = options.resolver.resolve(identity, "ws");
-      const finishActivity = options.activity.begin(identity.routingKey);
+      const account = options.activeAccounts.get();
+      if (!account) {
+        options.database.requestLog.log({
+          requestId: request.id,
+          route: "/responses",
+          transport: "ws",
+          statusCode: 503,
+          durationMs: Date.now() - startedAt,
+          errorCode: "no_active_account_selected",
+        });
+        await reply.code(503).send({ error: "no_active_account_selected" });
+        return;
+      }
+      if (account.fedRamp) {
+        options.database.requestLog.log({
+          requestId: request.id,
+          route: "/responses",
+          transport: "ws",
+          statusCode: 409,
+          durationMs: Date.now() - startedAt,
+          errorCode: "fedramp_accounts_not_supported",
+        });
+        await reply.code(409).send({ error: "fedramp_accounts_not_supported" });
+        return;
+      }
       try {
         const connection = await connectWithAuthRetry(options, request, account);
         upgradeHeaders.set(request.raw, connection.responseHeaders);
         for (const [name, value] of Object.entries(connection.responseHeaders)) reply.header(name, value);
-        prepared.set(request, { upstream: connection.socket, identity, account, finishActivity, startedAt });
+        prepared.set(request, { upstream: connection.socket, account, startedAt });
       } catch (error) {
-        finishActivity();
         const status = error instanceof WebSocketHandshakeError ? error.statusCode : 502;
         options.database.requestLog.log({
           requestId: request.id,
           route: "/responses",
           transport: "ws",
           accountId: account.id,
-          routingKey: identity.routingKey,
           statusCode: status,
           durationMs: Date.now() - startedAt,
           errorCode: (error as Error).message,
@@ -147,19 +162,16 @@ export async function registerWebSocketProxy(app: FastifyInstance, options: WsPr
 
     const pending: { data: RawData; isBinary: boolean; size: number }[] = [];
     let pendingBytes = 0;
-    let firstTextFrame = true;
     let closed = false;
 
     const closeOnce = (statusCode: number, errorCode?: string) => {
       if (closed) return;
       closed = true;
-      context.finishActivity();
       options.database.requestLog.log({
         requestId: request.id,
         route: "/responses",
         transport: "ws",
         accountId: context.account.id,
-        routingKey: context.identity.routingKey,
         statusCode,
         durationMs: Date.now() - context.startedAt,
         errorCode,
@@ -182,18 +194,6 @@ export async function registerWebSocketProxy(app: FastifyInstance, options: WsPr
 
     // These handlers are deliberately installed synchronously before any await.
     client.on("message", (data, isBinary) => {
-      if (firstTextFrame && !isBinary) {
-        firstTextFrame = false;
-        const alias = resolveFirstWebSocketFrame(Buffer.isBuffer(data) ? data : data.toString());
-        if (alias) {
-          try {
-            options.database.sessions.bindAlias(alias, "ws", context.account.id);
-          } catch {
-            client.close(1008, "session_binding_conflict");
-            return;
-          }
-        }
-      }
       forwardOrQueue(data, isBinary);
     });
     client.on("close", (code, reason) => {

@@ -101,21 +101,4 @@ export class AccountRepository {
   markAuthRefreshed(id: string): void {
     this.db.prepare("UPDATE accounts SET auth_status='ready', last_auth_refresh_at=?, updated_at=? WHERE id=?").run(Date.now(), Date.now(), id);
   }
-
-  markUsed(id: string): void {
-    this.db.prepare("UPDATE accounts SET last_used_at=?, updated_at=? WHERE id=?").run(Date.now(), Date.now(), id);
-  }
-
-  countActiveBindings(id: string): number {
-    const row = this.db.prepare("SELECT COUNT(*) AS count FROM session_bindings WHERE account_id=? AND status='active'").get(id) as { count: number };
-    return row.count;
-  }
-
-  hasActiveBinding(id: string): boolean {
-    return this.countActiveBindings(id) > 0;
-  }
-
-  clearInactiveBindings(id: string): void {
-    this.db.prepare("DELETE FROM session_bindings WHERE account_id=? AND status!='active'").run(id);
-  }
 }

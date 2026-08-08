@@ -15,8 +15,8 @@
 
 - Do not add automatic account routing (round robin, weighted, least-used, quota-aware, failover, or fallback).
 - Do not change the active account automatically; only the user's explicit manual selection changes it.
-- New sessions use the manually selected active account only; when none is selected, fail with `no_active_account_selected`.
-- Existing sessions stay bound to the account that first handled them (sticky); switching the active account never migrates them.
+- Every request uses the manually selected active account; when none is selected, fail with `no_active_account_selected`.
+- There is no session-to-account binding; switching the active account takes effect on the next request.
 - Do not use user-defined account labels; the real ChatGPT account ID is the account identity.
 - The `chatgpt_account_id` from Codex auth data must be unique; duplicate logins return `account_already_exists`.
 - Rate-limit data is display state only and must never affect routing or account selection.

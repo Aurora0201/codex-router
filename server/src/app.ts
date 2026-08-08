@@ -12,9 +12,6 @@ import { GatewayDatabase } from "./db/database.js";
 import { HttpProxy } from "./proxy/http-proxy.js";
 import { registerWebSocketProxy } from "./proxy/ws-proxy.js";
 import { ActiveAccountService } from "./routing/active-account-service.js";
-import { SessionAccountResolver } from "./routing/session-account-resolver.js";
-import { SessionActivityRegistry } from "./routing/session-activity-registry.js";
-import { SessionBindingService } from "./routing/session-binding-service.js";
 import { registerAdminApi } from "./api/admin/index.js";
 import { CsrfGuard } from "./security/csrf.js";
 import { CodexConfigService } from "./codex/codex-config.js";
@@ -90,16 +87,13 @@ export async function buildGateway(overrides: Partial<GatewayConfig> = {}): Prom
   const auth = new AccountAuthService(config, database);
   const usage = new AccountUsageService(config, database);
   const activeAccounts = new ActiveAccountService(database);
-  const bindings = new SessionBindingService(database);
-  const resolver = new SessionAccountResolver(database, activeAccounts, bindings);
-  const activity = new SessionActivityRegistry();
   const csrf = new CsrfGuard();
-  const proxy = new HttpProxy({ upstreamBaseUrl: config.upstreamBaseUrl, resolver, auth, usage, database, activity });
+  const proxy = new HttpProxy({ upstreamBaseUrl: config.upstreamBaseUrl, activeAccounts, auth, usage, database });
   const rateLimitTimer = startUsageRefreshScheduler(accounts, usage);
   const codexConfig = new CodexConfigService();
 
-  await registerAdminApi(app, { config, database, accounts, auth, usage, logins, activeAccounts, csrf, startedAt }, activity, codexConfig);
-  await registerWebSocketProxy(app, { upstreamBaseUrl: config.upstreamBaseUrl, resolver, auth, database, activity });
+  await registerAdminApi(app, { config, database, accounts, auth, usage, logins, activeAccounts, csrf, startedAt }, codexConfig);
+  await registerWebSocketProxy(app, { upstreamBaseUrl: config.upstreamBaseUrl, activeAccounts, auth, database });
 
   app.post("/backend-api/codex/responses", (request, reply) => proxy.handle(request, reply, "/responses"));
   app.post("/backend-api/codex/responses/compact", (request, reply) => proxy.handle(request, reply, "/responses/compact"));

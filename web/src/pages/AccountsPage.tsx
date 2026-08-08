@@ -53,7 +53,7 @@ export function AccountsPage({ data, onChanged }: { data: AccountsResponse | nul
   const selectActive = async (id: string) => {
     await run(`active-${id}`, () => api.setActive(id));
     const account = accounts.find((item) => item.id === id);
-    toast.success(`当前账号已切换到 ${shortId(account?.chatgptAccountId)}，仅影响新会话`);
+    toast.success(`当前账号已切换到 ${shortId(account?.chatgptAccountId)}`);
   };
 
   return (

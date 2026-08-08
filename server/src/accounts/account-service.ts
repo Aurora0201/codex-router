@@ -31,11 +31,9 @@ export class AccountService {
   async remove(id: string): Promise<void> {
     const account = this.database.accounts.get(id);
     if (!account) throw new Error("account_not_found");
-    if (this.database.accounts.hasActiveBinding(id)) throw new Error("account_has_active_sessions");
     const accountRoot = path.resolve(account.codexHome, "..");
     const expectedRoot = path.resolve(this.config.accountsDir);
     if (path.dirname(accountRoot) !== expectedRoot) throw new Error("unsafe_account_path");
-    this.database.accounts.clearInactiveBindings(id);
     this.database.accounts.delete(id);
     if (this.database.getActiveAccountId() === id) this.database.setActiveAccountId(null);
     await rm(accountRoot, { recursive: true, force: false });
