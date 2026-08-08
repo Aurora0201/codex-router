@@ -12,12 +12,11 @@ export type Transport = "http" | "ws" | "compact" | "models";
 
 export interface AccountRecord {
   id: string;
-  label: string;
+  chatgptAccountId: string | null;
   email: string | null;
   planType: string | null;
   codexHome: string;
   enabled: boolean;
-  isDefault: boolean;
   authStatus: AuthStatus;
   fedRamp: boolean;
   primaryUsedPercent: number | null;
@@ -26,6 +25,7 @@ export interface AccountRecord {
   secondaryUsedPercent: number | null;
   secondaryResetsAt: number | null;
   secondaryWindowMinutes: number | null;
+  rateLimitReachedType: string | null;
   lastAuthRefreshAt: number | null;
   lastLimitsRefreshAt: number | null;
   lastUsedAt: number | null;
@@ -51,6 +51,7 @@ export interface RateLimitWindow {
 export interface RateLimitSnapshot {
   primary: RateLimitWindow | null;
   secondary: RateLimitWindow | null;
+  rateLimitReachedType: string | null;
   loadedAt: number;
 }
 
@@ -66,7 +67,7 @@ export interface SessionRecord {
   routingKey: string;
   routingKeyHash: string;
   accountId: string;
-  accountLabel: string;
+  accountChatgptId: string | null;
   threadId: string | null;
   sessionId: string | null;
   transport: Transport;
@@ -83,6 +84,7 @@ export interface GatewayConfig {
   upstreamBaseUrl: string;
   dataDir: string;
   accountsDir: string;
+  loginStagingDir: string;
   databasePath: string;
   webDistDir: string;
   codexCliPath: string;

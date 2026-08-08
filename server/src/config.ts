@@ -30,6 +30,7 @@ export function loadConfig(overrides: Partial<GatewayConfig> = {}): GatewayConfi
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
   const dataDir = path.resolve(overrides.dataDir ?? process.env.GATEWAY_DATA_DIR ?? path.join(root, "data"));
   const accountsDir = path.resolve(overrides.accountsDir ?? path.join(dataDir, "accounts"));
+  const loginStagingDir = path.resolve(overrides.loginStagingDir ?? path.join(dataDir, "login-staging"));
   const cliOverride = overrides.codexCliPath ?? process.env.CODEX_GATEWAY_CLI;
   const bundledCodex = require.resolve("@openai/codex/bin/codex.js");
 
@@ -39,6 +40,7 @@ export function loadConfig(overrides: Partial<GatewayConfig> = {}): GatewayConfi
     upstreamBaseUrl,
     dataDir,
     accountsDir,
+    loginStagingDir,
     databasePath: path.resolve(overrides.databasePath ?? path.join(dataDir, "gateway.db")),
     webDistDir: path.resolve(overrides.webDistDir ?? process.env.GATEWAY_WEB_DIST ?? path.join(root, "web", "dist")),
     codexCliPath: cliOverride ?? process.execPath,

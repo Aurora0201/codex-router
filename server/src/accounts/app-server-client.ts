@@ -1,6 +1,8 @@
 import { EventEmitter } from "node:events";
 import { once } from "node:events";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import readline from "node:readline";
 
 interface JsonRpcResponse {
@@ -21,7 +23,6 @@ export class AppServerClient extends EventEmitter {
   private child: ChildProcessWithoutNullStreams | null = null;
   private nextId = 1;
   private readonly pending = new Map<number | string, PendingCall>();
-
   constructor(
     private readonly codexCliPath: string,
     readonly codexHome: string,
@@ -91,14 +92,19 @@ export class AppServerClient extends EventEmitter {
     if (!child) return;
     this.child = null;
     const exited = once(child, "exit").then(() => undefined).catch(() => undefined);
+    // EOF on stdin is the app-server's graceful-shutdown trigger (stdio mode).
+    // It drains background work, shuts down per-thread children and closes
+    // SQLite before exiting; on Windows those handles must be released before
+    // the CODEX_HOME directory can be renamed, so we wait for the real exit
+    // rather than racing a fixed timeout.
     child.stdin.end();
     const graceful = await Promise.race([
       exited.then(() => true),
-      new Promise<false>((resolve) => setTimeout(() => resolve(false), 2_000)),
+      new Promise<false>((resolve) => setTimeout(() => resolve(false), 30_000)),
     ]);
-    if (!graceful && !child.killed) {
-      child.kill();
-      await Promise.race([exited, new Promise((resolve) => setTimeout(resolve, 1_000))]);
+    if (!graceful) {
+      await forceKillProcessTree(child);
+      await Promise.race([exited, new Promise((resolve) => setTimeout(resolve, 2_000))]);
     }
   }
 
@@ -119,5 +125,37 @@ export class AppServerClient extends EventEmitter {
       return;
     }
     if (message.method) this.emit("notification", message.method, message.params);
+  }
+}
+
+async function forceKillProcessTree(child: ChildProcessWithoutNullStreams): Promise<void> {
+  if (typeof child.pid !== "number") return;
+  if (process.platform === "win32") {
+    try {
+      await promisify(execFile)("taskkill", ["/PID", String(child.pid), "/T", "/F"]);
+      return;
+    } catch {
+      // Fall through to a plain kill if the tree kill is unavailable.
+    }
+  }
+  if (!child.killed) child.kill();
+}
+
+export interface AppServerClientFactoryOptions {
+  codexCliPath: string;
+  codexCliArgs: string[];
+}
+
+export async function withAppServerClient<T>(
+  options: AppServerClientFactoryOptions,
+  codexHome: string,
+  operation: (client: AppServerClient) => Promise<T>,
+): Promise<T> {
+  const client = new AppServerClient(options.codexCliPath, codexHome, options.codexCliArgs);
+  try {
+    await client.start();
+    return await operation(client);
+  } finally {
+    await client.close();
   }
 }

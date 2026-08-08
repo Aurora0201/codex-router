@@ -124,9 +124,9 @@ beforeAll(async () => {
   const accountHome = path.join(root, "data", "accounts", "local", "codex-home");
   await mkdir(accountHome, { recursive: true });
   await writeFile(path.join(accountHome, "auth.json"), JSON.stringify({ tokens: { access_token: "top-secret", account_id: "upstream-account", refresh_token: "never-log" } }));
-  gateway.database.createAccount({ id: "local", label: "Local test", codexHome: accountHome });
-  gateway.database.updateAccount("local", { authStatus: "ready", email: "test@example.test", planType: "plus" });
-  gateway.database.setDefaultAccount("local");
+  gateway.database.accounts.insert({ id: "local", codexHome: accountHome });
+  gateway.database.accounts.update("local", { authStatus: "ready", email: "test@example.test", planType: "plus", chatgptAccountId: "upstream-account" });
+  gateway.activeAccounts.select("local");
   gatewayUrl = await gateway.app.listen({ host: "127.0.0.1", port: 0 });
 });
 
@@ -164,12 +164,11 @@ describe("HTTP, SSE, compact and models", () => {
     expect(models.status).toBe(200);
     expect(await models.json()).toEqual({ data: [{ id: "mock-codex" }] });
     expect(models.headers.get("x-models-etag")).toBe("models-1");
-    const sessions = gateway.database.listSessions().filter((session) => session.threadId === "http-thread");
+    const sessions = gateway.database.sessions.list().filter((session) => session.threadId === "http-thread");
     expect(new Set(sessions.map((session) => session.accountId))).toEqual(new Set(["local"]));
   });
-
   it("refreshes the same account once on a pre-stream 401", async () => {
-    const refresh = vi.spyOn(gateway.accounts, "refreshAuth").mockImplementation((id) => gateway.accounts.getCredential(id));
+    const refresh = vi.spyOn(gateway.auth, "refresh").mockImplementation((id) => gateway.auth.getCredential(id));
     const result = await streamRequest(`${gatewayUrl}/backend-api/codex/responses`, Buffer.from('{"cause401":true,"client_metadata":{"thread_id":"retry-thread"}}'));
     expect(result.status).toBe(200);
     expect(refresh).toHaveBeenCalledTimes(1);
@@ -178,7 +177,7 @@ describe("HTTP, SSE, compact and models", () => {
   });
 
   it("does not replay after stream start and transparently returns 429/compact errors", async () => {
-    const refresh = vi.spyOn(gateway.accounts, "refreshAuth").mockImplementation((id) => gateway.accounts.getCredential(id));
+    const refresh = vi.spyOn(gateway.auth, "refresh").mockImplementation((id) => gateway.auth.getCredential(id));
     const partial = await streamRequest(`${gatewayUrl}/backend-api/codex/responses`, Buffer.from('{"partialAuthError":true,"client_metadata":{"thread_id":"partial-thread"}}'));
     expect(partial.status).toBe(200);
     expect(refresh).not.toHaveBeenCalled();
@@ -190,7 +189,7 @@ describe("HTTP, SSE, compact and models", () => {
     expect(compact.headers["x-upstream-error"]).toBe("compact");
     expect(Buffer.concat(compact.chunks).toString()).toBe('{"error":"compact_invalid"}');
     refresh.mockRestore();
-    gateway.database.updateAccount("local", { authStatus: "ready" });
+    gateway.database.accounts.update("local", { authStatus: "ready" });
   });
 
   it("carries an opaque multi-turn shell and file tool loop", async () => {
@@ -261,22 +260,26 @@ describe("security and admin API", () => {
     const health = await fetch(`${gatewayUrl}/api/health`);
     const data = await health.json() as { csrfToken: string };
     const cookie = health.headers.get("set-cookie")!.split(";")[0];
-    const accounts = await (await fetch(`${gatewayUrl}/api/accounts`)).json() as Record<string, unknown>[];
-    expect(accounts[0]).not.toHaveProperty("codexHome");
+    const accountsResponse = await (await fetch(`${gatewayUrl}/api/accounts`)).json() as { activeAccountId: string | null; accounts: Record<string, unknown>[] };
+    expect(accountsResponse.activeAccountId).toBe("local");
+    expect(accountsResponse.accounts[0]).not.toHaveProperty("codexHome");
     const rejected = await fetch(`${gatewayUrl}/api/settings`, { method: "PATCH", headers: { origin: "https://evil.test", cookie, "x-csrf-token": data.csrfToken, "content-type": "application/json" }, body: '{"theme":"dark"}' });
     expect(rejected.status).toBe(403);
     const accepted = await fetch(`${gatewayUrl}/api/settings`, { method: "PATCH", headers: { origin: gatewayUrl, cookie, "x-csrf-token": data.csrfToken, "content-type": "application/json" }, body: '{"theme":"dark"}' });
     expect(accepted.status).toBe(200);
+    const proxiedOrigin = await fetch(`${gatewayUrl}/api/settings`, { method: "PATCH", headers: { origin: "http://127.0.0.1:5173", cookie, "x-csrf-token": data.csrfToken, "content-type": "application/json" }, body: '{"theme":"light"}' });
+    expect(proxiedOrigin.status).toBe(200);
     const requestColumns = gateway.database.raw.prepare("PRAGMA table_info(request_log)").all() as { name: string }[];
     expect(requestColumns.map((column) => column.name)).not.toEqual(expect.arrayContaining(["prompt", "response", "tool_arguments", "tool_output", "authorization"]));
     expect(accepted.headers.get("access-control-allow-origin")).toBeNull();
   });
 
   it("returns an explicit 503 for models when no account is enabled", async () => {
-    gateway.database.updateAccount("local", { enabled: false, authStatus: "disabled" });
+    gateway.accounts.setEnabled("local", false);
     const response = await fetch(`${gatewayUrl}/backend-api/codex/models`);
     expect(response.status).toBe(503);
-    expect(await response.json()).toEqual({ error: "no_authenticated_account" });
-    gateway.database.updateAccount("local", { enabled: true, authStatus: "ready" });
+    expect(await response.json()).toEqual({ error: "no_active_account_selected" });
+    gateway.accounts.setEnabled("local", true);
+    gateway.activeAccounts.select("local");
   });
 });

@@ -3,23 +3,27 @@ import { pipeline } from "node:stream/promises";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { request as undiciRequest, type Dispatcher } from "undici";
 import type { Transport } from "../types.js";
-import { AccountService } from "../accounts/account-service.js";
+import { AccountAuthService } from "../accounts/account-auth-service.js";
+import { AccountUsageService } from "../accounts/account-usage-service.js";
 import { GatewayDatabase } from "../db/database.js";
-import { AccountSelector } from "../routing/account-selector.js";
+import { SessionAccountResolver } from "../routing/session-account-resolver.js";
+import { SessionActivityRegistry } from "../routing/session-activity-registry.js";
 import { resolveSession } from "../routing/session-resolver.js";
 import { hasBrowserOrigin } from "../security/origin-guard.js";
 import { buildUpstreamHeaders, copyResponseHeaders } from "./headers.js";
 
 interface HttpProxyOptions {
   upstreamBaseUrl: string;
-  accounts: AccountService;
-  selector: AccountSelector;
+  resolver: SessionAccountResolver;
+  auth: AccountAuthService;
+  usage: AccountUsageService;
   database: GatewayDatabase;
+  activity: SessionActivityRegistry;
 }
 
 function errorStatus(error: unknown): number {
   switch ((error as Error).message) {
-    case "no_authenticated_account": return 503;
+    case "no_active_account_selected": return 503;
     case "bound_account_disabled":
     case "bound_account_not_ready":
     case "fedramp_accounts_not_supported": return 409;
@@ -47,9 +51,9 @@ export class HttpProxy {
     let finishActivity: () => void = () => {};
 
     try {
-      const account = path === "/models" ? this.options.selector.selectCatalog() : this.options.selector.select(identity!, transport);
-      if (identity) finishActivity = this.options.database.beginActivity(identity.routingKey);
-      let credential = await this.options.accounts.getCredential(account.id);
+      const account = path === "/models" ? this.options.resolver.selectCatalog() : this.options.resolver.resolve(identity!, transport);
+      if (identity) finishActivity = this.options.activity.begin(identity.routingKey);
+      let credential = await this.options.auth.getCredential(account.id);
       const controller = new AbortController();
       const abort = () => {
         if (!reply.raw.writableEnded) controller.abort();
@@ -69,12 +73,12 @@ export class HttpProxy {
       let upstream = await send();
       if (upstream.statusCode === 401) {
         await upstream.body.dump();
-        credential = await this.options.accounts.refreshAuth(account.id);
+        credential = await this.options.auth.refresh(account.id);
         upstream = await send();
       }
       if (upstream.statusCode === 429) {
-        this.options.database.updateAccount(account.id, { authStatus: "rate_limited" });
-        void this.options.accounts.refreshRateLimits(account.id).catch(() => undefined);
+        this.options.database.accounts.update(account.id, { authStatus: "rate_limited" });
+        void this.options.usage.refresh(account.id).catch(() => undefined);
       }
 
       copyResponseHeaders(responseHeaders(upstream.headers), reply.raw);
@@ -88,7 +92,7 @@ export class HttpProxy {
         },
       });
       await pipeline(upstream.body, counter, reply.raw);
-      this.options.database.logRequest({
+      this.options.database.requestLog.log({
         requestId: request.id,
         route: path,
         transport,
@@ -101,7 +105,7 @@ export class HttpProxy {
       });
     } catch (error) {
       const status = errorStatus(error);
-      this.options.database.logRequest({
+      this.options.database.requestLog.log({
         requestId: request.id,
         route: path,
         transport,
