@@ -1,7 +1,7 @@
 # ADR-0001：透明身份代理架构（HTTP / WebSocket）
 
 - 状态：已接受（2026-08-09）
-- 关联：`docs/research/codex-gateway-mvp-design.md`（设计基线）
+- 关联：`docs/research/codex-router-mvp-design.md`（设计基线）
 - 影响范围：`server/src/proxy/http-proxy.ts`、`server/src/proxy/ws-proxy.ts`、`server/src/proxy/headers.ts`
 
 ## Context

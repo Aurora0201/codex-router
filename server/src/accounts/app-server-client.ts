@@ -61,7 +61,7 @@ export class AppServerClient extends EventEmitter {
 
     await Promise.race([
       this.call("initialize", {
-        clientInfo: { name: "codex-gateway", title: "Codex Gateway", version: "0.1.0" },
+        clientInfo: { name: "codex-router", title: "Codex Router", version: "0.1.0" },
         capabilities: { experimentalApi: true },
       }, 15_000),
       exited,

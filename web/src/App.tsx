@@ -64,7 +64,7 @@ export function App() {
           <div className="flex items-center gap-3">
             <span className="grid size-9 place-items-center rounded-lg bg-primary text-primary-foreground"><CircleGauge className="size-5" /></span>
             <div>
-              <p className="font-semibold">Codex Gateway</p>
+              <p className="font-semibold">Codex Router</p>
               <p className="font-mono text-[11px] text-muted-foreground">transparent identity router · v{health?.version ?? "—"}</p>
             </div>
           </div>

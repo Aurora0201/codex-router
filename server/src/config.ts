@@ -19,7 +19,7 @@ export function loadConfig(overrides: Partial<GatewayConfig> = {}): GatewayConfi
     overrides.developerMode ?? (process.env.GATEWAY_DEVELOPER_MODE === "true" || process.env.NODE_ENV === "test");
   const host = (overrides.host ?? process.env.GATEWAY_HOST ?? "127.0.0.1") as GatewayConfig["host"];
   if (host !== "127.0.0.1" && host !== "::1") {
-    throw new Error("Codex Gateway only listens on loopback (127.0.0.1 or ::1)");
+    throw new Error("Codex Router only listens on loopback (127.0.0.1 or ::1)");
   }
 
   const upstreamBaseUrl = (overrides.upstreamBaseUrl ?? process.env.GATEWAY_UPSTREAM ?? OFFICIAL_UPSTREAM).replace(/\/$/, "");
@@ -31,7 +31,7 @@ export function loadConfig(overrides: Partial<GatewayConfig> = {}): GatewayConfi
   const dataDir = path.resolve(overrides.dataDir ?? process.env.GATEWAY_DATA_DIR ?? path.join(root, "data"));
   const accountsDir = path.resolve(overrides.accountsDir ?? path.join(dataDir, "accounts"));
   const loginStagingDir = path.resolve(overrides.loginStagingDir ?? path.join(dataDir, "login-staging"));
-  const cliOverride = overrides.codexCliPath ?? process.env.CODEX_GATEWAY_CLI;
+  const cliOverride = overrides.codexCliPath ?? process.env.CODEX_ROUTER_CLI;
   const bundledCodex = require.resolve("@openai/codex/bin/codex.js");
 
   return {
