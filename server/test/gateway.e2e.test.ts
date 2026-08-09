@@ -65,7 +65,7 @@ beforeAll(async () => {
   upstream = http.createServer(async (request, response) => {
     const body = await collect(request);
     received.push({ url: request.url ?? "", body, headers: request.headers });
-    if (request.url === "/backend-api/codex/models") {
+    if (request.url === "/backend-api/codex/models" || request.url?.startsWith("/backend-api/codex/models?")) {
       response.writeHead(200, { "content-type": "application/json", "x-models-etag": "models-1" });
       response.end('{"data":[{"id":"mock-codex"}]}');
       return;
@@ -165,10 +165,11 @@ describe("HTTP, SSE, compact and models", () => {
     const compactResult = await streamRequest(`${gatewayUrl}/backend-api/codex/responses/compact`, compact);
     expect(compactResult.status).toBe(200);
     expect(Buffer.concat(compactResult.chunks).equals(compact)).toBe(true);
-    const models = await fetch(`${gatewayUrl}/backend-api/codex/models`);
+    const models = await fetch(`${gatewayUrl}/backend-api/codex/models?client_version=0.147.0`);
     expect(models.status).toBe(200);
     expect(await models.json()).toEqual({ data: [{ id: "mock-codex" }] });
     expect(models.headers.get("x-models-etag")).toBe("models-1");
+    expect(received.findLast((entry) => entry.url.endsWith("/models?client_version=0.147.0"))).toBeTruthy();
     expect(received.findLast((entry) => entry.url.endsWith("/responses/compact"))!.headers.authorization).toBe("Bearer top-secret");
 
     gateway.activeAccounts.select("second");
