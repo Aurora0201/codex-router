@@ -100,7 +100,7 @@ export async function buildGateway(overrides: Partial<GatewayConfig> = {}): Prom
   app.get("/backend-api/codex/models", (request, reply) => proxy.handle(request, reply, "/models"));
   app.post("/backend-api/codex/alpha/search", (request, reply) => proxy.handle(request, reply, "/alpha/search"));
   app.all("/backend-api/codex/*", async (_request, reply) => {
-    await reply.code(501).send({ error: "unsupported_codex_gateway_route" });
+    await reply.code(501).send({ error: "unsupported_codex_router_route" });
   });
 
   try {

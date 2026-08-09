@@ -9,5 +9,7 @@ export function registerHealthRoutes(app: FastifyInstance, ctx: AdminContext): v
     csrfToken: ctx.csrf.issue(reply),
     version: "0.2.0",
     uptime: Math.max(0, Math.floor((Date.now() - ctx.startedAt) / 1000)),
+    pid: process.pid,
+    dataDir: ctx.config.dataDir,
   }));
 }

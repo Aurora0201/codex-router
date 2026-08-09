@@ -99,24 +99,33 @@ describe("config commands", () => {
 });
 
 describe("status command", () => {
-  it("reports a running gateway with uptime, accounts and injection state", async () => {
+  it("reports a running gateway from its health and accounts API", async () => {
     const dataDir = await tempDir();
     const home = await tempDir();
     vi.stubEnv("CODEX_HOME", home);
 
-    const server = http.createServer((_request, response) => {
-      response.writeHead(200, { "content-type": "application/json" });
-      response.end(JSON.stringify({ status: "ok", upstream: "configured", accounts: 1, csrfToken: "t", version: "0.2.0", uptime: 3661 }));
+    const server = http.createServer((request, response) => {
+      if (request.url?.startsWith("/api/health")) {
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify({ status: "ok", upstream: "configured", accounts: 2, csrfToken: "t", version: "0.2.0", uptime: 3661, pid: 4242, dataDir }));
+        return;
+      }
+      if (request.url?.startsWith("/api/accounts")) {
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify({
+          activeAccountId: "local",
+          accounts: [
+            { id: "local", email: "test@example.test", authStatus: "ready", isActive: true },
+            { id: "second", email: "second@example.test", authStatus: "rate_limited", isActive: false },
+          ],
+        }));
+        return;
+      }
+      response.writeHead(404);
+      response.end();
     });
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
     const port = (server.address() as { port: number }).port;
-
-    await writeFile(path.join(dataDir, "gateway.pid"), `${process.pid}\n`);
-    const database = new GatewayDatabase(path.join(dataDir, "gateway.db"));
-    database.accounts.insert({ id: "local", codexHome: path.join(dataDir, "codex-home") });
-    database.accounts.update("local", { authStatus: "ready", email: "test@example.test", planType: "plus", chatgptAccountId: "acc-1" });
-    database.setActiveAccountId("local");
-    database.close();
 
     const { stdout, exitCode } = await runCli(["status", "--host", "127.0.0.1", "--port", String(port), "--data-dir", dataDir]);
     await new Promise<void>((resolve) => server.close(() => resolve()));
@@ -125,13 +134,39 @@ describe("status command", () => {
     expect(stdout).toContain("running");
     expect(stdout).toContain("uptime");
     expect(stdout).toContain("1h 1m 1s");
-    expect(stdout).toContain("accounts (1)");
+    expect(stdout).toContain("pid");
+    expect(stdout).toContain("4242");
+    expect(stdout).toContain("data");
+    expect(stdout).toContain(dataDir);
+    expect(stdout).toContain("accounts (2)");
     expect(stdout).toContain("test@example.test");
+    expect(stdout).toContain("second@example.test");
     expect(stdout).toContain("[active]");
     expect(stdout).toContain("injected");
   });
 
-  it("exits 1 when not running but still shows local state", async () => {
+  it("falls back to the local database when the gateway is down", async () => {
+    const dataDir = await tempDir();
+    const home = await tempDir();
+    await writeFile(path.join(home, "config.toml"), 'model = "gpt-5.6-luna"\n');
+    vi.stubEnv("CODEX_HOME", home);
+
+    const database = new GatewayDatabase(path.join(dataDir, "gateway.db"));
+    database.accounts.insert({ id: "local", codexHome: path.join(dataDir, "codex-home") });
+    database.accounts.update("local", { authStatus: "ready", email: "test@example.test", planType: "plus", chatgptAccountId: "acc-1" });
+    database.setActiveAccountId("local");
+    database.close();
+
+    const { stdout, exitCode } = await runCli(["status", "--host", "127.0.0.1", "--port", "1", "--data-dir", dataDir]);
+    expect(exitCode).toBe(1);
+    expect(stdout).toContain("not running");
+    expect(stdout).toContain("accounts (1)");
+    expect(stdout).toContain("test@example.test");
+    expect(stdout).toContain("[active]");
+    expect(stdout).toContain("codex-router start");
+  });
+
+  it("exits 1 when not running and shows no local state", async () => {
     const dataDir = await tempDir();
     const home = await tempDir();
     await writeFile(path.join(home, "config.toml"), 'model = "gpt-5.6-luna"\n');
@@ -139,6 +174,7 @@ describe("status command", () => {
     const { stdout, exitCode } = await runCli(["status", "--host", "127.0.0.1", "--port", "1", "--data-dir", dataDir]);
     expect(exitCode).toBe(1);
     expect(stdout).toContain("not running");
+    expect(stdout).toContain("accounts (0)");
     expect(stdout).toContain("codex-router start");
   });
 });
