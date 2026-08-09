@@ -1,6 +1,6 @@
-# Codex Gateway
+# Codex Router
 
-Codex Gateway 是一个只监听本机的透明代理。它为每个已授权 ChatGPT/Codex 账号维护独立 `CODEX_HOME`，按 thread/session 固定账号，并原样转发 Codex HTTP/SSE、WebSocket、remote compact 与 model catalog 请求。Gateway 不执行工具、不重写 Responses JSON，也不实现 OAuth refresh。
+Codex Router 是一个只监听本机的透明代理。它为每个已授权 ChatGPT/Codex 账号维护独立 `CODEX_HOME`，按 thread/session 固定账号，并原样转发 Codex HTTP/SSE、WebSocket、remote compact 与 model catalog 请求。Router 不执行工具、不重写 Responses JSON，也不实现 OAuth refresh。
 
 ## 快速开始
 
@@ -81,7 +81,7 @@ npm run hash:main-auth
 | `GATEWAY_HOST` | `127.0.0.1` | 只接受 `127.0.0.1` 或 `::1` |
 | `GATEWAY_PORT` | `8317` | 本地 Gateway/Admin 端口 |
 | `GATEWAY_DATA_DIR` | `<repo>/data` | DB、隔离账号与登录暂存目录 |
-| `CODEX_GATEWAY_CLI` | 锁定的官方 npm CLI | 可显式指定 Codex 可执行文件 |
+| `CODEX_ROUTER_CLI` | 锁定的官方 npm CLI | 可显式指定 Codex 可执行文件 |
 | `GATEWAY_LOG_LEVEL` | `info` | Fastify/Pino 日志级别 |
 
 自定义 upstream 默认被拒绝；只可在明确设置 `GATEWAY_DEVELOPER_MODE=true` 时使用，避免把认证发送到不可信服务。

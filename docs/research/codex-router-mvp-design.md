@@ -1,4 +1,4 @@
-# Codex Gateway MVP 架构与设计指导文档
+# Codex Router MVP 架构与设计指导文档
 
 > 文档状态：MVP v1 设计基线  
 > 核验日期：2026-08-08  
@@ -25,7 +25,7 @@
 
 ## 0. 文档目的
 
-本文用于指导第一版 **Codex Gateway** 的实际开发。
+本文用于指导第一版 **Codex Router** 的实际开发。
 
 目标不是重新实现 Codex，也不是重新实现 OpenAI Responses API，而是在 Codex 与 ChatGPT Codex 后端之间增加一层本地 Gateway：
 
@@ -616,7 +616,7 @@ Thread X -> Account A
                                 │
                                 ▼
 ┌──────────────────────────────────────────────────────────────┐
-│                      Codex Gateway                           │
+│                      Codex Router                           │
 │                                                              │
 │  ┌────────────────────────────────────────────────────────┐  │
 │  │                    Data Plane                          │  │
@@ -1006,7 +1006,7 @@ Google Fonts 属于在线字体服务。
 保持简单：
 
 ```text
-codex-gateway/
+codex-router/
 │
 ├── server/
 │   ├── src/
@@ -1120,7 +1120,7 @@ GET  /backend-api/codex/models
 
 ```json
 {
-  "error": "unsupported_codex_gateway_route"
+  "error": "unsupported_codex_router_route"
 }
 ```
 
@@ -2115,7 +2115,7 @@ GET /api/stats
 
 ```text
 ┌────────────────────────────────────────────────────────────┐
-│ Codex Gateway                            ● Gateway Online   │
+│ Codex Router                            ● Gateway Online   │
 ├────────────────────────────────────────────────────────────┤
 │ Accounts     Sessions     Settings                         │
 ├────────────────────────────────────────────────────────────┤
@@ -3165,7 +3165,7 @@ web/dist
 用户启动：
 
 ```text
-codex-gateway
+codex-router
 ```
 
 看到：

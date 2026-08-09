@@ -3,7 +3,8 @@ import os from "node:os";
 import path from "node:path";
 
 export const BACKUP_NAME = "config.toml.gateway.bak";
-const GATEWAY_MARKER = "# Auto-injected by codex-gateway";
+const GATEWAY_MARKER = "# Auto-injected by codex-router";
+const LEGACY_GATEWAY_MARKER = "# Auto-injected by codex-gateway";
 const OPENCODEX_MARKER = "# Auto-injected by opencodex";
 
 function codexHomeDir(): string {
@@ -104,7 +105,10 @@ export class CodexConfigService {
     const original = await readFile(configPath, "utf8");
 
     // Remove any stale gateway injection first so the final config stays clean.
+    // The legacy marker is stripped too so configs injected before the rename
+    // do not accumulate a duplicate marker on the next apply.
     let content = original.replace(new RegExp(`^${GATEWAY_MARKER}\\s*\\r?\\n?`, "m"), "");
+    content = content.replace(new RegExp(`^${LEGACY_GATEWAY_MARKER}\\s*\\r?\\n?`, "m"), "");
     content = content.replace(/^openai_base_url\s*=\s*"[^"]*"\s*$/m, "");
 
     // TOML tables can swallow bare root keys that follow them; strip the

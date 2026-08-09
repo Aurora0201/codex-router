@@ -89,6 +89,21 @@ describe("CodexConfigService", () => {
     expect(backup).toContain("10100");
   });
 
+  it("strips a legacy codex-gateway marker and never duplicates markers on re-apply", async () => {
+    const home = await tempHome();
+    const legacy = '# Auto-injected by codex-gateway\nopenai_base_url = "http://127.0.0.1:9999/backend-api/codex"\n\nmodel = "gpt-5.6-luna"\n';
+    await writeFile(path.join(home, "config.toml"), legacy);
+    vi.stubEnv("CODEX_HOME", home);
+    const service = new CodexConfigService();
+    const status = await service.applyGatewayConfig("127.0.0.1", 8317);
+    expect(status.applied).toBe(true);
+    const content = await readFile(path.join(home, "config.toml"), "utf8");
+    expect(content).not.toContain("codex-gateway");
+    expect(content.match(/# Auto-injected by codex-router/g)).toHaveLength(1);
+    expect(content.match(/openai_base_url\s*=\s*"[^"]*"/g)).toHaveLength(1);
+    expect(content).toContain("http://127.0.0.1:8317/backend-api/codex");
+  });
+
   it("appends openai_base_url at the root even when the file ends with a table", async () => {
     const home = await tempHome();
     await writeFile(path.join(home, "config.toml"), SAMPLE_TABLE_END);
