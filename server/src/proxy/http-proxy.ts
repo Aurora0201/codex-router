@@ -10,6 +10,8 @@ import { ActiveAccountService } from "../routing/active-account-service.js";
 import { hasBrowserOrigin } from "../security/origin-guard.js";
 import { buildUpstreamHeaders, copyResponseHeaders } from "./headers.js";
 
+export type ProxyPath = "/responses" | "/responses/compact" | "/models" | "/alpha/search";
+
 interface HttpProxyOptions {
   upstreamBaseUrl: string;
   activeAccounts: ActiveAccountService;
@@ -35,7 +37,7 @@ function responseHeaders(headers: Record<string, string | string[] | undefined>)
 export class HttpProxy {
   constructor(private readonly options: HttpProxyOptions) {}
 
-  async handle(request: FastifyRequest, reply: FastifyReply, path: "/responses" | "/responses/compact" | "/models"): Promise<void> {
+  async handle(request: FastifyRequest, reply: FastifyReply, path: ProxyPath): Promise<void> {
     if (hasBrowserOrigin(request)) {
       await reply.code(403).send({ error: "browser_origin_not_allowed" });
       return;
@@ -43,7 +45,7 @@ export class HttpProxy {
 
     const startedAt = Date.now();
     const rawBody = request.method === "GET" ? Buffer.alloc(0) : this.rawBody(request.body);
-    const transport: Transport = path === "/models" ? "models" : path === "/responses/compact" ? "compact" : "http";
+    const transport: Transport = path === "/models" ? "models" : path === "/responses/compact" ? "compact" : path === "/alpha/search" ? "search" : "http";
 
     try {
       const account = this.options.activeAccounts.get();
@@ -114,7 +116,7 @@ export class HttpProxy {
     }
   }
 
-  private upstreamUrl(request: FastifyRequest, path: "/responses" | "/responses/compact" | "/models"): string {
+  private upstreamUrl(request: FastifyRequest, path: ProxyPath): string {
     const base = `${this.options.upstreamBaseUrl}${path}`;
     const rawUrl = request.raw.url ?? "";
     const queryIndex = rawUrl.indexOf("?");

@@ -8,7 +8,7 @@ export type AuthStatus =
   | "disabled"
   | "error";
 
-export type Transport = "http" | "ws" | "compact" | "models";
+export type Transport = "http" | "ws" | "compact" | "models" | "search";
 
 export interface AccountRecord {
   id: string;

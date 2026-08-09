@@ -100,6 +100,11 @@ beforeAll(async () => {
       response.end(body);
       return;
     }
+    if (request.url === "/backend-api/codex/alpha/search") {
+      response.writeHead(200, { "content-type": "application/json", "x-request-id": "search-1" });
+      response.end(body);
+      return;
+    }
     response.writeHead(200, { "content-type": "text/event-stream", "x-request-id": "stream-1" });
     response.write("data: first\n\n");
     setTimeout(() => response.end("data: second\n\n"), 60);
@@ -178,6 +183,27 @@ describe("HTTP, SSE, compact and models", () => {
     expect(received.findLast((entry) => entry.url.endsWith("/responses/compact"))!.headers.authorization).toBe("Bearer second-secret");
     gateway.activeAccounts.select("local");
   });
+  it("proxies the standalone web-search endpoint opaquely on the active account", async () => {
+    const raw = Buffer.from('{"id":"search-session","model":"mock-codex","input":[{"type":"message","role":"user","content":[{"type":"input_text","text":"find this"}]}],"commands":{"search_query":[{"q":"OpenAI news"}]},"settings":{"external_web_access":true}}');
+    const result = await streamRequest(`${gatewayUrl}/backend-api/codex/alpha/search`, raw, { authorization: "Bearer client-secret", "chatgpt-account-id": "client-account", "x-codex-turn-metadata": "turn-1", originator: "chatgpt_cca" });
+    expect(result.status).toBe(200);
+    expect(Buffer.concat(result.chunks).equals(raw)).toBe(true);
+    expect(result.headers["x-request-id"]).toBe("search-1");
+    const request = received.findLast((entry) => entry.url.endsWith("/alpha/search"))!;
+    expect(request.body.equals(raw)).toBe(true);
+    expect(request.headers.authorization).toBe("Bearer top-secret");
+    expect(request.headers["chatgpt-account-id"]).toBe("upstream-account");
+    expect(request.headers["x-codex-turn-metadata"]).toBe("turn-1");
+    expect(request.headers.originator).toBe("chatgpt_cca");
+    expect(request.headers.cookie).toBeUndefined();
+
+    gateway.activeAccounts.select("second");
+    const switched = await streamRequest(`${gatewayUrl}/backend-api/codex/alpha/search`, raw);
+    expect(switched.status).toBe(200);
+    expect(received.findLast((entry) => entry.url.endsWith("/alpha/search"))!.headers.authorization).toBe("Bearer second-secret");
+    gateway.activeAccounts.select("local");
+  });
+
   it("refreshes the same account once on a pre-stream 401", async () => {
     const refresh = vi.spyOn(gateway.auth, "refresh").mockImplementation((id) => gateway.auth.getCredential(id));
     const result = await streamRequest(`${gatewayUrl}/backend-api/codex/responses`, Buffer.from('{"cause401":true,"client_metadata":{"thread_id":"retry-thread"}}'));

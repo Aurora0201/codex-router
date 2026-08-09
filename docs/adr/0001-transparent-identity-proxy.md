@@ -20,7 +20,7 @@
 
 ### 通用
 
-- 路由白名单仅限：`POST /responses`、`POST /responses/compact`、`GET /models`，以及 `GET /responses` 的 WebSocket Upgrade。其余 `backend-api/codex/*` 一律 `501`。
+- 路由白名单仅限：`POST /responses`、`POST /responses/compact`、`GET /models`、`POST /alpha/search`（Codex `web.run` 工具的独立网页搜索端点，见 `codex-rs/ext/web-search`），以及 `GET /responses` 的 WebSocket Upgrade。其余 `backend-api/codex/*` 一律 `501`。
 - 每个请求从 `active_account` 解析出账号，经 `auth.getCredential()` 取得其 access token。
 - 认证替换由 `buildUpstreamHeaders` 完成：设置 `Authorization: Bearer <token>` 与 `chatgpt-account-id`；剥离 `cookie`、`host`、`connection`、`content-length` 等请求头（由网关重建）。
 - 响应头经 `copyResponseHeaders` 转发，剥离 `set-cookie`、`connection` 等传输层头。
