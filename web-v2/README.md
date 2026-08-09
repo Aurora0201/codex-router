@@ -1,27 +1,21 @@
-# Codex Gateway Web V2
+# React + TypeScript + Vite + shadcn/ui
 
-Independent frontend workspace for the shadcn + Base UI redesign.
+This is a template for a new Vite project with React, TypeScript, and shadcn/ui.
 
-## Development
+## Adding components
+
+To add components to your app, run the following command:
 
 ```bash
-npm install
-npm run dev
+npx shadcn@latest add button
 ```
 
-The preview runs at `http://127.0.0.1:5174/admin-v2/`.
+This will place the ui components in the `src/components` directory.
 
-## Data boundary
+## Using components
 
-- `src/services/contracts.ts` defines the UI-facing service contract.
-- `src/services/mock/` is the only active implementation during the product-design phase.
-- The app does not proxy or request `/api`.
-- A future `src/services/http/` adapter can implement the same contract without coupling pages to transport details.
+To use the components in your app, import them as follows:
 
-The mock adapter contains fictional identifiers and does not persist data.
-
-## Typography
-
-- Noto Sans SC is the interface font and supplies all Chinese glyphs.
-- Roboto Mono is reserved for account identifiers, addresses, transport data, and numeric usage values.
-- Inter from the preset remains a Latin fallback.
+```tsx
+import { Button } from "@/components/ui/button"
+```

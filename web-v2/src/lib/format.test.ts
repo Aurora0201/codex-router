@@ -1,21 +1,26 @@
 import { describe, expect, it } from "vitest"
+import { formatUsageWindow, shortAccountId } from "./format"
 
-import { formatUsageWindowName, shortAccountId } from "@/lib/format"
-
-describe("account display formatting", () => {
-  it("uses a compact account id while preserving both ends", () => {
-    expect(shortAccountId("acct_01JQ7V5M0F6K9")).toBe("acct_01J…F6K9")
+describe("account formatting", () => {
+  it("formats backend usage windows as meaningful quota names", () => {
+    expect(
+      formatUsageWindow({
+        usedPercent: 10,
+        resetsAt: null,
+        windowDurationMins: 300,
+      })
+    ).toBe("5 小时额度")
+    expect(
+      formatUsageWindow({
+        usedPercent: 10,
+        resetsAt: null,
+        windowDurationMins: 10080,
+      })
+    ).toBe("7 天额度")
   })
 
-  it.each([
-    [30, "30 分钟额度"],
-    [300, "5 小时额度"],
-    [10_080, "7 天额度"],
-  ])("formats %i minutes as a meaningful usage label", (minutes, expected) => {
-    expect(formatUsageWindowName(minutes)).toBe(expected)
-  })
-
-  it("uses the supplied semantic fallback when upstream omits a window", () => {
-    expect(formatUsageWindowName(null, "短周期额度")).toBe("短周期额度")
+  it("keeps short ids and truncates long ids consistently", () => {
+    expect(shortAccountId("short-id")).toBe("short-id")
+    expect(shortAccountId("account-0123456789abcdef")).toBe("account-…cdef")
   })
 })

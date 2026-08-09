@@ -1,59 +1,373 @@
-import type { Account, CodexStatus, GatewayService, GatewaySnapshot, LoginSession, MockScenario, SettingsState } from "@/services/contracts"
+import type {
+  AccountView,
+  AccountsResponse,
+  CodexStatusView,
+  GatewayService,
+  GatewaySnapshot,
+  LoginSessionView,
+  MockScenario,
+  MockScenarioController,
+  SettingsView,
+} from "@/services/contracts"
 
-const now = Date.now()
-const usage = (usedPercent: number | null, hours: number, windowDurationMins: number) => ({ usedPercent, resetsAt: now + hours * 3_600_000, windowDurationMins })
-const account = (values: Partial<Account> & Pick<Account, "id" | "chatgptAccountId">): Account => ({
-  email: null, planType: null, enabled: true, authStatus: "ready", rateLimitReachedType: null,
-  usage: { primary: null, secondary: null }, lastAuthRefreshAt: now - 900_000, lastLimitsRefreshAt: now - 120_000,
-  ...values,
-})
+const NOW = Date.now()
 
-const healthyAccounts: Account[] = [
-  account({ id: "acc-01", chatgptAccountId: "acct_01JQ7V5DM31YAX8PM0F6K9", email: "lin@example.com", planType: "Plus", usage: { primary: usage(28, 2, 300), secondary: usage(63, 96, 10080) } }),
-  account({ id: "acc-02", chatgptAccountId: "acct_01JR8N2XZ61VHT3QK4B7SA", email: "studio@example.com", planType: "Team", authStatus: "rate_limited", rateLimitReachedType: "primary", usage: { primary: usage(100, 1, 300), secondary: usage(74, 72, 10080) } }),
-  account({ id: "acc-03", chatgptAccountId: "acct_01JT4K9WD72MBC5FL8H0RE", email: "archive@example.com", planType: "Free", authStatus: "relogin_required", usage: { primary: null, secondary: null }, lastAuthRefreshAt: null, lastLimitsRefreshAt: null }),
-  account({ id: "acc-04", chatgptAccountId: "acct_01JV6Y3HF82KDP9MN5W1TC", email: "secure@example.com", planType: "Enterprise", authStatus: "unsupported_fedramp", usage: { primary: usage(null, 4, 300), secondary: null } }),
-  account({ id: "acc-05", chatgptAccountId: "acct_01JW2B8QL94XAF7RC3S6NP", email: "paused@example.com", planType: "Plus", enabled: false, authStatus: "disabled", usage: { primary: usage(11, 3, 300), secondary: usage(22, 120, 10080) } }),
+const seedAccounts: AccountView[] = [
+  {
+    id: "f0652969-1bbf-46e3-bf0b-395dc1396d2f",
+    chatgptAccountId: "account-01HTF8R9J2K4N6P8Q0S2V4X6Z8",
+    email: "lin.qiao@example.com",
+    planType: "Plus",
+    enabled: true,
+    isActive: true,
+    authStatus: "ready",
+    rateLimitReachedType: null,
+    usage: {
+      primary: {
+        usedPercent: 28,
+        resetsAt: NOW + 2 * 3_600_000,
+        windowDurationMins: 300,
+      },
+      secondary: {
+        usedPercent: 46,
+        resetsAt: NOW + 3 * 86_400_000,
+        windowDurationMins: 10080,
+      },
+    },
+    lastAuthRefreshAt: NOW - 11 * 60_000,
+    lastLimitsRefreshAt: NOW - 4 * 60_000,
+  },
+  {
+    id: "34f78fd4-1b8d-4ef5-a66e-a3f3e521c382",
+    chatgptAccountId: "account-01HTH4J6M8P0R2T4V6X8Z0B2D4",
+    email: "operations.long-address@example.org",
+    planType: "Team",
+    enabled: true,
+    isActive: false,
+    authStatus: "rate_limited",
+    rateLimitReachedType: "primary",
+    usage: {
+      primary: {
+        usedPercent: 100,
+        resetsAt: NOW + 38 * 60_000,
+        windowDurationMins: 300,
+      },
+      secondary: {
+        usedPercent: 73,
+        resetsAt: NOW + 5 * 86_400_000,
+        windowDurationMins: 10080,
+      },
+    },
+    lastAuthRefreshAt: NOW - 45 * 60_000,
+    lastLimitsRefreshAt: NOW - 8 * 60_000,
+  },
+  {
+    id: "7fbd28a1-2a73-45a4-af79-12c39df28429",
+    chatgptAccountId: "account-01HTK8N0Q2S4V6X8Z0B2D4F6H8",
+    email: "design@example.net",
+    planType: "Pro",
+    enabled: true,
+    isActive: false,
+    authStatus: "ready",
+    rateLimitReachedType: null,
+    usage: {
+      primary: { usedPercent: null, resetsAt: null, windowDurationMins: 300 },
+      secondary: {
+        usedPercent: null,
+        resetsAt: null,
+        windowDurationMins: 10080,
+      },
+    },
+    lastAuthRefreshAt: NOW - 2 * 3_600_000,
+    lastLimitsRefreshAt: null,
+  },
+  {
+    id: "23a4f612-dd36-4bdd-bf16-063b746d07c6",
+    chatgptAccountId: "account-01HTM2P4R6T8V0X2Z4B6D8F0H2",
+    email: "qa@example.com",
+    planType: "Plus",
+    enabled: false,
+    isActive: false,
+    authStatus: "disabled",
+    rateLimitReachedType: null,
+    usage: {
+      primary: {
+        usedPercent: 12,
+        resetsAt: NOW + 4 * 3_600_000,
+        windowDurationMins: 300,
+      },
+      secondary: {
+        usedPercent: 31,
+        resetsAt: NOW + 6 * 86_400_000,
+        windowDurationMins: 10080,
+      },
+    },
+    lastAuthRefreshAt: NOW - 86_400_000,
+    lastLimitsRefreshAt: NOW - 86_400_000,
+  },
+  {
+    id: "0ecb267c-c5af-45df-80ae-14d0e8b95bea",
+    chatgptAccountId: "account-01HTQ6S8V0X2Z4B6D8F0H2J4L6",
+    email: "backup@example.com",
+    planType: "Free",
+    enabled: true,
+    isActive: false,
+    authStatus: "relogin_required",
+    rateLimitReachedType: null,
+    usage: { primary: null, secondary: null },
+    lastAuthRefreshAt: NOW - 7 * 86_400_000,
+    lastLimitsRefreshAt: NOW - 7 * 86_400_000,
+  },
+  {
+    id: "a3e43d34-777d-43f9-ae52-f6bb9d2d8205",
+    chatgptAccountId: "account-01HTT0V2X4Z6B8D0F2H4J6L8N0",
+    email: "research@example.com",
+    planType: "Plus",
+    enabled: true,
+    isActive: false,
+    authStatus: "ready",
+    rateLimitReachedType: null,
+    usage: {
+      primary: {
+        usedPercent: 9,
+        resetsAt: NOW + 5 * 3_600_000,
+        windowDurationMins: 300,
+      },
+      secondary: {
+        usedPercent: 18,
+        resetsAt: NOW + 7 * 86_400_000,
+        windowDurationMins: 10080,
+      },
+    },
+    lastAuthRefreshAt: NOW - 22 * 60_000,
+    lastLimitsRefreshAt: NOW - 12 * 60_000,
+  },
 ]
 
-const makeSnapshot = (scenario: MockScenario): GatewaySnapshot => ({
-  version: "0.3.0-preview", online: scenario !== "offline", activeAccountId: scenario === "healthy" ? "acc-01" : null,
-  accounts: scenario === "empty" ? [] : structuredClone(healthyAccounts), requestsToday: scenario === "offline" ? 0 : 1842,
-  errorsToday: scenario === "degraded" ? 87 : 3, activeRequests: scenario === "offline" ? 0 : 4,
-  activeWebSockets: scenario === "offline" ? 0 : 2, uptimeSeconds: scenario === "offline" ? 0 : 18420,
-})
-
-let scenario: MockScenario = "healthy"
-let snapshot = makeSnapshot(scenario)
-let settings: SettingsState = { gatewayAddress: "127.0.0.1", gatewayPort: 8317, upstream: "https://chatgpt.com/backend-api/codex", requestMetadataLogging: true, promptLogging: false, theme: "system" }
-let codex: CodexStatus = { configPath: "C:\\Users\\demo\\.codex\\config.toml", openaiBaseUrl: null, gatewayBaseUrl: "http://127.0.0.1:8317/backend-api/codex", applied: false, modelCatalogJson: null, hasBackup: false, configExists: true, codexRunning: true }
-const logins = new Map<string, LoginSession & { polls: number }>()
-
-const wait = () => new Promise((resolve) => window.setTimeout(resolve, 240))
-const clone = <T>(value: T): T => structuredClone(value)
-const requireOnline = () => { if (!snapshot.online) throw new Error("Gateway 当前离线，请切换 Mock 场景后重试") }
-const findAccount = (id: string) => { const found = snapshot.accounts.find((item) => item.id === id); if (!found) throw new Error("account_not_found"); return found }
-
-export const mockScenarioController = {
-  getScenario: () => scenario,
-  setScenario(next: MockScenario) { scenario = next; snapshot = makeSnapshot(next) },
+function clone<T>(value: T): T {
+  return structuredClone(value)
 }
 
-export const mockGatewayService: GatewayService = {
-  async getSnapshot() { await wait(); if (scenario === "offline") return clone(snapshot); return clone(snapshot) },
-  async setActiveAccount(id) { await wait(); requireOnline(); const target = findAccount(id); if (!target.enabled || target.authStatus !== "ready") throw new Error("该账号当前不可用"); snapshot.activeAccountId = id; return clone(snapshot) },
-  async clearActiveAccount() { await wait(); requireOnline(); snapshot.activeAccountId = null; return clone(snapshot) },
-  async setAccountEnabled(id, enabled) { await wait(); requireOnline(); const target = findAccount(id); target.enabled = enabled; target.authStatus = enabled ? "ready" : "disabled"; if (!enabled && snapshot.activeAccountId === id) snapshot.activeAccountId = null; return clone(snapshot) },
-  async removeAccount(id) { await wait(); requireOnline(); findAccount(id); snapshot.accounts = snapshot.accounts.filter((item) => item.id !== id); if (snapshot.activeAccountId === id) snapshot.activeAccountId = null; return clone(snapshot) },
-  async refreshUsage(id) { await wait(); requireOnline(); const target = findAccount(id); target.lastLimitsRefreshAt = Date.now(); if (target.authStatus === "rate_limited") { target.authStatus = "ready"; target.rateLimitReachedType = null; target.usage.primary = usage(42, 4, 300) } return clone(snapshot) },
-  async refreshAuth(id) { await wait(); requireOnline(); const target = findAccount(id); target.authStatus = "refreshing"; await wait(); target.authStatus = "ready"; target.enabled = true; target.lastAuthRefreshAt = Date.now(); return clone(snapshot) },
-  async startLogin() { await wait(); requireOnline(); const loginId = `login-${Date.now()}`; const session = { loginId, authUrl: `https://auth.openai.example/mock/${loginId}`, status: "launching" as const, polls: 0 }; logins.set(loginId, session); return clone(session) },
-  async getLogin(id) { await wait(); const session = logins.get(id); if (!session) throw new Error("login_not_found"); if (!["complete", "failed", "cancelled"].includes(session.status)) { session.polls += 1; session.status = session.polls < 2 ? "waiting" : session.polls < 4 ? "completing" : scenario === "degraded" ? "failed" : "complete"; if (session.status === "failed") session.error = "模拟 OAuth 完成失败"; if (session.status === "complete" && !session.createdAccountId) { session.createdAccountId = "acct_01MOCKNEWACCOUNT000001"; snapshot.accounts.push(account({ id: `acc-${Date.now()}`, chatgptAccountId: session.createdAccountId, email: "new.account@example.com", planType: "Plus", usage: { primary: usage(0, 5, 300), secondary: usage(0, 168, 10080) } })) } } return clone(session) },
-  async cancelLogin(id) { await wait(); const session = logins.get(id); if (!session) throw new Error("login_not_found"); session.status = "cancelled"; return clone(session) },
-  async getSettings() { await wait(); return clone(settings) },
-  async updateSettings(values) { await wait(); requireOnline(); settings = { ...settings, ...values, promptLogging: false }; return clone(settings) },
-  async getCodexStatus() { await wait(); return clone(codex) },
-  async applyCodexConfig() { await wait(); requireOnline(); codex = { ...codex, applied: true, hasBackup: true, openaiBaseUrl: codex.gatewayBaseUrl }; return clone(codex) },
-  async restoreCodexConfig() { await wait(); requireOnline(); codex = { ...codex, applied: false, openaiBaseUrl: null }; return clone(codex) },
-  async restartCodex() { await wait(); requireOnline(); codex = { ...codex, codexRunning: false }; await wait(); codex = { ...codex, codexRunning: true }; return clone(codex) },
+export function createMockGatewayService(
+  initialScenario: MockScenario = "healthy"
+): GatewayService & MockScenarioController {
+  let scenario = initialScenario
+  let accounts = clone(seedAccounts)
+  let activeAccountId: string | null = accounts[0].id
+  let login: LoginSessionView | null = null
+  let loginChecks = 0
+  let settings: SettingsView = {
+    gatewayAddress: "127.0.0.1",
+    gatewayPort: 8317,
+    upstream: "https://chatgpt.com/backend-api/codex",
+    requestMetadataLogging: true,
+    promptLogging: false,
+    theme: "system",
+  }
+  let codex: CodexStatusView = {
+    configPath: "C:\\Users\\demo\\.codex\\config.toml",
+    openaiBaseUrl: "http://127.0.0.1:8317/backend-api/codex",
+    gatewayBaseUrl: "http://127.0.0.1:8317/backend-api/codex",
+    applied: true,
+    modelCatalogJson: null,
+    hasBackup: true,
+    configExists: true,
+    codexRunning: true,
+  }
+
+  const wait = () =>
+    new Promise<void>((resolve) => window.setTimeout(resolve, 180))
+  const failOffline = () => {
+    if (scenario === "offline") throw new Error("mock_gateway_offline")
+  }
+  const find = (id: string) => {
+    const account = accounts.find((item) => item.id === id)
+    if (!account) throw new Error("account_not_found")
+    return account
+  }
+  const viewAccounts = (): AccountsResponse => {
+    const visible = scenario === "empty" ? [] : accounts
+    const selected = scenario === "no-active" ? null : activeAccountId
+    return {
+      activeAccountId: selected,
+      accounts: visible.map((account) => ({
+        ...clone(account),
+        isActive: account.id === selected,
+      })),
+    }
+  }
+  const getCodex = () =>
+    scenario === "degraded"
+      ? {
+          ...codex,
+          applied: false,
+          openaiBaseUrl: "https://chatgpt.com/backend-api/codex",
+          codexRunning: false,
+        }
+      : codex
+
+  const service: GatewayService & MockScenarioController = {
+    getScenario: () => scenario,
+    setScenario: (next) => {
+      scenario = next
+    },
+    async getSnapshot() {
+      await wait()
+      failOffline()
+      const accountView = viewAccounts()
+      return clone({
+        health: {
+          status: "ok",
+          upstream: "configured",
+          accounts: accountView.accounts.length,
+          csrfToken: "mock-csrf",
+          version: "0.2.0",
+        },
+        stats: {
+          uptimeSeconds: 76_440,
+          requestsToday: 1_284,
+          errorsToday: scenario === "degraded" ? 19 : 3,
+          accountsReady: accountView.accounts.filter(
+            (account) => account.enabled && account.authStatus === "ready"
+          ).length,
+        },
+        accounts: accountView,
+        settings,
+        codex: getCodex(),
+      } satisfies GatewaySnapshot)
+    },
+    async getAccounts() {
+      await wait()
+      failOffline()
+      return clone(viewAccounts())
+    },
+    async setActiveAccount(id) {
+      await wait()
+      failOffline()
+      const account = find(id)
+      if (!account.enabled || account.authStatus !== "ready")
+        throw new Error("account_not_ready")
+      activeAccountId = id
+      return clone({ ...account, isActive: true })
+    },
+    async clearActiveAccount() {
+      await wait()
+      failOffline()
+      activeAccountId = null
+    },
+    async updateAccount(id, values) {
+      await wait()
+      failOffline()
+      const account = find(id)
+      account.enabled = values.enabled
+      account.authStatus = values.enabled ? "ready" : "disabled"
+      if (!values.enabled && activeAccountId === id) activeAccountId = null
+      return clone(account)
+    },
+    async removeAccount(id) {
+      await wait()
+      failOffline()
+      find(id)
+      accounts = accounts.filter((account) => account.id !== id)
+      if (activeAccountId === id) activeAccountId = null
+    },
+    async refreshAccountAuth(id) {
+      await wait()
+      failOffline()
+      const account = find(id)
+      account.authStatus = account.enabled ? "ready" : "disabled"
+      account.lastAuthRefreshAt = Date.now()
+      return clone(account)
+    },
+    async refreshAccountLimits(id) {
+      await wait()
+      failOffline()
+      const account = find(id)
+      account.lastLimitsRefreshAt = Date.now()
+      if (account.usage.primary)
+        account.usage.primary.usedPercent = Math.max(
+          0,
+          (account.usage.primary.usedPercent ?? 24) - 4
+        )
+      return clone(account)
+    },
+    async startLogin() {
+      await wait()
+      failOffline()
+      loginChecks = 0
+      login = {
+        loginId: "mock-login-001",
+        authUrl: "https://auth.openai.com/mock/codex",
+        status: "waiting",
+      }
+      return clone(login)
+    },
+    async getLoginStatus(loginId) {
+      await wait()
+      failOffline()
+      if (!login || login.loginId !== loginId)
+        throw new Error("login_not_found")
+      loginChecks += 1
+      if (loginChecks >= 3 && login.status === "waiting") {
+        const created = clone(seedAccounts[2])
+        created.id = "mock-created-account"
+        created.chatgptAccountId = "account-01HTNEW2X4Z6B8D0F2H4J6L8N0"
+        created.email = "new.account@example.com"
+        created.isActive = false
+        accounts.push(created)
+        login = { ...login, status: "complete", createdAccountId: created.id }
+      }
+      return clone(login)
+    },
+    async cancelLogin(loginId) {
+      await wait()
+      failOffline()
+      if (!login || login.loginId !== loginId)
+        throw new Error("login_not_found")
+      login.status = "cancelled"
+    },
+    async saveSettings(values) {
+      await wait()
+      failOffline()
+      settings = { ...settings, ...values }
+      return clone(settings)
+    },
+    async applyCodexConfig() {
+      await wait()
+      failOffline()
+      codex = {
+        ...codex,
+        applied: true,
+        openaiBaseUrl: codex.gatewayBaseUrl,
+        hasBackup: true,
+      }
+      return clone(codex)
+    },
+    async restoreCodexConfig() {
+      await wait()
+      failOffline()
+      codex = {
+        ...codex,
+        applied: false,
+        openaiBaseUrl: "https://chatgpt.com/backend-api/codex",
+      }
+      return clone(codex)
+    },
+    async restartCodex() {
+      await wait()
+      failOffline()
+      codex = { ...codex, codexRunning: true }
+      return { running: true, codexPath: "C:\\Program Files\\Codex\\Codex.exe" }
+    },
+  }
+  return service
+}
+
+export function scenarioFromUrl(search = window.location.search): MockScenario {
+  const value = new URLSearchParams(search).get("scenario")
+  return ["healthy", "empty", "no-active", "degraded", "offline"].includes(
+    value ?? ""
+  )
+    ? (value as MockScenario)
+    : "healthy"
 }

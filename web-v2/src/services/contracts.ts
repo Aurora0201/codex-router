@@ -1,49 +1,74 @@
-export type AccountAuthStatus = "ready" | "refreshing" | "rate_limited" | "relogin_required" | "unsupported_fedramp" | "disabled" | "login_pending" | "error"
-export type ThemePreference = "system" | "light" | "dark"
-export type LoginStatus = "launching" | "waiting" | "completing" | "complete" | "failed" | "cancelled"
-export type MockScenario = "healthy" | "empty" | "no-active" | "degraded" | "offline"
+export type AuthStatus =
+  | "login_pending"
+  | "ready"
+  | "refreshing"
+  | "rate_limited"
+  | "relogin_required"
+  | "unsupported_fedramp"
+  | "disabled"
+  | "error"
 
-export interface UsageWindow {
+export interface UsageWindowView {
   usedPercent: number | null
   resetsAt: number | null
   windowDurationMins: number | null
 }
 
-export interface Account {
+export interface AccountView {
   id: string
-  chatgptAccountId: string
+  chatgptAccountId: string | null
   email: string | null
   planType: string | null
   enabled: boolean
-  authStatus: AccountAuthStatus
+  isActive: boolean
+  authStatus: AuthStatus
   rateLimitReachedType: string | null
-  usage: { primary: UsageWindow | null; secondary: UsageWindow | null }
+  usage: {
+    primary: UsageWindowView | null
+    secondary: UsageWindowView | null
+  }
   lastAuthRefreshAt: number | null
   lastLimitsRefreshAt: number | null
 }
 
-export interface GatewaySnapshot {
-  version: string
-  online: boolean
+export interface AccountsResponse {
   activeAccountId: string | null
-  accounts: Account[]
-  requestsToday: number
-  errorsToday: number
-  activeRequests: number
-  activeWebSockets: number
-  uptimeSeconds: number
+  accounts: AccountView[]
 }
 
-export interface SettingsState {
+export interface HealthView {
+  status: "ok"
+  upstream: "configured"
+  accounts: number
+  csrfToken: string
+  version: string
+}
+
+export interface StatsView {
+  uptimeSeconds: number
+  requestsToday: number
+  errorsToday: number
+  accountsReady: number
+}
+
+export interface SettingsView {
   gatewayAddress: string
   gatewayPort: number
   upstream: string
   requestMetadataLogging: boolean
   promptLogging: false
-  theme: ThemePreference
+  theme: "system" | "light" | "dark"
 }
 
-export interface CodexStatus {
+export interface LoginSessionView {
+  loginId: string
+  authUrl: string
+  status: "waiting" | "complete" | "failed" | "cancelled"
+  error?: string
+  createdAccountId?: string
+}
+
+export interface CodexStatusView {
   configPath: string
   openaiBaseUrl: string | null
   gatewayBaseUrl: string
@@ -54,29 +79,38 @@ export interface CodexStatus {
   codexRunning: boolean
 }
 
-export interface LoginSession {
-  loginId: string
-  authUrl: string
-  status: LoginStatus
-  error?: string
-  createdAccountId?: string
+export type MockScenario =
+  "healthy" | "empty" | "no-active" | "degraded" | "offline"
+
+export interface GatewaySnapshot {
+  health: HealthView
+  stats: StatsView
+  accounts: AccountsResponse
+  settings: SettingsView
+  codex: CodexStatusView
 }
 
 export interface GatewayService {
   getSnapshot(): Promise<GatewaySnapshot>
-  setActiveAccount(accountId: string): Promise<GatewaySnapshot>
-  clearActiveAccount(): Promise<GatewaySnapshot>
-  setAccountEnabled(accountId: string, enabled: boolean): Promise<GatewaySnapshot>
-  removeAccount(accountId: string): Promise<GatewaySnapshot>
-  refreshUsage(accountId: string): Promise<GatewaySnapshot>
-  refreshAuth(accountId: string): Promise<GatewaySnapshot>
-  startLogin(): Promise<LoginSession>
-  getLogin(loginId: string): Promise<LoginSession>
-  cancelLogin(loginId: string): Promise<LoginSession>
-  getSettings(): Promise<SettingsState>
-  updateSettings(values: Pick<SettingsState, "requestMetadataLogging" | "theme">): Promise<SettingsState>
-  getCodexStatus(): Promise<CodexStatus>
-  applyCodexConfig(): Promise<CodexStatus>
-  restoreCodexConfig(): Promise<CodexStatus>
-  restartCodex(): Promise<CodexStatus>
+  getAccounts(): Promise<AccountsResponse>
+  setActiveAccount(id: string): Promise<AccountView>
+  clearActiveAccount(): Promise<void>
+  updateAccount(id: string, values: { enabled: boolean }): Promise<AccountView>
+  removeAccount(id: string): Promise<void>
+  refreshAccountAuth(id: string): Promise<AccountView>
+  refreshAccountLimits(id: string): Promise<AccountView>
+  startLogin(): Promise<LoginSessionView>
+  getLoginStatus(loginId: string): Promise<LoginSessionView>
+  cancelLogin(loginId: string): Promise<void>
+  saveSettings(
+    values: Pick<SettingsView, "requestMetadataLogging" | "theme">
+  ): Promise<SettingsView>
+  applyCodexConfig(): Promise<CodexStatusView>
+  restoreCodexConfig(): Promise<CodexStatusView>
+  restartCodex(): Promise<{ running: boolean; codexPath: string | null }>
+}
+
+export interface MockScenarioController {
+  getScenario(): MockScenario
+  setScenario(scenario: MockScenario): void
 }
