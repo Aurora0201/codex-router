@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import { access, mkdir, open, readFile, stat } from "node:fs/promises";
 import { accessSync, realpathSync, watch } from "node:fs";
 import { createRequire } from "node:module";
+import net from "node:net";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { Command } from "commander";
@@ -85,8 +86,28 @@ async function waitForHealth(host: string, port: number, timeoutMs: number): Pro
   return false;
 }
 
+export function isPortFree(host: string, port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = net.connect({ host, port });
+    const done = (free: boolean) => {
+      socket.destroy();
+      resolve(free);
+    };
+    socket.once("connect", () => done(false));
+    socket.once("error", () => done(true));
+  });
+}
+
 async function startInBackground(overrides: Partial<GatewayConfig>, logFileOption?: string): Promise<void> {
   const config = loadConfig(overrides);
+
+  if (!(await isPortFree(config.host, config.port))) {
+    err(`[codex-router] failed to start: port ${config.port} is already in use`);
+    err(`[codex-router] is a gateway already running? check with: codex-router status`);
+    process.exitCode = 1;
+    return;
+  }
+
   const logDir = path.join(config.dataDir, "logs");
   await mkdir(logDir, { recursive: true });
   const logFile = path.resolve(logFileOption ?? path.join(logDir, "gateway.log"));
@@ -111,9 +132,14 @@ async function startInBackground(overrides: Partial<GatewayConfig>, logFileOptio
   await logFd.close();
   child.unref();
 
+  let childExited = false;
+  child.once("exit", () => {
+    childExited = true;
+  });
+
   const started = await waitForHealth(config.host, config.port, 5_000);
-  if (!started) {
-    err("[codex-router] failed to start in the background (health check timed out)");
+  if (childExited || !started) {
+    err("[codex-router] failed to start in the background");
     err("[codex-router] check the log file for details:");
     err(`  ${logFile}`);
     try {
