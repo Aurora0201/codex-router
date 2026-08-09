@@ -57,7 +57,7 @@ export class HttpProxy {
       request.raw.once("aborted", abort);
       reply.raw.once("close", abort);
 
-      const send = (): Promise<Dispatcher.ResponseData> => undiciRequest(`${this.options.upstreamBaseUrl}${path}`, {
+      const send = (): Promise<Dispatcher.ResponseData> => undiciRequest(this.upstreamUrl(request, path), {
         method: request.method as Dispatcher.HttpMethod,
         headers: buildUpstreamHeaders(request.headers, credential, request.method === "GET" ? undefined : rawBody.byteLength),
         body: request.method === "GET" ? undefined : rawBody,
@@ -112,6 +112,16 @@ export class HttpProxy {
       if (!reply.raw.headersSent) await reply.code(status).send({ error: (error as Error).message });
       else reply.raw.destroy(error as Error);
     }
+  }
+
+  private upstreamUrl(request: FastifyRequest, path: "/responses" | "/responses/compact" | "/models"): string {
+    const base = `${this.options.upstreamBaseUrl}${path}`;
+    const rawUrl = request.raw.url ?? "";
+    const queryIndex = rawUrl.indexOf("?");
+    if (queryIndex === -1) return base;
+    // Preserve the client's query string (e.g. ?client_version=...) so the
+    // upstream receives the parameters Codex sends on the /models route.
+    return `${base}${rawUrl.slice(queryIndex)}`;
   }
 
   private rawBody(body: unknown): Buffer {
