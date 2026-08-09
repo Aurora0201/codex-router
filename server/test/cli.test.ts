@@ -2,8 +2,9 @@ import http from "node:http";
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createProgram, startOverrides } from "../src/cli.js";
+import { createProgram, isEntryScript, startOverrides } from "../src/cli.js";
 import { GatewayDatabase } from "../src/db/database.js";
 
 const temporary: string[] = [];
@@ -41,6 +42,23 @@ describe("startOverrides", () => {
       dataDir: path.resolve("x"),
       upstreamBaseUrl: "https://u",
     });
+  });
+});
+
+describe("isEntryScript", () => {
+  it("recognizes the running script by realpath", () => {
+    const url = new URL(import.meta.url);
+    expect(isEntryScript(fileURLToPath(url), url.href)).toBe(true);
+    expect(isEntryScript("C:\\nonexistent\\elsewhere.js", url.href)).toBe(false);
+    expect(isEntryScript(undefined, url.href)).toBe(false);
+  });
+
+  it("normalizes non-canonical argv paths before comparing", async () => {
+    const dir = await tempDir();
+    const file = path.join(dir, "cli-entry.js");
+    await writeFile(file, "");
+    const nonCanonical = path.join(dir, "sub", "..", "cli-entry.js");
+    expect(isEntryScript(nonCanonical, pathToFileURL(file).href)).toBe(true);
   });
 });
 
