@@ -1,0 +1,21 @@
+import { useState } from "react"
+import { RefreshCw, RotateCcw, Rocket, Wrench } from "lucide-react"
+import { toast } from "sonner"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Spinner } from "@/components/ui/spinner"
+import type { CodexStatus, GatewayService } from "@/services/contracts"
+
+type Action = "apply" | "restore" | "restart"
+
+export function CodexTakeoverCard({ status, service, onChange }: { status: CodexStatus; service: GatewayService; onChange(status: CodexStatus): void }) {
+  const [confirm, setConfirm] = useState<Action | null>(null)
+  const [busy, setBusy] = useState<Action | null>(null)
+  const [error, setError] = useState("")
+  const run = async (action: Action) => { setBusy(action); setError(""); try { const next = action === "apply" ? await service.applyCodexConfig() : action === "restore" ? await service.restoreCodexConfig() : await service.restartCodex(); onChange(next); toast.success(action === "apply" ? "已替换为 Gateway" : action === "restore" ? "已恢复原配置" : "Codex 已重启") } catch (reason) { setError((reason as Error).message) } finally { setBusy(null); setConfirm(null) } }
+
+  return <Card><CardHeader><div className="flex flex-wrap items-start justify-between gap-3"><div><CardTitle className="flex items-center gap-2"><Wrench />Codex 接管</CardTitle><CardDescription>模拟管理主 Codex 配置与进程状态</CardDescription></div><div className="flex gap-2"><Badge variant={status.applied ? "default" : "secondary"}>{status.applied ? "已接管" : status.configExists ? "未接管" : "配置缺失"}</Badge><Badge variant={status.codexRunning ? "default" : "outline"}>{status.codexRunning ? "运行中" : "未运行"}</Badge></div></div></CardHeader><CardContent className="space-y-5"><dl className="grid gap-3 text-sm"><div className="grid grid-cols-[5rem_1fr] gap-2"><dt className="text-muted-foreground">配置</dt><dd className="break-all font-mono text-xs">{status.configPath}</dd></div><div className="grid grid-cols-[5rem_1fr] gap-2"><dt className="text-muted-foreground">目标</dt><dd className="break-all font-mono text-xs">{status.gatewayBaseUrl}</dd></div><div className="grid grid-cols-[5rem_1fr] gap-2"><dt className="text-muted-foreground">当前</dt><dd className="break-all font-mono text-xs">{status.openaiBaseUrl ?? "默认 ChatGPT 路径"}</dd></div><div className="grid grid-cols-[5rem_1fr] gap-2"><dt className="text-muted-foreground">模型目录</dt><dd className="break-all font-mono text-xs">{status.modelCatalogJson ?? "从 Gateway /models 获取"}</dd></div></dl>{error && <Alert variant="destructive"><AlertTitle>操作失败</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}<Alert><AlertTitle>配置安全</AlertTitle><AlertDescription>应用前会模拟备份原配置；所有动作只修改 Mock 状态，不读取或写入本机 Codex 文件。</AlertDescription></Alert><div className="flex flex-wrap justify-end gap-2"><Button variant="outline" disabled={busy != null} onClick={() => setConfirm("restart")}><RefreshCw />{busy === "restart" ? <><Spinner />重启中</> : "重启 Codex"}</Button><Button variant="secondary" disabled={!status.hasBackup || !status.applied || busy != null} onClick={() => setConfirm("restore")}><RotateCcw />恢复原配置</Button><Button disabled={!status.configExists || status.applied || busy != null} onClick={() => setConfirm("apply")}><Rocket />替换为 Gateway</Button></div></CardContent><AlertDialog open={confirm != null} onOpenChange={(open) => !open && setConfirm(null)}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>{confirm === "apply" ? "替换为 Gateway？" : confirm === "restore" ? "恢复原配置？" : "重启 Codex？"}</AlertDialogTitle><AlertDialogDescription>{confirm === "restart" ? "真实接入后重启会中断正在执行的任务；当前只模拟状态变化。" : "当前操作只更新 Mock 状态，不会修改本机文件。"}</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>取消</AlertDialogCancel><AlertDialogAction disabled={busy != null} onClick={() => confirm && void run(confirm)}>确认</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog></Card>
+}
