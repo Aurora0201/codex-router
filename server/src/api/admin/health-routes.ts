@@ -8,5 +8,6 @@ export function registerHealthRoutes(app: FastifyInstance, ctx: AdminContext): v
     accounts: ctx.database.accounts.list().length,
     csrfToken: ctx.csrf.issue(reply),
     version: "0.2.0",
+    uptime: Math.max(0, Math.floor((Date.now() - ctx.startedAt) / 1000)),
   }));
 }

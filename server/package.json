@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "bin": {
-    "codex-gateway": "dist/index.js"
+    "codex-router": "dist/cli.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -19,6 +19,7 @@
     "@fastify/websocket": "^11.3.0",
     "@openai/codex": "^0.147.0",
     "better-sqlite3": "^13.0.3",
+    "commander": "^15.0.0",
     "fastify": "^5.11.2",
     "undici": "^8.10.0",
     "ws": "^8.21.3"

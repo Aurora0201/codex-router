@@ -28,6 +28,33 @@ chatgpt_base_url = "http://127.0.0.1:8317/backend-api/codex"
 npm run dev
 ```
 
+## 命令行
+
+构建后即可在仓库内使用 `codex-router`（零安装）：
+
+```powershell
+npm run build
+node server/dist/cli.js --help
+```
+
+也可一次 `npm link` 将 `codex-router` 挂到全局 PATH（改代码后重新 `npm run build` 即生效，无需重装）：
+
+```powershell
+npm link
+codex-router status
+```
+
+| 命令 | 说明 |
+|---|---|
+| `codex-router start` | 默认后台启动：打印摘要后转后台，日志写入 `<data-dir>/logs/gateway.log` |
+| `codex-router start --foreground` (`-f`) | 前台启动，持续打印日志到终端（等价 `npm start`） |
+| `codex-router status` | 显示运行状态、uptime、config 注入（劫持）状态与账号明细 |
+| `codex-router stop` | 读取 pid 文件并优雅停止后台进程 |
+| `codex-router logs [--tail]` | 查看日志文件；`--tail` 跟随追加 |
+| `codex-router config status/apply/restore` | 查看 / 注入 / 还原 `~/.codex/config.toml` 的 `openai_base_url` |
+
+常用参数：`--host`、`--port`、`--data-dir`（默认 `<repo>/data`）、`--upstream`（需 `--dev`）、`--log-level`、`--log-file`。后台进程使用 `<data-dir>/gateway.pid` 记录 pid。
+
 ## 管理功能
 
 - Accounts：官方 Browser OAuth（无标签输入，以 ChatGPT Account ID 标记账号）、手动选择当前账号、认证刷新、额度刷新、启用/禁用和安全移除。
