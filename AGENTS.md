@@ -1,27 +1,42 @@
 # Repository instructions
 
-- Follow the product baseline in `codex-gateway-mvp-design.md`.
-- For frontend work, follow `docs/agents/frontend.md`.
-- Never log credentials, prompts, tool arguments, tool output, or response bodies.
-- Keep data-plane payloads opaque; only routing metadata may be inspected read-only.
+Stable, long-lived rules for agents working in this repository. Follow these across sessions;
+one-off decisions belong in commit messages or ADRs, not here.
+
+## Source of truth
+
+- `docs/adr/0001-transparent-identity-proxy.md` is the authoritative reference for proxy and data-plane routing, including the account/routing hard rules (no automatic routing, manual active-account selection only, no session binding, opaque data plane); treat it as current truth.
+- Frontend: follow `docs/agents/frontend.md`.
+- Consult `docs/` before changing routing or transport behavior; update the relevant ADR when rules evolve.
 
 ## Coding principles
 
 - Seek a reasonable separation of concerns, but avoid over-abstraction; do not add layers or indirection that buy nothing (no unnecessary base classes, factories, or wrappers).
 - Favor the smallest amount of code that implements the feature, but do not create tightly coupled modules; keep dependencies clear and replaceable rather than implicit.
-- Prefer reusing existing components and third-party modules over writing your own; when adopting a component or external module, check its official documentation first to confirm the correct usage and API.
-
-## Account and routing hard rules
-
-- Do not add automatic account routing (round robin, weighted, least-used, quota-aware, failover, or fallback).
-- Do not change the active account automatically; only the user's explicit manual selection changes it.
-- Every request uses the manually selected active account; when none is selected, fail with `no_active_account_selected`.
-- There is no session-to-account binding; switching the active account takes effect on the next request.
-- Do not use user-defined account labels; the real ChatGPT account ID is the account identity.
-- The `chatgpt_account_id` from Codex auth data must be unique; duplicate logins return `account_already_exists`.
-- Rate-limit data is display state only and must never affect routing or account selection.
-- Gateway must not parse or rewrite Responses tool payloads; data-plane bytes stay opaque.
+- Prefer reusing existing components and third-party modules over writing your own. When adopting or relying on any component, external module, or library API, search and check the latest official documentation to confirm the correct usage and API; do not rely on memory or outdated docs.
 
 ## Data plane freeze
 
 - Do not change HTTP/WS proxy transport behavior without the integration tests in `server/test/gateway.e2e.test.ts` staying green.
+- Before adding any new data-plane route, confirm the endpoint against the Codex source (`codex-rs/codex-api/src/endpoint`, `codex-rs/ext/web-search`) and record it in `docs/adr/0001-transparent-identity-proxy.md`.
+- Data-plane payloads stay opaque; only routing metadata may be inspected read-only.
+
+## Security
+
+- Never log credentials, prompts, tool arguments, tool output, or response bodies.
+
+## Git workflow
+
+- `main` is the only long-lived branch and must stay deployable. Do not commit directly to it.
+- Work on short-lived branches: `fix/...` for bug fixes, `feature/...` for features, `chore/...` for maintenance.
+- Merge into `main` with `--no-ff` and delete the branch afterwards.
+- Rebase the branch onto `main` before merging; never merge `main` into the branch.
+- Use conventional commit messages (`fix:`, `feat:`, `refactor:`, `docs:`, `chore:`); one logical change per commit.
+- Never force-push to `main`; undo with `git revert`.
+- Tag releases (e.g. `v0.1.0`) so rollback points are explicit.
+
+## Verification (definition of done)
+
+- Changes must pass `npm test`, `npm run lint`, and `npm run build` before merging.
+- Any transport/proxy change must keep `server/test/gateway.e2e.test.ts` green.
+- After upgrading the `@openai/codex` dependency, run the full compatibility smoke test (see `docs/compatibility.md`).
