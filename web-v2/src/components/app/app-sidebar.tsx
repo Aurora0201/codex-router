@@ -55,7 +55,7 @@ export function AppSidebar({
             <CircleGaugeIcon aria-hidden="true" />
           </span>
           <div className="min-w-0 group-data-[collapsible=icon]:hidden">
-            <p className="truncate text-sm font-semibold">Codex Gateway</p>
+            <p className="truncate text-sm font-semibold">Codex Router</p>
             <p className="truncate text-xs text-muted-foreground">
               Identity router
             </p>
