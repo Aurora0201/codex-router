@@ -210,6 +210,14 @@ interface HealthPayload {
   version?: string;
   accounts?: number;
   uptime?: number;
+  pid?: number;
+  dataDir?: string;
+}
+
+interface RemoteAccount {
+  id: string;
+  email?: string | null;
+  authStatus: string;
 }
 
 async function actionStatus(options: StatusOptions): Promise<void> {
@@ -225,7 +233,23 @@ async function actionStatus(options: StatusOptions): Promise<void> {
     health = null;
   }
 
-  const pid = await readPidFile(dataDir);
+  let remoteAccounts: RemoteAccount[] | null = null;
+  let remoteActiveId: string | null = null;
+  if (health) {
+    try {
+      const response = await fetch(`http://${host}:${port}/api/accounts`, { signal: AbortSignal.timeout(2000) });
+      if (response.ok) {
+        const body = (await response.json()) as { activeAccountId: string | null; accounts: RemoteAccount[] };
+        remoteAccounts = body.accounts;
+        remoteActiveId = body.activeAccountId;
+      }
+    } catch {
+      remoteAccounts = null;
+    }
+  }
+
+  const pid = health?.pid ?? (await readPidFile(dataDir));
+  const effectiveDataDir = health?.dataDir ?? dataDir;
 
   let config: CodexConfigStatus | null = null;
   try {
@@ -234,9 +258,9 @@ async function actionStatus(options: StatusOptions): Promise<void> {
     config = null;
   }
 
-  const database = openDatabase(dataDir);
-  const accounts = database?.accounts.list() ?? [];
-  const activeAccountId = database?.getActiveAccountId() ?? null;
+  const database = remoteAccounts ? null : openDatabase(dataDir);
+  const accounts = (remoteAccounts ?? database?.accounts.list() ?? []) as RemoteAccount[];
+  const activeAccountId = remoteActiveId ?? database?.getActiveAccountId() ?? null;
   database?.close();
 
   if (health) {
@@ -250,6 +274,7 @@ async function actionStatus(options: StatusOptions): Promise<void> {
   if (health) {
     out(`│  pid      : ${pid ?? "?"}`);
     out(`│  uptime   : ${formatUptime(health.uptime ?? 0)}`);
+    out(`│  data     : ${effectiveDataDir}`);
   }
   out("│");
 
