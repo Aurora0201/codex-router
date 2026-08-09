@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createProgram, isEntryScript, startOverrides } from "../src/cli.js";
+import { createProgram, isEntryScript, isPortFree, startOverrides } from "../src/cli.js";
 import { GatewayDatabase } from "../src/db/database.js";
 
 const temporary: string[] = [];
@@ -59,6 +59,27 @@ describe("isEntryScript", () => {
     await writeFile(file, "");
     const nonCanonical = path.join(dir, "sub", "..", "cli-entry.js");
     expect(isEntryScript(nonCanonical, pathToFileURL(file).href)).toBe(true);
+  });
+});
+
+describe("isPortFree", () => {
+  it("reports an occupied port as not free", async () => {
+    const server = http.createServer((_request, response) => response.end());
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const port = (server.address() as { port: number }).port;
+    try {
+      expect(await isPortFree("127.0.0.1", port)).toBe(false);
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
+  it("reports a free port after the listener is released", async () => {
+    const server = http.createServer();
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const port = (server.address() as { port: number }).port;
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    expect(await isPortFree("127.0.0.1", port)).toBe(true);
   });
 });
 
