@@ -12,7 +12,7 @@ import { loadConfig } from "./config.js";
 import { GatewayDatabase } from "./db/database.js";
 import { printBanner } from "./banner.js";
 import { isProcessAlive, readPidFile, removePidFile } from "./pid.js";
-import type { GatewayConfig } from "./types.js";
+import type { AccountRecord, GatewayConfig } from "./types.js";
 
 const require = createRequire(import.meta.url);
 const VERSION = (require("../package.json").version as string) ?? "0.0.0";
@@ -200,6 +200,30 @@ function summarizeAccounts(accounts: { authStatus: string }[]): string {
   return parts.length > 0 ? parts.join(" · ") : "0 accounts";
 }
 
+function shortAccountId(id: string): string {
+  return id.length <= 9 ? id : `${id.slice(0, 8)}…`;
+}
+
+function windowLabel(minutes: number): string {
+  if (minutes % 1440 === 0) return `${minutes / 1440}d`;
+  if (minutes % 60 === 0) return `${minutes / 60}h`;
+  return `${minutes}m`;
+}
+
+function quotaBar(percent: number, width = 10): string {
+  const clamped = Math.max(0, Math.min(100, percent));
+  const filled = Math.round((clamped / 100) * width);
+  return `[${"█".repeat(filled)}${"░".repeat(width - filled)}]`;
+}
+
+function formatQuota(window?: UsageWindow | null): string {
+  if (!window || window.windowDurationMins == null) return "—";
+  const label = windowLabel(window.windowDurationMins);
+  if (window.usedPercent == null) return `${label} ${quotaBar(0)} —`;
+  const remaining = Math.max(0, Math.min(100, 100 - window.usedPercent));
+  return `${label} ${quotaBar(remaining)} ${remaining}% left`;
+}
+
 interface StatusOptions {
   host?: string;
   port?: string;
@@ -214,10 +238,44 @@ interface HealthPayload {
   dataDir?: string;
 }
 
-interface RemoteAccount {
+interface UsageWindow {
+  usedPercent?: number | null;
+  resetsAt?: number | null;
+  windowDurationMins?: number | null;
+}
+
+interface RemoteUsage {
+  primary?: UsageWindow | null;
+  secondary?: UsageWindow | null;
+}
+
+interface AccountSummary {
   id: string;
   email?: string | null;
+  planType?: string | null;
   authStatus: string;
+  usage?: RemoteUsage | null;
+}
+
+function fromAccountRecord(account: AccountRecord): AccountSummary {
+  return {
+    id: account.id,
+    email: account.email,
+    planType: account.planType,
+    authStatus: account.authStatus,
+    usage: {
+      primary: {
+        usedPercent: account.primaryUsedPercent,
+        resetsAt: account.primaryResetsAt,
+        windowDurationMins: account.primaryWindowMinutes,
+      },
+      secondary: {
+        usedPercent: account.secondaryUsedPercent,
+        resetsAt: account.secondaryResetsAt,
+        windowDurationMins: account.secondaryWindowMinutes,
+      },
+    },
+  };
 }
 
 async function actionStatus(options: StatusOptions): Promise<void> {
@@ -233,13 +291,13 @@ async function actionStatus(options: StatusOptions): Promise<void> {
     health = null;
   }
 
-  let remoteAccounts: RemoteAccount[] | null = null;
+  let remoteAccounts: AccountSummary[] | null = null;
   let remoteActiveId: string | null = null;
   if (health) {
     try {
       const response = await fetch(`http://${host}:${port}/api/accounts`, { signal: AbortSignal.timeout(2000) });
       if (response.ok) {
-        const body = (await response.json()) as { activeAccountId: string | null; accounts: RemoteAccount[] };
+        const body = (await response.json()) as { activeAccountId: string | null; accounts: AccountSummary[] };
         remoteAccounts = body.accounts;
         remoteActiveId = body.activeAccountId;
       }
@@ -259,7 +317,7 @@ async function actionStatus(options: StatusOptions): Promise<void> {
   }
 
   const database = remoteAccounts ? null : openDatabase(dataDir);
-  const accounts = (remoteAccounts ?? database?.accounts.list() ?? []) as RemoteAccount[];
+  const accounts: AccountSummary[] = remoteAccounts ?? (database?.accounts.list() ?? []).map(fromAccountRecord);
   const activeAccountId = remoteActiveId ?? database?.getActiveAccountId() ?? null;
   database?.close();
 
@@ -277,6 +335,14 @@ async function actionStatus(options: StatusOptions): Promise<void> {
     out(`│  data     : ${effectiveDataDir}`);
   }
   out("│");
+
+  const activeAccount = accounts.find((account) => account.id === activeAccountId) ?? null;
+  if (health && activeAccount) {
+    out(`├─ quota · active ${shortAccountId(activeAccount.id)}`);
+    out(`│  ${formatQuota(activeAccount.usage?.primary)}`);
+    out(`│  ${formatQuota(activeAccount.usage?.secondary)}`);
+    out("│");
+  }
 
   out("├─ config");
   if (config) {
@@ -304,7 +370,8 @@ async function actionStatus(options: StatusOptions): Promise<void> {
       const marker = active ? paint(color, "green", "●") : paint(color, "cyan", "○");
       const symbol = accountSymbol(account.authStatus, color);
       const tag = active ? "  [active]" : "";
-      out(`│  ├─ ${marker} ${account.id.padEnd(14)} ${(account.email ?? "-").padEnd(22)} ${symbol.padEnd(12)}${tag}`);
+      const plan = (account.planType ?? "").padEnd(6);
+      out(`│  ├─ ${marker} ${shortAccountId(account.id).padEnd(10)} ${(account.email ?? "-").padEnd(24)} ${plan}${symbol}${tag}`);
     }
     out(`│  └─ ${summarizeAccounts(accounts)}`);
   }

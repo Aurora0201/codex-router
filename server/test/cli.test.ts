@@ -113,10 +113,16 @@ describe("status command", () => {
       if (request.url?.startsWith("/api/accounts")) {
         response.writeHead(200, { "content-type": "application/json" });
         response.end(JSON.stringify({
-          activeAccountId: "local",
+          activeAccountId: "cb33fd13-60cd-478d-b77c-f6e7ece226ef",
           accounts: [
-            { id: "local", email: "test@example.test", authStatus: "ready", isActive: true },
-            { id: "second", email: "second@example.test", authStatus: "rate_limited", isActive: false },
+            {
+              id: "a3edf18c-53d7-45a5-941e-c41972c41b9a", email: "test@example.test", planType: "plus", authStatus: "ready", isActive: false,
+              usage: { primary: { usedPercent: 32, resetsAt: 1, windowDurationMins: 10080 }, secondary: { usedPercent: null, resetsAt: null, windowDurationMins: 300 } },
+            },
+            {
+              id: "cb33fd13-60cd-478d-b77c-f6e7ece226ef", email: "active@example.test", planType: "pro", authStatus: "ready", isActive: true,
+              usage: { primary: { usedPercent: 50, resetsAt: 1, windowDurationMins: 10080 }, secondary: { usedPercent: 10, resetsAt: 1, windowDurationMins: 300 } },
+            },
           ],
         }));
         return;
@@ -138,31 +144,49 @@ describe("status command", () => {
     expect(stdout).toContain("4242");
     expect(stdout).toContain("data");
     expect(stdout).toContain(dataDir);
+    expect(stdout).toContain("quota · active cb33fd13…");
+    expect(stdout).toContain("7d [");
+    expect(stdout).toContain("5h [");
+    expect(stdout).toContain("50% left");
+    expect(stdout).toContain("90% left");
     expect(stdout).toContain("accounts (2)");
+    expect(stdout).toContain("a3edf18c…");
     expect(stdout).toContain("test@example.test");
-    expect(stdout).toContain("second@example.test");
+    expect(stdout).toContain("active@example.test");
+    expect(stdout).toContain("plus");
+    expect(stdout).toContain("pro");
     expect(stdout).toContain("[active]");
     expect(stdout).toContain("injected");
   });
 
-  it("falls back to the local database when the gateway is down", async () => {
+  it("falls back to the local database when the gateway is down and omits quota", async () => {
     const dataDir = await tempDir();
     const home = await tempDir();
     await writeFile(path.join(home, "config.toml"), 'model = "gpt-5.6-luna"\n');
     vi.stubEnv("CODEX_HOME", home);
 
+    const id = "cb33fd13-60cd-478d-b77c-f6e7ece226ef";
     const database = new GatewayDatabase(path.join(dataDir, "gateway.db"));
-    database.accounts.insert({ id: "local", codexHome: path.join(dataDir, "codex-home") });
-    database.accounts.update("local", { authStatus: "ready", email: "test@example.test", planType: "plus", chatgptAccountId: "acc-1" });
-    database.setActiveAccountId("local");
+    database.accounts.insert({ id, codexHome: path.join(dataDir, "codex-home") });
+    database.accounts.update(id, { authStatus: "ready", email: "test@example.test", planType: "plus", chatgptAccountId: "acc-1" });
+    database.accounts.updateRateLimits(id, {
+      primary: { usedPercent: 50, resetsAt: 1, windowDurationMins: 10080 },
+      secondary: { usedPercent: 10, resetsAt: 1, windowDurationMins: 300 },
+      rateLimitReachedType: null,
+      loadedAt: Date.now(),
+    });
+    database.setActiveAccountId(id);
     database.close();
 
     const { stdout, exitCode } = await runCli(["status", "--host", "127.0.0.1", "--port", "1", "--data-dir", dataDir]);
     expect(exitCode).toBe(1);
     expect(stdout).toContain("not running");
     expect(stdout).toContain("accounts (1)");
+    expect(stdout).toContain("cb33fd13…");
     expect(stdout).toContain("test@example.test");
+    expect(stdout).toContain("plus");
     expect(stdout).toContain("[active]");
+    expect(stdout).not.toContain("quota · active");
     expect(stdout).toContain("codex-router start");
   });
 
