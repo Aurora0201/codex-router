@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import { pathToFileURL } from "node:url";
+import { realpathSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { buildGateway } from "./app.js";
 import type { GatewayConfig } from "./types.js";
 import { printBanner } from "./banner.js";
@@ -30,7 +31,7 @@ export async function startGateway(overrides: Partial<GatewayConfig> = {}): Prom
   }
 }
 
-const isMainEntry = process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href;
+const isMainEntry = process.argv[1] !== undefined && fileURLToPath(import.meta.url) === realpathSync(process.argv[1]);
 if (isMainEntry) {
   printBanner();
   await startGateway();

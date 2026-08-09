@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
 import { access, mkdir, open, readFile, stat } from "node:fs/promises";
-import { accessSync, watch } from "node:fs";
+import { accessSync, realpathSync, watch } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -505,7 +505,16 @@ async function main(): Promise<void> {
   await program.parseAsync(process.argv);
 }
 
-const isMainEntry = process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href;
+export function isEntryScript(argv1: string | undefined, moduleUrl: string): boolean {
+  if (argv1 === undefined) return false;
+  try {
+    return fileURLToPath(moduleUrl) === realpathSync(argv1);
+  } catch {
+    return false;
+  }
+}
+
+const isMainEntry = isEntryScript(process.argv[1], import.meta.url);
 if (isMainEntry) {
   main().catch((error) => {
     err(error instanceof Error ? error.message : String(error));
