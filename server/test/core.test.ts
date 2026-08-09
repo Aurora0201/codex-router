@@ -17,7 +17,7 @@ import { parseRateLimitResponse } from "../src/accounts/rate-limit-parser.js";
 import Database from "better-sqlite3";
 
 const temporary: string[] = [];
-async function tempDir() { const dir = await mkdtemp(path.join(os.tmpdir(), "codex-gateway-test-")); temporary.push(dir); return dir; }
+async function tempDir() { const dir = await mkdtemp(path.join(os.tmpdir(), "codex-router-test-")); temporary.push(dir); return dir; }
 async function pathExists(filePath: string): Promise<boolean> {
   try { await access(filePath); return true; } catch { return false; }
 }

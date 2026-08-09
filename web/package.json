@@ -1,5 +1,5 @@
 {
-  "name": "@codex-gateway/web",
+  "name": "@codex-router/web",
   "version": "0.1.0",
   "private": true,
   "type": "module",

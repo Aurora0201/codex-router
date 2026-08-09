@@ -2,7 +2,7 @@
 
 > Status: research notes for a future feature (not yet implemented)
 > Researched: 2026-08-08
-> Author: codex-gateway maintainers
+> Author: codex-router maintainers
 > Scope: allow other providers (e.g. DeepSeek) to be used inside Codex, including switching provider mid-conversation
 
 This document records research findings for two questions:

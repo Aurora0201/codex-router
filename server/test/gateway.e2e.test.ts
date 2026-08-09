@@ -51,7 +51,7 @@ function streamRequest(url: string, body: Buffer, headers: Record<string, string
 
 beforeAll(async () => {
   process.env.GATEWAY_LOG_LEVEL = "silent";
-  root = await mkdtemp(path.join(os.tmpdir(), "codex-gateway-e2e-"));
+  root = await mkdtemp(path.join(os.tmpdir(), "codex-router-e2e-"));
   wsServer = new WebSocketServer({ noServer: true });
   wsServer.on("headers", (headers) => headers.push("x-models-etag: mock-etag", "x-reasoning-included: true", "openai-model: mock-codex"));
   wsServer.on("connection", (socket, request) => {
