@@ -37,14 +37,18 @@ export function AccountActions({
         <TooltipTrigger
           render={
             <DropdownMenuTrigger
-              render={<Button variant="ghost" size="icon-sm" />}
+              render={<Button variant="outline" size="icon" />}
             />
           }
         >
-          <EllipsisIcon />
+          <EllipsisIcon aria-hidden="true" />
           <span className="sr-only">账号操作</span>
         </TooltipTrigger>
-        <DropdownMenuContent side="bottom" align="end">
+        <DropdownMenuContent
+          side="bottom"
+          align="end"
+          className="w-44 whitespace-nowrap"
+        >
           <DropdownMenuGroup>
             <DropdownMenuItem onClick={() => onAction("copy")}>
               <CopyIcon />

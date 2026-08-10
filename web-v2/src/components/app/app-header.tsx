@@ -1,9 +1,8 @@
-import { MoonIcon, SunIcon } from "lucide-react"
+import { CircleIcon, MoonIcon, SunIcon } from "lucide-react"
 
 import type { AppPage } from "@/components/app/app-sidebar"
 import { MockToolbar } from "@/components/app/mock-toolbar"
 import { useTheme } from "@/components/theme-provider"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
@@ -13,10 +12,11 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import type { MockScenario } from "@/services/contracts"
+import { cn } from "@/lib/utils"
 
-const pageCopy: Record<AppPage, { title: string; description: string }> = {
-  accounts: { title: "账号路由", description: "身份、认证与流量控制" },
-  settings: { title: "Gateway 设置", description: "网络边界与 Codex 接管" },
+const pageTitle: Record<AppPage, string> = {
+  accounts: "账号路由",
+  settings: "Gateway 设置",
 }
 
 export function AppHeader({
@@ -35,23 +35,25 @@ export function AppHeader({
   const { resolvedTheme, setTheme } = useTheme()
   return (
     <header className="flex h-14 shrink-0 items-center gap-3 border-b px-4 lg:px-6">
-      <SidebarTrigger />
-      <Separator orientation="vertical" className="h-4" />
-      <div className="min-w-0">
-        <p className="truncate text-sm font-medium">{pageCopy[page].title}</p>
-        <p className="hidden truncate text-xs text-muted-foreground sm:block">
-          {pageCopy[page].description}
-        </p>
-      </div>
+      <SidebarTrigger className="md:hidden" />
+      <Separator orientation="vertical" className="h-4 md:hidden" />
+      <p className="min-w-0 truncate text-sm font-medium">{pageTitle[page]}</p>
       <div className="ml-auto flex items-center gap-2">
         {import.meta.env.DEV ? (
           <div className="hidden lg:block">
             <MockToolbar value={scenario} onValueChange={onScenarioChange} />
           </div>
         ) : null}
-        <Badge variant={online ? "outline" : "destructive"}>
-          {online ? `在线 · v${version ?? "—"}` : "Gateway 离线"}
-        </Badge>
+        <div
+          className={cn(
+            "inline-flex items-center gap-1.5 text-xs font-medium [&_svg]:size-2",
+            online ? "text-muted-foreground" : "text-destructive"
+          )}
+          role="status"
+        >
+          <CircleIcon className="fill-current" aria-hidden="true" />
+          <span>{online ? `在线 · v${version ?? "—"}` : "Gateway 离线"}</span>
+        </div>
         <Tooltip>
           <TooltipTrigger
             render={

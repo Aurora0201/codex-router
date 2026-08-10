@@ -1,7 +1,13 @@
 import { useEffect, useState } from "react"
-import { CopyIcon, ExternalLinkIcon, PlusIcon } from "lucide-react"
+import {
+  BanIcon,
+  CircleCheckIcon,
+  CopyIcon,
+  ExternalLinkIcon,
+  PlusIcon,
+  TriangleAlertIcon,
+} from "lucide-react"
 
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -13,7 +19,40 @@ import {
 } from "@/components/ui/dialog"
 import { Spinner } from "@/components/ui/spinner"
 import { toast } from "@/components/ui/toast"
+import { cn } from "@/lib/utils"
 import type { GatewayService, LoginSessionView } from "@/services/contracts"
+
+function LoginStatus({ status }: { status: LoginSessionView["status"] }) {
+  const copy = {
+    waiting: "等待授权",
+    complete: "授权完成",
+    cancelled: "已取消",
+    failed: "授权失败",
+  }[status]
+
+  const Icon =
+    status === "complete"
+      ? CircleCheckIcon
+      : status === "cancelled"
+        ? BanIcon
+        : TriangleAlertIcon
+
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 text-sm font-medium [&_svg]:size-4",
+        status === "complete" && "text-primary",
+        status === "waiting" && "text-muted-foreground",
+        status === "cancelled" && "text-muted-foreground",
+        status === "failed" && "text-destructive"
+      )}
+      role="status"
+    >
+      {status === "waiting" ? <Spinner /> : <Icon aria-hidden="true" />}
+      {copy}
+    </span>
+  )
+}
 
 export function OAuthDialog({
   service,
@@ -116,26 +155,7 @@ export function OAuthDialog({
             </div>
           ) : (
             <div className="flex flex-col gap-5">
-              <div className="flex items-center gap-3">
-                <Badge
-                  variant={
-                    session.status === "complete"
-                      ? "default"
-                      : session.status === "waiting"
-                        ? "secondary"
-                        : "destructive"
-                  }
-                >
-                  {session.status === "waiting"
-                    ? "等待授权"
-                    : session.status === "complete"
-                      ? "授权完成"
-                      : session.status === "cancelled"
-                        ? "已取消"
-                        : "授权失败"}
-                </Badge>
-                {session.status === "waiting" ? <Spinner /> : null}
-              </div>
+              <LoginStatus status={session.status} />
               <p className="text-sm text-muted-foreground">
                 {session.status === "waiting"
                   ? "模拟登录窗口已准备好，稍后将自动完成授权。"

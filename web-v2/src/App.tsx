@@ -18,17 +18,12 @@ import {
 
 function LoadingPage() {
   return (
-    <div className="flex flex-col gap-6" aria-label="正在载入 Mock 数据">
+    <div className="flex flex-col gap-5" aria-label="正在载入 Mock 数据">
       <div className="flex flex-col gap-2">
         <Skeleton className="h-8 w-48" />
         <Skeleton className="h-4 w-96 max-w-full" />
       </div>
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Skeleton className="h-56 lg:col-span-2" />
-        <Skeleton className="h-56" />
-      </div>
-      <Skeleton className="h-24 w-full" />
-      <Skeleton className="h-[28rem] w-full" />
+      <Skeleton className="h-[30rem] w-full lg:h-[clamp(30rem,calc(100dvh-13rem),48rem)]" />
     </div>
   )
 }

@@ -1,5 +1,13 @@
 import { useState } from "react"
-import { PlayIcon, RotateCcwIcon, ShieldCheckIcon } from "lucide-react"
+import {
+  CircleCheckIcon,
+  CircleDashedIcon,
+  CircleXIcon,
+  DatabaseBackupIcon,
+  PlayIcon,
+  RotateCcwIcon,
+  ShieldCheckIcon,
+} from "lucide-react"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
@@ -12,7 +20,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -26,6 +33,7 @@ import {
 import { Separator } from "@/components/ui/separator"
 import { Spinner } from "@/components/ui/spinner"
 import { toast } from "@/components/ui/toast"
+import { cn } from "@/lib/utils"
 import type { CodexStatusView, GatewayService } from "@/services/contracts"
 
 type CodexAction = "apply" | "restore" | "restart"
@@ -98,9 +106,19 @@ export function CodexTakeoverCard({
           管理全局配置的 Gateway 注入、备份恢复和进程重启。
         </CardDescription>
         <CardAction>
-          <Badge variant={status.applied ? "default" : "secondary"}>
+          <span
+            className={cn(
+              "inline-flex items-center gap-1.5 text-xs font-medium [&_svg]:size-3.5",
+              status.applied ? "text-primary" : "text-muted-foreground"
+            )}
+          >
+            {status.applied ? (
+              <CircleCheckIcon aria-hidden="true" />
+            ) : (
+              <CircleDashedIcon aria-hidden="true" />
+            )}
             {status.applied ? "已应用" : "未应用"}
-          </Badge>
+          </span>
         </CardAction>
       </CardHeader>
       <CardContent className="flex flex-col gap-5">
@@ -121,13 +139,24 @@ export function CodexTakeoverCard({
           ))}
         </dl>
         <Separator />
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant={status.codexRunning ? "outline" : "destructive"}>
+        <div className="grid gap-2 text-xs sm:grid-cols-2" role="status">
+          <span
+            className={cn(
+              "inline-flex items-center gap-1.5 font-medium [&_svg]:size-3.5",
+              status.codexRunning ? "text-primary" : "text-destructive"
+            )}
+          >
+            {status.codexRunning ? (
+              <CircleCheckIcon aria-hidden="true" />
+            ) : (
+              <CircleXIcon aria-hidden="true" />
+            )}
             {status.codexRunning ? "Codex 正在运行" : "Codex 未运行"}
-          </Badge>
-          <Badge variant={status.hasBackup ? "outline" : "secondary"}>
+          </span>
+          <span className="inline-flex items-center gap-1.5 font-medium text-muted-foreground [&_svg]:size-3.5">
+            <DatabaseBackupIcon aria-hidden="true" />
             {status.hasBackup ? "备份可用" : "尚无备份"}
-          </Badge>
+          </span>
         </div>
       </CardContent>
       <CardFooter className="flex-wrap justify-end gap-2">

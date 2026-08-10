@@ -1,19 +1,12 @@
 import { useCallback, useState } from "react"
 import {
-  ActivityIcon,
-  AlertTriangleIcon,
-  CircleCheckBigIcon,
-  CircleGaugeIcon,
-  SendIcon,
+  CircleAlertIcon,
   TriangleAlertIcon,
   UsersRoundIcon,
 } from "lucide-react"
 
-import { AccountCard } from "@/components/account/account-card"
-import { AccountTable } from "@/components/account/account-table"
-import { ActiveAccountSelect } from "@/components/account/active-account-select"
+import { AccountList } from "@/components/account/account-list"
 import { OAuthDialog } from "@/components/account/oauth-dialog"
-import { TransportTrace } from "@/components/gateway/transport-trace"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
   AlertDialog,
@@ -25,15 +18,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Badge } from "@/components/ui/badge"
-import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import {
   Empty,
   EmptyContent,
@@ -43,7 +28,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty"
 import { toast } from "@/components/ui/toast"
-import { shortAccountId } from "@/lib/format"
+import { authStatusLabel, shortAccountId } from "@/lib/format"
 import type {
   AccountView,
   GatewayService,
@@ -87,12 +72,11 @@ export function AccountsPage({
     [reload]
   )
 
-  const selectAccount = async (value: string | null) => {
+  const selectAccount = async (account: AccountView) => {
     await run(
-      value ?? "clear",
-      () =>
-        value ? service.setActiveAccount(value) : service.clearActiveAccount(),
-      value ? "当前账号已切换" : "当前账号已清除"
+      account.id,
+      () => service.setActiveAccount(account.id),
+      "当前路由账号已切换"
     )
   }
 
@@ -123,139 +107,50 @@ export function AccountsPage({
     }
   }
 
-  const metrics = [
-    { label: "账号总数", value: accounts.length, icon: UsersRoundIcon },
-    {
-      label: "认证就绪",
-      value: snapshot.stats.accountsReady,
-      icon: CircleCheckBigIcon,
-    },
-    {
-      label: "今日请求",
-      value: snapshot.stats.requestsToday.toLocaleString("zh-CN"),
-      icon: SendIcon,
-    },
-    {
-      label: "今日错误",
-      value: snapshot.stats.errorsToday,
-      icon: TriangleAlertIcon,
-    },
-  ]
+  const activeUnavailable =
+    active !== null && (!active.enabled || active.authStatus !== "ready")
 
   return (
-    <section className="flex flex-col gap-7">
+    <section className="flex flex-col gap-5">
       <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-end">
-        <div className="flex flex-col gap-2">
-          <Badge variant="outline" className="w-fit">
-            <ActivityIcon />
-            Manual routing
-          </Badge>
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">
-              账号与路由
-            </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              所有请求只会进入你手动选定的认证账号，不自动轮换，不绑定会话。
-            </p>
-          </div>
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">账号与路由</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            所有请求只会进入你手动选定的认证账号，不自动轮换，不绑定会话。
+          </p>
         </div>
         <OAuthDialog service={service} onComplete={reload} />
       </div>
 
-      <div className="grid items-stretch gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(20rem,1fr)]">
-        <TransportTrace accountId={active?.chatgptAccountId ?? null} />
-        <Card className="h-full">
-          <CardHeader>
-            <CardTitle>当前路由账号</CardTitle>
-            <CardDescription>切换会在下一个请求立即生效。</CardDescription>
-            <CardAction>
-              <Badge variant={active ? "default" : "secondary"}>
-                {active ? "已选择" : "未选择"}
-              </Badge>
-            </CardAction>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            <ActiveAccountSelect
-              accounts={accounts}
-              activeId={activeAccountId}
-              disabled={busyId !== null}
-              onValueChange={(value) => void selectAccount(value)}
-            />
-            {active ? (
-              <div className="flex min-w-0 items-center gap-3 rounded-lg bg-muted/60 p-3">
-                <span className="grid size-9 shrink-0 place-items-center rounded-md bg-background text-muted-foreground">
-                  <CircleGaugeIcon aria-hidden="true" />
-                </span>
-                <div className="min-w-0">
-                  <p className="truncate font-mono text-xs font-medium">
-                    {shortAccountId(active.chatgptAccountId)}
-                  </p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {active.email ?? "无邮箱"} · {active.planType ?? "未知套餐"}
-                  </p>
-                </div>
-              </div>
-            ) : accounts.length > 0 ? (
-              <Alert>
-                <AlertTriangleIcon />
-                <AlertTitle>数据面已阻断</AlertTitle>
-                <AlertDescription>
-                  选择一个认证就绪账号后才会放行请求。
-                </AlertDescription>
-              </Alert>
-            ) : null}
-          </CardContent>
-        </Card>
-      </div>
+      {accounts.length > 0 && active === null ? (
+        <Alert>
+          <CircleAlertIcon />
+          <AlertTitle>尚未选择路由账号</AlertTitle>
+          <AlertDescription>
+            后续请求暂时无法路由，请在账号池中选择一个认证就绪账号。
+          </AlertDescription>
+        </Alert>
+      ) : null}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>运行概览</CardTitle>
-          <CardDescription>Gateway 当前进程内的实时摘要。</CardDescription>
-        </CardHeader>
-        <CardContent className="grid grid-cols-2 gap-6 lg:grid-cols-4">
-          {metrics.map((metric) => {
-            const Icon = metric.icon
-            return (
-              <div
-                key={metric.label}
-                className="flex min-w-0 items-center gap-3"
-              >
-                <span className="grid size-9 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground">
-                  <Icon aria-hidden="true" />
-                </span>
-                <div className="min-w-0">
-                  <p className="text-xs text-muted-foreground">
-                    {metric.label}
-                  </p>
-                  <p className="truncate font-mono text-xl font-semibold tracking-tight">
-                    {metric.value}
-                  </p>
-                </div>
-              </div>
-            )
-          })}
-        </CardContent>
-      </Card>
+      {activeUnavailable ? (
+        <Alert variant="destructive">
+          <TriangleAlertIcon />
+          <AlertTitle>当前路由账号不可用</AlertTitle>
+          <AlertDescription>
+            {shortAccountId(active.chatgptAccountId)} 当前为
+            {authStatusLabel(active.authStatus)}
+            状态，后续请求可能失败。请处理该账号状态，或手动选择其他可路由账号。
+          </AlertDescription>
+        </Alert>
+      ) : null}
 
       {accounts.length ? (
-        <>
-          <AccountTable
-            accounts={accounts}
-            busyId={busyId}
-            onAction={accountAction}
-          />
-          <div className="flex flex-col gap-3 md:hidden">
-            {accounts.map((account) => (
-              <AccountCard
-                key={account.id}
-                account={account}
-                busy={busyId === account.id}
-                onAction={(action) => accountAction(account, action)}
-              />
-            ))}
-          </div>
-        </>
+        <AccountList
+          accounts={accounts}
+          busyId={busyId}
+          onAction={accountAction}
+          onSelect={(account) => void selectAccount(account)}
+        />
       ) : (
         <Card>
           <CardContent className="flex min-h-80 items-center justify-center">

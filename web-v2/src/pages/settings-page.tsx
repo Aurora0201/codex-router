@@ -4,12 +4,10 @@ import {
   LockKeyholeIcon,
   NetworkIcon,
   SaveIcon,
-  Settings2Icon,
 } from "lucide-react"
 
 import { CodexTakeoverCard } from "@/components/codex/codex-takeover-card"
 import { useTheme } from "@/components/theme-provider"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -91,19 +89,11 @@ export function SettingsPage({
 
   return (
     <section className="flex flex-col gap-7">
-      <div className="flex flex-col gap-2">
-        <Badge variant="outline" className="w-fit">
-          <Settings2Icon />
-          Configuration
-        </Badge>
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Gateway 设置
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            管理 Codex 接管、固定网络边界与允许持久化的本地偏好。
-          </p>
-        </div>
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Gateway 设置</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          管理 Codex 接管、固定网络边界与允许持久化的本地偏好。
+        </p>
       </div>
 
       <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.65fr)_minmax(21rem,1fr)]">
@@ -120,7 +110,10 @@ export function SettingsPage({
                 由 Gateway 启动配置决定，前端仅做只读展示。
               </CardDescription>
               <CardAction>
-                <Badge variant="secondary">只读</Badge>
+                <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground [&_svg]:size-3.5">
+                  <LockKeyholeIcon aria-hidden="true" />
+                  只读
+                </span>
               </CardAction>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
@@ -184,10 +177,10 @@ export function SettingsPage({
                       Prompt、工具参数、工具输出和响应体永不记录。
                     </FieldDescription>
                   </FieldContent>
-                  <Badge variant="secondary">
-                    <LockKeyholeIcon />
+                  <span className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground [&_svg]:size-3.5">
+                    <LockKeyholeIcon aria-hidden="true" />
                     锁定关闭
-                  </Badge>
+                  </span>
                 </Field>
                 <Field orientation="responsive">
                   <FieldContent>

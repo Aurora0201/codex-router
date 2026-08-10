@@ -1,6 +1,12 @@
-import { CircleGaugeIcon, Settings2Icon, UsersRoundIcon } from "lucide-react"
+import {
+  CircleGaugeIcon,
+  PanelLeftIcon,
+  Settings2Icon,
+  ShieldCheckIcon,
+  UsersRoundIcon,
+} from "lucide-react"
 
-import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import {
   Sidebar,
   SidebarContent,
@@ -12,9 +18,14 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarRail,
+  SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 
 export type AppPage = "accounts" | "settings"
 
@@ -22,13 +33,11 @@ const navigation = [
   {
     value: "accounts" as const,
     label: "账号路由",
-    description: "身份与流量",
     icon: UsersRoundIcon,
   },
   {
     value: "settings" as const,
     label: "Gateway 设置",
-    description: "边界与接管",
     icon: Settings2Icon,
   },
 ]
@@ -40,7 +49,7 @@ export function AppSidebar({
   page: AppPage
   onPageChange(page: AppPage): void
 }) {
-  const { isMobile, setOpenMobile } = useSidebar()
+  const { isMobile, setOpenMobile, state, toggleSidebar } = useSidebar()
 
   const navigate = (nextPage: AppPage) => {
     onPageChange(nextPage)
@@ -50,23 +59,43 @@ export function AppSidebar({
   return (
     <Sidebar variant="inset" collapsible="icon">
       <SidebarHeader>
-        <div className="flex h-12 items-center gap-3 px-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
-          <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground">
-            <CircleGaugeIcon aria-hidden="true" />
-          </span>
-          <div className="min-w-0 group-data-[collapsible=icon]:hidden">
-            <p className="truncate text-sm font-semibold">Codex Router</p>
-            <p className="truncate text-xs text-muted-foreground">
-              Identity router
-            </p>
+        {state === "collapsed" && !isMobile ? (
+          <div className="flex h-12 items-center justify-center">
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant="default"
+                    size="icon"
+                    className="group/logo-toggle relative"
+                    aria-label="展开导航栏"
+                    onClick={toggleSidebar}
+                  />
+                }
+              >
+                <CircleGaugeIcon className="transition-opacity group-hover/logo-toggle:opacity-0 group-focus-visible/logo-toggle:opacity-0" />
+                <PanelLeftIcon className="absolute opacity-0 transition-opacity group-hover/logo-toggle:opacity-100 group-focus-visible/logo-toggle:opacity-100" />
+              </TooltipTrigger>
+              <TooltipContent side="right">展开导航栏</TooltipContent>
+            </Tooltip>
           </div>
-        </div>
+        ) : (
+          <div className="flex h-12 items-center gap-3 px-2">
+            <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground">
+              <CircleGaugeIcon aria-hidden="true" />
+            </span>
+            <p className="min-w-0 truncate text-sm font-semibold">
+              Codex Router
+            </p>
+            <SidebarTrigger className="ml-auto size-8" />
+          </div>
+        )}
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupLabel>控制台</SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu>
+            <SidebarMenu className="gap-1">
               {navigation.map((item) => {
                 const Icon = item.icon
                 return (
@@ -75,17 +104,12 @@ export function AppSidebar({
                       isActive={page === item.value}
                       tooltip={item.label}
                       aria-label={item.label}
-                      size="lg"
                       onClick={() => navigate(item.value)}
+                      aria-current={page === item.value ? "page" : undefined}
                     >
                       <Icon aria-hidden="true" />
-                      <span className="flex min-w-0 flex-col items-start leading-tight">
-                        <span className="truncate font-medium">
-                          {item.label}
-                        </span>
-                        <span className="truncate text-xs text-muted-foreground">
-                          {item.description}
-                        </span>
+                      <span className="truncate group-data-[collapsible=icon]:hidden">
+                        {item.label}
                       </span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -103,10 +127,12 @@ export function AppSidebar({
               127.0.0.1:8317
             </p>
           </div>
-          <Badge variant="outline">安全</Badge>
+          <span className="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground [&_svg]:size-3.5">
+            <ShieldCheckIcon aria-hidden="true" />
+            安全
+          </span>
         </div>
       </SidebarFooter>
-      <SidebarRail />
     </Sidebar>
   )
 }

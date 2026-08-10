@@ -1,6 +1,5 @@
 import { FlaskConicalIcon } from "lucide-react"
 
-import { Badge } from "@/components/ui/badge"
 import {
   Select,
   SelectContent,
@@ -28,10 +27,10 @@ export function MockToolbar({
 }) {
   return (
     <div className="flex items-center gap-2">
-      <Badge variant="outline">
-        <FlaskConicalIcon />
+      <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground [&_svg]:size-3.5">
+        <FlaskConicalIcon aria-hidden="true" />
         Mock
-      </Badge>
+      </span>
       <Select
         items={scenarios}
         value={value}

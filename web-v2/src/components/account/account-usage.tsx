@@ -1,36 +1,52 @@
-import { Progress } from "@/components/ui/progress"
+import {
+  Progress,
+  ProgressLabel,
+  ProgressValue,
+} from "@/components/ui/progress"
 import { formatRelativeTime, formatUsageWindow } from "@/lib/format"
+import { cn } from "@/lib/utils"
 import type { UsageWindowView } from "@/services/contracts"
 
 function UsageLine({ window }: { window: UsageWindowView | null }) {
   const reported = window?.usedPercent != null
+  const label = formatUsageWindow(window)
   return (
-    <div className="grid grid-cols-[5.5rem_minmax(4rem,1fr)] items-center gap-x-3 gap-y-1 text-xs sm:grid-cols-[6.5rem_minmax(5rem,1fr)_8rem]">
-      <span className="font-medium">{formatUsageWindow(window)}</span>
-      <Progress
-        value={reported ? (window.usedPercent ?? 0) : null}
-        aria-label={
-          reported
-            ? `${formatUsageWindow(window)}使用量`
-            : `${formatUsageWindow(window)}未报告`
-        }
-      />
-      <span className="col-span-2 text-right text-muted-foreground sm:col-span-1">
-        {reported
-          ? `已使用 ${window.usedPercent}% · ${formatRelativeTime(window.resetsAt)}重置`
-          : "Not reported"}
-      </span>
-    </div>
+    <Progress
+      value={reported ? (window.usedPercent ?? 0) : null}
+      aria-label={reported ? `${label}使用量` : `${label}未报告`}
+      className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-x-2 gap-y-2 [&_[data-slot=progress-track]]:col-span-2"
+    >
+      <ProgressLabel className="flex min-w-0 items-center gap-1.5">
+        <span className="shrink-0">{label}</span>
+        <span className="truncate text-xs font-normal text-muted-foreground">
+          ·{" "}
+          {reported
+            ? `${formatRelativeTime(window.resetsAt)}重置`
+            : "暂无额度数据"}
+        </span>
+      </ProgressLabel>
+      <ProgressValue>
+        {(formattedValue) => (reported ? formattedValue : "未报告")}
+      </ProgressValue>
+    </Progress>
   )
 }
 
 export function AccountUsage({
   usage,
+  className,
 }: {
   usage: { primary: UsageWindowView | null; secondary: UsageWindowView | null }
+  className?: string
 }) {
   return (
-    <div className="flex min-w-0 flex-col gap-2">
+    <div
+      data-slot="account-usage"
+      className={cn(
+        "grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 lg:gap-5",
+        className
+      )}
+    >
       <UsageLine window={usage.primary} />
       <UsageLine window={usage.secondary} />
     </div>
