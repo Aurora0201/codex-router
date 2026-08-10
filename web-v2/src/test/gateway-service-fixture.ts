@@ -92,7 +92,7 @@ export function createGatewayServiceFixture({
       return structuredClone(snapshot.accounts)
     },
     async getRequestLogs() {
-      return { items: [], summary: { requests: 0, errors: 0, averageDurationMs: null }, timeline: [], nextCursor: null, pagination: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0 } }
+      return { items: [], summary: { requests: 0, errors: 0, rejected: 0, cancelled: 0, availabilityRequests: 0, availabilityErrors: 0, averageDurationMs: null }, timeline: [], nextCursor: null, pagination: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0 } }
     },
     async setActiveAccount(id) {
       snapshot.accounts.activeAccountId = id
@@ -155,6 +155,7 @@ export function createGatewayServiceFixture({
       snapshot.codex.codexRunning = true
       return { running: true, codexPath: "C:\\Program Files\\Codex\\Codex.exe" }
     },
+    async openLocalEnvironment() {},
   }
   return service
 }

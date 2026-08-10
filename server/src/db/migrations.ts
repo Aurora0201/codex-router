@@ -2,7 +2,7 @@ import type Database from "better-sqlite3";
 
 type SqliteDatabase = Database.Database;
 
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 7;
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -51,6 +51,8 @@ CREATE TABLE IF NOT EXISTS request_log (
   bytes_in INTEGER,
   bytes_out INTEGER,
   error_code TEXT,
+  outcome TEXT NOT NULL DEFAULT 'upstream_error',
+  scope TEXT NOT NULL DEFAULT 'request',
   created_at INTEGER NOT NULL,
   FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE SET NULL
 );
@@ -105,6 +107,49 @@ export function migrate(db: SqliteDatabase): void {
       WHERE primary_resets_at > 0 AND primary_resets_at < 100000000000;
       UPDATE accounts SET secondary_resets_at = secondary_resets_at * 1000
       WHERE secondary_resets_at > 0 AND secondary_resets_at < 100000000000;
+    `);
+  }
+  if (version < 5) {
+    const logColumns = tableColumns(db, "request_log");
+    if (!logColumns.has("outcome")) db.exec("ALTER TABLE request_log ADD COLUMN outcome TEXT NOT NULL DEFAULT 'upstream_error'");
+    if (!logColumns.has("scope")) db.exec("ALTER TABLE request_log ADD COLUMN scope TEXT NOT NULL DEFAULT 'request'");
+    db.exec(`
+      UPDATE request_log SET scope = 'connection'
+      WHERE transport = 'ws'
+         OR status_code = 101
+         OR error_code LIKE 'client_close_%'
+         OR error_code LIKE 'upstream_close_%'
+         OR error_code LIKE '%websocket%';
+
+      UPDATE request_log SET outcome = CASE
+        WHEN lower(COALESCE(error_code, '')) IN ('this operation was aborted', 'client_cancelled') THEN 'client_cancelled'
+        WHEN error_code IN ('no_active_account_selected', 'account_disabled', 'account_not_ready', 'fedramp_accounts_not_supported', 'raw_request_body_unavailable') THEN 'gateway_error'
+        WHEN status_code IS NOT NULL AND status_code < 400 THEN 'success'
+        WHEN status_code IS NOT NULL AND status_code < 500 THEN 'rejected'
+        ELSE 'upstream_error'
+      END;
+    `);
+  }
+  if (version < 6) {
+    db.exec(`
+      UPDATE request_log
+      SET outcome = 'client_cancelled', status_code = NULL, error_code = 'client_cancelled'
+      WHERE outcome = 'client_cancelled'
+         OR lower(COALESCE(error_code, '')) = 'this operation was aborted';
+    `);
+  }
+  if (version < 7) {
+    db.exec(`
+      UPDATE request_log
+      SET outcome = CASE
+        WHEN lower(COALESCE(error_code, '')) IN ('this operation was aborted', 'client_cancelled') THEN 'client_cancelled'
+        WHEN error_code IN ('no_active_account_selected', 'account_disabled', 'account_not_ready', 'fedramp_accounts_not_supported', 'raw_request_body_unavailable') THEN 'gateway_error'
+        WHEN status_code >= 200 AND status_code < 400 THEN 'success'
+        WHEN status_code >= 400 AND status_code < 500 THEN 'rejected'
+        WHEN status_code >= 500 THEN 'upstream_error'
+        ELSE outcome
+      END
+      WHERE scope = 'request';
     `);
   }
 

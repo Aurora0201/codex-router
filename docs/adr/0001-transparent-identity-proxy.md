@@ -11,7 +11,7 @@
 关键设计意图：
 
 - **锚定 Codex 登录账号，后端动态切换请求账号。** Codex 桌面端保持登录一个账号；网关在转发时用另一个（用户手动选中的 active）账号的凭证替换 `Authorization` 与 `chatgpt-account-id`，从而实现"不切换 Codex 登录即可换后端账号"。账号不匹配是设计常态，而非错误。
-- **数据面透明。** 网关不解析、不重写 Responses 工具 payload，数据面字节保持不透明。
+- **数据面透明。** 网关不重写 Responses 工具 payload，数据面字节保持不透明；唯一只读例外是从 WebSocket JSON 包络提取 Codex 官方定义的请求类型、生命周期事件和规范化错误码，用于安全诊断。
 - **无会话绑定。** 每个请求独立使用当前 active 账号；切换 active 在下一个请求立即生效，无会话/线程粘滞（session binding 机制已移除）。
 - **多账号隔离。** 每个账号有独立 `CODEX_HOME`（`data/accounts/<id>/codex-home`）与 `auth.json`，凭证不落 SQLite、不进日志。
 - **接入方式。** 网关注入全局 `~/.codex/config.toml` 的 `openai_base_url` 指向自身，使 Codex 内置 `openai` provider 的流量全部经过网关。
@@ -25,6 +25,7 @@
 - 认证替换由 `buildUpstreamHeaders` 完成：设置 `Authorization: Bearer <token>` 与 `chatgpt-account-id`；剥离 `cookie`、`host`、`connection`、`content-length` 等请求头（由网关重建）。
 - 响应头经 `copyResponseHeaders` 转发，剥离 `set-cookie`、`connection` 等传输层头。
 - 浏览器 Origin 请求（`hasBrowserOrigin`）一律拒绝（数据面仅服务本地 Codex 客户端）。
+- 网关使用服务端生成的 UUID 作为请求诊断 ID，且不接受客户端请求头覆盖；因此 HTTP、WebSocket 连接以及连接内派生请求在网关重启后仍可唯一关联。
 
 ### HTTP / SSE
 
@@ -35,11 +36,14 @@
 - 上游返回 `401` 且尚未产生有效流：对**同一账号**执行一次认证刷新并重试一次。
 - 上游返回 `429`：将该账号标记为 `rate_limited`，并异步刷新额度展示。
 - 大请求体与长连接不受网关限制（`bodyTimeout: 0`）。
+- HTTP 请求成功获得上游响应时，日志 `status_code` 表示上游返回的 HTTP 状态；若请求在到达上游前被网关拒绝，则表示网关返回给本地客户端的 HTTP 状态。WebSocket 请求级记录不复用握手码：收到 `response.completed` 后使用合成的 `200` 表示协议终态成功，握手 `101` 仅存在于连接级记录。`outcome` 是统计和筛选的权威字段，不能把 2xx 请求归为上游故障。
 
 ### WebSocket
 
 - 握手阶段注入所选账号认证（`websocketUpgradeHeaders`，保留 codex 依赖的 `x-codex-turn-state`、session/thread 头、`OpenAI-Beta` 等）。
-- 升级成功后**双向透明转发**文本/二进制帧。
+- 升级成功后**双向透明转发**文本/二进制帧，诊断提取不得改变帧字节；解析失败必须继续转发。
+- 文本帧使用流式 JSON 路径筛选器且 `keepStack: false`，客户端仅读取顶层 `type`、`generate` 和 `client_metadata.x-codex-turn-metadata`，上游仅读取顶层 `type`、`response.error.code` 和 `response.incomplete_details.reason`。不组装完整 payload，不读取或记录 input、instructions、prompt、工具参数、工具结果和响应正文。
+- 每个非 prewarm `response.create` 独立记录请求生命周期；复用连接中的 `request_kind = "compaction"` 记录为 `compact`。握手和连接关闭属于连接级诊断，不参与 API 可用性。
 - 客户端早于上游连接就绪的消息进入**有界缓冲区**（`MAX_PENDING_FRAMES` / `MAX_PENDING_BYTES`），上游 `open` 后按序补发。
 - ping / pong 双向转发；close code / reason 按合法范围桥接（非法码直接 `terminate`）。
 - 保留上游 Upgrade 响应头（`x-codex-turn-state`、`x-models-etag`、`x-reasoning-included`、`openai-model`）。
@@ -49,12 +53,12 @@
 ### 正面
 
 - 最大化复用官方能力：工具调用、推理、远端压缩、模型发现均不破坏。
-- 数据面不透明 → 上游协议演进对网关零影响。
+- 转发数据面不透明，诊断元数据提取失败时自动降级为仅透传，不影响上游协议兼容性。
 - 账号切换对 Codex 客户端透明，无需重新登录。
 
 ### 代价
 
-- 网关不做 payload 级处理，因此无法在数据面做模型路由或内容改写；多 provider 路由只能依赖未来在 `openai_base_url` 之上的代理层（见 `docs/research/multi-provider-routing.md`）。
+- 网关不做 payload 内容处理，因此无法在数据面做模型路由或内容改写；只读诊断例外不得扩展为业务路由依据。多 provider 路由只能依赖未来在 `openai_base_url` 之上的代理层（见 `docs/research/multi-provider-routing.md`）。
 - 依赖全局 `~/.codex/config.toml` 注入，与桌面端共享配置，需注意注入的幂等与备份恢复。
 
 ### 已知修正记录

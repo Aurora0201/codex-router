@@ -29,12 +29,18 @@ describe("application shell", () => {
 
     expect(container.querySelector('[data-slot="sidebar-rail"]')).toBeNull()
     expect(screen.getByText("Codex Router")).toBeInTheDocument()
+    const brandMark = container.querySelector('[data-slot="brand-mark"]')
+    expect(brandMark).toHaveClass("bg-sidebar-foreground")
+    expect(brandMark).toHaveClass("size-6")
+    expect(brandMark).not.toHaveClass("bg-primary")
+    expect(brandMark).toHaveAttribute("style", expect.stringContaining("codex-router-icon.png"))
 
     await user.click(screen.getByRole("button", { name: "Toggle Sidebar" }))
 
     expect(
       await screen.findByRole("button", { name: "展开导航栏" })
     ).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "展开导航栏" })).not.toHaveClass("bg-primary")
     expect(screen.queryByText("Identity router")).not.toBeInTheDocument()
   })
 

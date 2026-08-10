@@ -160,7 +160,7 @@ describe("database migration v2", () => {
   });
 });
 
-describe("schema v4 diagnostics", () => {
+describe("schema diagnostics", () => {
   it("migrates historical reset seconds while preserving millisecond timestamps", async () => {
     const root = await tempDir();
     const dbPath = path.join(root, "timestamps.db");
@@ -169,7 +169,7 @@ describe("schema v4 diagnostics", () => {
     database.accounts.insert({ id: "milliseconds", codexHome: path.join(root, "milliseconds") });
     database.raw.prepare("UPDATE accounts SET primary_resets_at = ?, secondary_resets_at = ? WHERE id = ?").run(1_786_000_000, null, "seconds");
     database.raw.prepare("UPDATE accounts SET primary_resets_at = ? WHERE id = ?").run(1_786_000_000_000, "milliseconds");
-    database.raw.prepare("DELETE FROM schema_migrations WHERE version = 4").run();
+    database.raw.prepare("DELETE FROM schema_migrations WHERE version >= 4").run();
     database.close();
 
     const migrated = new GatewayDatabase(dbPath);
@@ -186,13 +186,56 @@ describe("schema v4 diagnostics", () => {
     expect(isCompactionRequest({ "x-codex-turn-metadata": "x".repeat(8 * 1024 + 1) })).toBe(false);
   });
 
+  it("backfills historical aborts as status-less client cancellations", async () => {
+    const root = await tempDir();
+    const dbPath = path.join(root, "cancelled.db");
+    const database = new GatewayDatabase(dbPath);
+    database.raw.prepare(`
+      INSERT INTO request_log(id, route, transport, status_code, error_code, outcome, scope, created_at)
+      VALUES ('cancelled-old', '/models', 'models', 502, 'This operation was aborted', 'upstream_error', 'request', 1)
+    `).run();
+    database.raw.prepare("DELETE FROM schema_migrations WHERE version >= 6").run();
+    database.close();
+
+    const migrated = new GatewayDatabase(dbPath);
+    const item = migrated.requestLog.query({ since: 0, status: "cancelled", limit: 10 }).items[0];
+    expect(item).toMatchObject({ outcome: "client_cancelled", errorCode: "client_cancelled" });
+    expect(item?.statusCode).toBeUndefined();
+    migrated.close();
+  });
+
+  it("reconciles historical request outcomes from their recorded status", async () => {
+    const root = await tempDir();
+    const dbPath = path.join(root, "outcomes.db");
+    const database = new GatewayDatabase(dbPath);
+    database.raw.prepare(`
+      INSERT INTO request_log(id, route, transport, status_code, outcome, scope, created_at)
+      VALUES ('successful-old', '/responses', 'http', 200, 'upstream_error', 'request', 1)
+    `).run();
+    database.raw.prepare("DELETE FROM schema_migrations WHERE version = 7").run();
+    database.close();
+
+    const migrated = new GatewayDatabase(dbPath);
+    const item = migrated.requestLog.query({ since: 0, status: "success", limit: 10 }).items[0];
+    expect(item).toMatchObject({ statusCode: 200, outcome: "success", scope: "request" });
+    migrated.close();
+  });
+
   it("filters and summarizes structured request logs without request bodies", async () => {
     const root = await tempDir();
     const database = new GatewayDatabase(path.join(root, "logs.db"));
     database.requestLog.log({ requestId: "req-ok", route: "/responses", transport: "http", statusCode: 200, durationMs: 20, bytesIn: 10, bytesOut: 30 });
     database.requestLog.log({ requestId: "req-failed", route: "/responses", transport: "http", statusCode: 500, durationMs: 80, errorCode: "upstream_error" });
     const result = database.requestLog.query({ since: 0, status: "error", limit: 50 });
-    expect(result.summary).toEqual({ requests: 1, errors: 1, averageDurationMs: 80 });
+    expect(result.summary).toEqual({
+      requests: 1,
+      errors: 1,
+      rejected: 0,
+      cancelled: 0,
+      availabilityRequests: 1,
+      availabilityErrors: 1,
+      averageDurationMs: 80,
+    });
     expect(result.items).toHaveLength(1);
     expect(result.timeline).toHaveLength(1);
     expect(result.pagination).toEqual({ page: 1, pageSize: 50, totalItems: 1, totalPages: 1 });
@@ -205,8 +248,8 @@ describe("schema v4 diagnostics", () => {
     const root = await tempDir();
     const database = new GatewayDatabase(path.join(root, "paged-logs.db"));
     const insert = database.raw.prepare(`
-      INSERT INTO request_log(id, route, transport, status_code, duration_ms, created_at)
-      VALUES (?, '/responses', 'http', 200, 10, ?)
+      INSERT INTO request_log(id, route, transport, status_code, duration_ms, outcome, created_at)
+      VALUES (?, '/responses', 'http', 200, 10, 'success', ?)
     `);
     database.raw.transaction(() => {
       for (let index = 0; index < 45; index++) insert.run(`log-${index}`, 1_000 + index);
@@ -234,11 +277,14 @@ describe("schema v4 diagnostics", () => {
     const root = await tempDir();
     const database = new GatewayDatabase(path.join(root, "timeline.db"));
     const insert = database.raw.prepare(`
-      INSERT INTO request_log(id, route, transport, status_code, duration_ms, created_at)
-      VALUES (?, '/responses', 'http', ?, ?, ?)
+      INSERT INTO request_log(id, route, transport, status_code, duration_ms, outcome, created_at)
+      VALUES (?, '/responses', 'http', ?, ?, ?, ?)
     `);
     database.raw.transaction(() => {
-      for (let index = 0; index < 502; index++) insert.run(`log-${index}`, index % 2 ? 200 : 500, index === 501 ? null : index + 1, Date.now() + index);
+      for (let index = 0; index < 502; index++) {
+        const statusCode = index % 2 ? 200 : 500;
+        insert.run(`log-${index}`, statusCode, index === 501 ? null : index + 1, statusCode >= 500 ? "upstream_error" : "success", Date.now() + index);
+      }
     })();
     const result = database.requestLog.query({ since: 0, status: "error", limit: 10 });
     expect(result.timeline).toHaveLength(251);

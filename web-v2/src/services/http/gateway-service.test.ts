@@ -211,8 +211,8 @@ describe("HTTP GatewayService", () => {
   it("maps request-log filters and preserves timeline metadata", async () => {
     const payload = {
       items: [],
-      summary: { requests: 1, errors: 1, averageDurationMs: 42 },
-      timeline: [{ id: "log-1", createdAt: 1000, durationMs: 42, statusCode: 500 }],
+      summary: { requests: 1, errors: 1, rejected: 0, cancelled: 0, availabilityRequests: 1, availabilityErrors: 1, averageDurationMs: 42 },
+      timeline: [{ id: "log-1", createdAt: 1000, durationMs: 42, statusCode: 500, outcome: "upstream_error" }],
       nextCursor: null,
       pagination: { page: 3, pageSize: 50, totalItems: 121, totalPages: 3 },
     }

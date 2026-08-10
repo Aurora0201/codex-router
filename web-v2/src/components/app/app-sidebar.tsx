@@ -1,5 +1,4 @@
 import {
-  CircleGaugeIcon,
   PanelLeftIcon,
   Settings2Icon,
   SlidersHorizontalIcon,
@@ -28,7 +27,24 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { cn } from "@/lib/utils"
 import type { AccountView } from "@/services/contracts"
+
+const brandIconUrl = `${import.meta.env.BASE_URL}codex-router-icon.png`
+const brandMaskStyle = {
+  maskImage: `url("${brandIconUrl}")`,
+  maskPosition: "center",
+  maskRepeat: "no-repeat",
+  maskSize: "contain",
+  WebkitMaskImage: `url("${brandIconUrl}")`,
+  WebkitMaskPosition: "center",
+  WebkitMaskRepeat: "no-repeat",
+  WebkitMaskSize: "contain",
+}
+
+function BrandMark({ className }: { className?: string }) {
+  return <span data-slot="brand-mark" aria-hidden="true" className={cn("shrink-0 bg-sidebar-foreground", className)} style={brandMaskStyle} />
+}
 
 export type AppPage = "accounts" | "gateway" | "logs" | "preferences"
 
@@ -73,14 +89,14 @@ export function AppSidebar({
 
   return (
     <Sidebar variant="inset" collapsible="icon">
-      <SidebarHeader>
+      <SidebarHeader className="p-0">
         {state === "collapsed" && !isMobile ? (
           <div className="flex h-14 items-center justify-center">
             <Tooltip>
               <TooltipTrigger
                 render={
                   <Button
-                    variant="default"
+                    variant="ghost"
                     size="icon"
                     className="group/logo-toggle relative"
                     aria-label="展开导航栏"
@@ -88,18 +104,16 @@ export function AppSidebar({
                   />
                 }
               >
-                <CircleGaugeIcon className="transition-opacity group-hover/logo-toggle:opacity-0 group-focus-visible/logo-toggle:opacity-0" />
+                <BrandMark className="size-5 transition-opacity group-hover/logo-toggle:opacity-0 group-focus-visible/logo-toggle:opacity-0" />
                 <PanelLeftIcon className="absolute opacity-0 transition-opacity group-hover/logo-toggle:opacity-100 group-focus-visible/logo-toggle:opacity-100" />
               </TooltipTrigger>
               <TooltipContent side="right">展开导航栏</TooltipContent>
             </Tooltip>
           </div>
         ) : (
-          <div className="flex h-14 items-center gap-2.5 px-2">
-            <span className="grid size-7 shrink-0 place-items-center rounded-md bg-primary text-primary-foreground [&_svg]:size-4">
-              <CircleGaugeIcon aria-hidden="true" />
-            </span>
-            <p className="min-w-0 truncate text-base font-semibold leading-none">
+          <div className="flex h-14 items-center gap-3 px-3">
+            <BrandMark className="size-6" />
+            <p className="min-w-0 truncate text-lg font-semibold leading-none">
               Codex Router
             </p>
             <SidebarTrigger className="ml-auto size-8" />

@@ -1,43 +1,40 @@
 # Known issues
 
-## Repeated `/models` failures can be over-counted
+## Resolved: repeated `/models` failures were over-counted
 
 Observed behavior:
 
 - Codex periodically refreshes `GET /backend-api/codex/models` and retries after failures.
-- When the upstream connection to `chatgpt.com:443` times out, or the Codex client
-  cancels a slow refresh, the router currently records the request as a `502` error.
-- The exception path does not retain the account that had already been selected, so
-  these rows can have an empty account label even though routing succeeded.
+- Older builds recorded both upstream timeouts and client-cancelled slow refreshes as
+  `502`, which inflated the error count.
 
-Implemented safeguards:
+Implemented resolution:
 
 - Proxy exceptions retain the selected account ID when one was resolved.
-
-Follow-up work:
-
-- Distinguish client cancellation from an upstream gateway failure in structured logs
-  and error summaries.
-- Add tests for upstream connect timeout, client cancellation, and account attribution.
+- Downstream abort/close is now recorded as `client_cancelled` without a fabricated
+  status code and is excluded from upstream API availability.
+- Structured outcomes distinguish success, upstream rejection, upstream failure,
+  gateway failure, and client cancellation.
 
 Security constraints remain unchanged: diagnostics must not record credentials,
 prompts, tool arguments, tool output, or response bodies.
 
-## Remote compaction v2 is classified as a normal Responses request
+## Resolved: remote compaction v2 on reused WebSockets was classified as normal Responses
 
 Codex supports two remote compaction transports. V1 sends
 `POST /backend-api/codex/responses/compact`, which the router classifies as `compact`.
 V2 sends a normal Responses stream (HTTP or WebSocket) with
-`x-codex-turn-metadata.request_kind = "compaction"`, so it is currently classified as
-`http` or `ws`. Consequently, an empty `compact` transport does not mean that no
-compaction occurred.
+`client_metadata["x-codex-turn-metadata"].request_kind = "compaction"`. A reused
+WebSocket does not repeat the compatibility handshake header, which caused older
+builds to miss the request.
 
-Current behavior:
+Implemented resolution:
 
-- HTTP and WebSocket handshakes read only the bounded `x-codex-turn-metadata`
-  compatibility header and classify `request_kind = "compaction"` as `compact`.
-- Keep the data-plane body opaque; never inspect the compaction trigger or other
-  request content to perform this classification.
-- A compaction request sent later over an already-reused WebSocket cannot be
-  reclassified without inspecting the request frame, so it remains `ws` under the
-  current opaque data-plane contract.
+- HTTP continues to use the bounded compatibility header.
+- WebSocket diagnostics stream-select only the official request-kind metadata and
+  terminal event fields, without constructing or storing the full payload.
+- Each non-prewarm `response.create` receives a request-level log entry, so a V2
+  compaction on an already-reused connection is recorded as `compact` when its
+  terminal event arrives.
+- Malformed, binary, or future frames remain byte-for-byte transparent; failure to
+  extract diagnostics never blocks forwarding.

@@ -94,9 +94,11 @@ export interface GatewaySnapshot {
 export type GatewayResource = "accounts" | "stats" | "settings" | "codex" | "logs"
 
 export type RequestLogRange = "1h" | "24h" | "7d"
+export type RequestOutcome = "success" | "rejected" | "upstream_error" | "gateway_error" | "client_cancelled"
+export type RequestScope = "request" | "connection"
 export interface RequestLogFilters {
   range: RequestLogRange
-  status?: "success" | "error"
+  status?: "success" | "rejected" | "error" | "cancelled"
   transport?: "http" | "ws" | "compact" | "models" | "search"
   accountId?: string
   query?: string
@@ -116,16 +118,19 @@ export interface RequestLogView {
   bytesIn?: number
   bytesOut?: number
   errorCode?: string
+  outcome: RequestOutcome
+  scope: RequestScope
   createdAt: number
 }
 export interface RequestLogsResponse {
   items: RequestLogView[]
-  summary: { requests: number; errors: number; averageDurationMs: number | null }
+  summary: { requests: number; errors: number; rejected: number; cancelled: number; availabilityRequests: number; availabilityErrors: number; averageDurationMs: number | null }
   timeline: Array<{
     id: string
     createdAt: number
     durationMs: number
     statusCode: number | null
+    outcome: RequestOutcome
   }>
   nextCursor: string | null
   pagination: {
@@ -159,4 +164,5 @@ export interface GatewayService {
   applyCodexConfig(): Promise<CodexStatusView>
   restoreCodexConfig(): Promise<CodexStatusView>
   restartCodex(): Promise<{ running: boolean; codexPath: string | null }>
+  openLocalEnvironment(target: "data" | "backup" | "logs"): Promise<void>
 }

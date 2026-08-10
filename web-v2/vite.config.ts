@@ -6,6 +6,7 @@ import { defineConfig } from "vite"
 // https://vite.dev/config/
 export default defineConfig({
   base: "/admin/",
+  publicDir: path.resolve(import.meta.dirname, "../assets/branding"),
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {

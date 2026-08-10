@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { access } from "node:fs/promises";
 import Fastify, { type FastifyInstance } from "fastify";
 import fastifyStatic from "@fastify/static";
@@ -63,6 +64,8 @@ export async function buildGateway(overrides: Partial<GatewayConfig> = {}): Prom
   const startedAt = Date.now();
   const app = Fastify({
     bodyLimit: config.requestBodyLimit,
+    requestIdHeader: false,
+    genReqId: () => randomUUID(),
     logger: {
       level: process.env.GATEWAY_LOG_LEVEL ?? "info",
       redact: {

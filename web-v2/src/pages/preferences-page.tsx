@@ -1,16 +1,13 @@
 import { useState } from "react"
-import { ClipboardIcon, DatabaseIcon, FileArchiveIcon, FileTextIcon, MonitorIcon, MoonIcon, PackageIcon, SunIcon } from "lucide-react"
+import { ChevronRightIcon, DatabaseIcon, FileArchiveIcon, FileTextIcon, MonitorIcon, MoonIcon, PackageIcon, SunIcon } from "lucide-react"
 
 import { useTheme, type Theme } from "@/components/theme-provider"
-import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Field, FieldContent, FieldDescription, FieldGroup, FieldTitle } from "@/components/ui/field"
-import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card"
-import { Item, ItemActions, ItemContent, ItemGroup, ItemMedia, ItemTitle } from "@/components/ui/item"
+import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from "@/components/ui/item"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { toast } from "@/components/ui/toast"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import type { GatewayService, GatewaySnapshot, SettingsView } from "@/services/contracts"
 
 const themeItems = [
@@ -19,33 +16,12 @@ const themeItems = [
   { value: "dark", label: "深色", description: "始终使用低亮度的中性色表面。", icon: MoonIcon },
 ] as const
 
-function CopyPath({ value, label }: { value: string; label: string }) {
+function EnvironmentItem({ title, description, icon: Icon, disabled = false, onActivate }: { title: string; description: string; icon: typeof PackageIcon; disabled?: boolean; onActivate(): void }) {
   return (
-    <Tooltip>
-      <TooltipTrigger render={<Button variant="ghost" size="icon-sm" aria-label={`复制${label}`} onClick={() => void navigator.clipboard.writeText(value).then(() => toast.add({ title: `${label}已复制` }))} />}><ClipboardIcon /></TooltipTrigger>
-      <TooltipContent>复制{label}</TooltipContent>
-    </Tooltip>
-  )
-}
-
-function EnvironmentItem({ title, value, detail, icon: Icon, copyable = true }: { title: string; value: string; detail?: string; icon: typeof PackageIcon; copyable?: boolean }) {
-  return (
-    <Item variant="muted" className="grid min-w-0 grid-cols-[1.75rem_minmax(0,1fr)_2rem] grid-rows-[1.75rem_1rem] items-center gap-x-2 gap-y-1">
-      <ItemMedia variant="icon" className="col-start-1 row-start-1"><Icon /></ItemMedia>
-      <ItemContent className="col-start-2 row-start-1 min-w-0"><ItemTitle className="truncate leading-none">{title}</ItemTitle></ItemContent>
-      {copyable ? <ItemActions className="col-start-3 row-start-1"><CopyPath value={value} label={title} /></ItemActions> : null}
-      <HoverCard>
-        <HoverCardTrigger render={<button type="button" className="col-span-3 col-start-1 row-start-2 block min-w-0 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring" />}>
-          <span className="block truncate font-mono text-xs leading-none text-muted-foreground underline decoration-border underline-offset-4">{value}</span>
-        </HoverCardTrigger>
-        <HoverCardContent align="start" className="w-96">
-          <div className="flex flex-col gap-2">
-            <p className="text-sm font-medium">{title}</p>
-            <p className="break-all font-mono text-xs text-muted-foreground">{value}</p>
-            {detail ? <p className="break-all text-xs text-muted-foreground">{detail}</p> : null}
-          </div>
-        </HoverCardContent>
-      </HoverCard>
+    <Item variant="outline" render={<button type="button" disabled={disabled} onClick={onActivate} aria-label={title} />} className="min-w-0 flex-nowrap text-left disabled:cursor-not-allowed disabled:opacity-60">
+      <ItemMedia variant="icon" className="rounded-md bg-muted p-2"><Icon /></ItemMedia>
+      <ItemContent className="min-w-0"><ItemTitle>{title}</ItemTitle><ItemDescription className="truncate font-mono text-xs">{description}</ItemDescription></ItemContent>
+      <ItemActions><ChevronRightIcon className="size-4 text-muted-foreground" aria-hidden="true" /></ItemActions>
     </Item>
   )
 }
@@ -53,6 +29,13 @@ function EnvironmentItem({ title, value, detail, icon: Icon, copyable = true }: 
 export function PreferencesPage({ snapshot, service, reload, onThemeChange }: { snapshot: GatewaySnapshot; service: GatewayService; reload(): Promise<void>; onThemeChange(theme: Theme): Promise<void> }) {
   const [saving, setSaving] = useState(false)
   const { theme } = useTheme()
+  const openEnvironment = async (target: "data" | "backup" | "logs") => {
+    try {
+      await service.openLocalEnvironment(target)
+    } catch (error) {
+      toast.add({ title: "无法打开目标目录", description: (error as Error).message, type: "error" })
+    }
+  }
   const save = async (values: Partial<Pick<SettingsView, "requestMetadataLogging" | "logLevel">>) => {
     setSaving(true)
     try {
@@ -78,12 +61,12 @@ export function PreferencesPage({ snapshot, service, reload, onThemeChange }: { 
         </Card>
       </div>
       <Card>
-        <CardHeader><CardTitle>本地环境</CardTitle><CardDescription>悬停路径可查看完整位置，复制操作保持在标题行右侧。</CardDescription></CardHeader>
-        <CardContent><ItemGroup className="grid grid-cols-4 gap-3">
-          <EnvironmentItem title="Codex Router 版本" value={snapshot.health.version} icon={PackageIcon} copyable={false} />
-          <EnvironmentItem title="数据目录" value={snapshot.health.dataDir} detail={`数据库：${snapshot.health.databasePath}`} icon={DatabaseIcon} />
-          <EnvironmentItem title="Codex 配置备份" value={snapshot.codex.backupPath} icon={FileArchiveIcon} />
-          <EnvironmentItem title="Codex Router 运行日志" value={snapshot.health.logFilePath ?? "标准输出"} detail={snapshot.health.logFilePath ? undefined : "前台开发模式没有独立日志文件。"} icon={FileTextIcon} copyable={snapshot.health.logFilePath !== null} />
+        <CardHeader><CardTitle>本地环境</CardTitle><CardDescription>选择一项可在系统中打开对应目录；版本发布页将在地址配置后启用。</CardDescription></CardHeader>
+        <CardContent><ItemGroup className="grid gap-2 md:grid-cols-2">
+          <EnvironmentItem title="Codex Router 版本" description={`${snapshot.health.version} · GitHub 发布页即将提供`} icon={PackageIcon} disabled onActivate={() => undefined} />
+          <EnvironmentItem title="数据目录" description={snapshot.health.dataDir} icon={DatabaseIcon} onActivate={() => void openEnvironment("data")} />
+          <EnvironmentItem title="Codex 配置备份" description={snapshot.codex.backupPath} icon={FileArchiveIcon} onActivate={() => void openEnvironment("backup")} />
+          <EnvironmentItem title="Codex Router 运行日志" description={snapshot.health.logFilePath ?? "标准输出模式，没有独立日志目录"} icon={FileTextIcon} disabled={!snapshot.health.logFilePath} onActivate={() => void openEnvironment("logs")} />
         </ItemGroup></CardContent>
       </Card>
     </section>

@@ -6,8 +6,11 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import open from "open";
 import WebSocket, { WebSocketServer } from "ws";
 import { buildGateway, type GatewayApp } from "../src/app.js";
+
+vi.mock("open", () => ({ default: vi.fn(async () => undefined) }));
 
 interface ReceivedRequest { url: string; body: Buffer; headers: IncomingHttpHeaders; }
 
@@ -62,7 +65,17 @@ beforeAll(async () => {
     wsAccounts.push(String(request.headers["chatgpt-account-id"]));
     socket.on("message", (data, isBinary) => {
       if (data.toString() === "close-me") socket.close(4001, "mock_complete");
-      else socket.send(data, { binary: isBinary });
+      else {
+        socket.send(data, { binary: isBinary });
+        try {
+          const metadata = JSON.parse(data.toString()) as { type?: string; generate?: boolean };
+          if (metadata.type === "response.create" && metadata.generate !== false) {
+            setTimeout(() => socket.send('{"type":"response.completed","response":{"status":"completed"}}'), 10);
+          }
+        } catch {
+          // Opaque non-JSON frames are echoed unchanged.
+        }
+      }
     });
   });
 
@@ -270,6 +283,8 @@ describe("HTTP, SSE, compact and models", () => {
     });
     await new Promise((resolve) => setTimeout(resolve, 100));
     expect(abortedSlowRequest).toBe(true);
+    const cancelled = gateway.database.requestLog.query({ since: 0, status: "cancelled", transport: "http", limit: 100 });
+    expect(cancelled.items.some((entry) => entry.errorCode === "client_cancelled" && entry.statusCode === undefined)).toBe(true);
   });
 });
 
@@ -283,9 +298,20 @@ describe("WebSocket transport", () => {
     socket.send(frame);
     const [echo] = await once(socket, "message");
     expect(echo.toString()).toBe(frame);
+    await once(socket, "message");
     expect(upgradeHeaders["x-models-etag"]).toBe("mock-etag");
     expect(upgradeHeaders["x-reasoning-included"]).toBe("true");
     expect(upgradeHeaders["openai-model"]).toBe("mock-codex");
+    const compactFrame = JSON.stringify({
+      type: "response.create",
+      input: [{ type: "compaction_trigger" }],
+      client_metadata: { "x-codex-turn-metadata": JSON.stringify({ request_kind: "compaction", compaction: { trigger: "manual" } }) },
+    });
+    socket.send(compactFrame);
+    expect((await once(socket, "message"))[0].toString()).toBe(compactFrame);
+    await once(socket, "message");
+    const compactLogs = gateway.database.requestLog.query({ since: 0, transport: "compact", limit: 100 });
+    expect(compactLogs.items.some((entry) => entry.scope === "request" && entry.outcome === "success" && entry.bytesIn === Buffer.byteLength(compactFrame))).toBe(true);
     const pong = once(socket, "pong"); socket.ping("health"); await pong;
     socket.send("close-me");
     const [code, reason] = await once(socket, "close");
@@ -301,6 +327,16 @@ describe("WebSocket transport", () => {
 });
 
 describe("security and admin API", () => {
+  it("generates globally unique request IDs and ignores caller-provided IDs", async () => {
+    const response = await fetch(`${gatewayUrl}/backend-api/codex/models`, {
+      headers: { "request-id": "caller-controlled" },
+    });
+    expect(response.status).toBe(200);
+    const item = gateway.database.requestLog.query({ since: 0, transport: "models", limit: 100 }).items[0];
+    expect(item?.requestId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+    expect(item?.requestId).not.toBe("caller-controlled");
+  });
+
   it("serves web-v2 from the canonical admin entrypoint", async () => {
     const redirect = await gateway.app.inject({ method: "GET", url: "/admin" });
     expect(redirect.statusCode).toBe(302);
@@ -351,6 +387,12 @@ describe("security and admin API", () => {
     const requestColumns = gateway.database.raw.prepare("PRAGMA table_info(request_log)").all() as { name: string }[];
     expect(requestColumns.map((column) => column.name)).not.toEqual(expect.arrayContaining(["prompt", "response", "tool_arguments", "tool_output", "authorization"]));
     expect(accepted.headers.get("access-control-allow-origin")).toBeNull();
+
+    const opened = await fetch(`${gatewayUrl}/api/local-environment/open`, { method: "POST", headers: { origin: gatewayUrl, cookie, "x-csrf-token": data.csrfToken, "content-type": "application/json" }, body: '{"target":"data"}' });
+    expect(opened.status).toBe(204);
+    expect(vi.mocked(open)).toHaveBeenCalledWith(gateway.config.dataDir, { wait: false });
+    const invalidTarget = await fetch(`${gatewayUrl}/api/local-environment/open`, { method: "POST", headers: { origin: gatewayUrl, cookie, "x-csrf-token": data.csrfToken, "content-type": "application/json" }, body: '{"target":"arbitrary-path"}' });
+    expect(invalidTarget.status).toBe(400);
   });
 
   it("supports direct request-log pages and rejects page/cursor conflicts", async () => {

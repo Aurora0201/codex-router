@@ -10,6 +10,7 @@ import { registerCodexRoutes } from "./codex-routes.js";
 import { CodexConfigService } from "../../codex/codex-config.js";
 import { registerAdminEventRoutes } from "./admin-events.js";
 import { registerRequestLogRoutes } from "./request-log-routes.js";
+import { registerLocalEnvironmentRoutes } from "./local-environment-routes.js";
 
 export async function registerAdminApi(
   app: FastifyInstance,
@@ -25,6 +26,7 @@ export async function registerAdminApi(
   registerStatsRoutes(app, ctx);
   registerRequestLogRoutes(app, ctx);
   registerCodexRoutes(app, ctx, codexConfig);
+  registerLocalEnvironmentRoutes(app, ctx, codexConfig);
 }
 
 export type { AdminContext } from "./context.js";

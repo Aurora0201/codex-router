@@ -8,17 +8,20 @@ import { createGatewayServiceFixture } from "@/test/gateway-service-fixture"
 import { PreferencesPage } from "./preferences-page"
 
 describe("PreferencesPage", () => {
-  it("balances environment items and reveals full paths with HoverCard", async () => {
+  it("renders local environment actions with Item and opens fixed targets", async () => {
     const service = createGatewayServiceFixture()
+    const openLocalEnvironment = vi.spyOn(service, "openLocalEnvironment")
     render(
       <ThemeProvider><Toaster><PreferencesPage snapshot={service.snapshot} service={service} reload={vi.fn()} onThemeChange={vi.fn()} /></Toaster></ThemeProvider>
     )
     expect(screen.getByText("Codex Router 版本")).toBeInTheDocument()
     expect(screen.getByText("Codex Router 运行日志")).toBeInTheDocument()
     const path = service.snapshot.health.dataDir
-    const trigger = screen.getByRole("button", { name: path })
-    await userEvent.hover(trigger)
-    await waitFor(() => expect(screen.getAllByText(path).length).toBeGreaterThan(1))
+    expect(screen.getByText(path)).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Codex Router 版本" })).toBeDisabled()
+    await userEvent.click(screen.getByRole("button", { name: "数据目录" }))
+    await waitFor(() => expect(openLocalEnvironment).toHaveBeenCalledWith("data"))
+    expect(screen.getByRole("button", { name: "数据目录" }).closest('[data-slot="item"]')).toBeInTheDocument()
     expect(screen.queryByText("Prompt logging")).not.toBeInTheDocument()
     expect(screen.getByRole("tab", { name: "INFO" })).toHaveAttribute("data-active")
   })
