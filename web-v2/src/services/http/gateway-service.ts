@@ -6,6 +6,8 @@ import type {
   GatewayResource,
   HealthView,
   LoginSessionView,
+  RequestLogFilters,
+  RequestLogsResponse,
   SettingsView,
   StatsView,
 } from "@/services/contracts"
@@ -100,6 +102,16 @@ export function createHttpGatewayService(): GatewayService {
       return { health, stats, accounts, settings, codex }
     },
     getAccounts: () => request<AccountsResponse>("/api/accounts"),
+    getRequestLogs: (filters: RequestLogFilters) => {
+      const query = new URLSearchParams({ range: filters.range })
+      if (filters.status) query.set("status", filters.status)
+      if (filters.transport) query.set("transport", filters.transport)
+      if (filters.accountId) query.set("accountId", filters.accountId)
+      if (filters.query) query.set("q", filters.query)
+      if (filters.cursor) query.set("cursor", filters.cursor)
+      if (filters.limit) query.set("limit", String(filters.limit))
+      return request<RequestLogsResponse>(`/api/request-logs?${query}`)
+    },
     setActiveAccount: (id) =>
       request<AccountView>("/api/active-account", json("PUT", { id })),
     clearActiveAccount: () =>

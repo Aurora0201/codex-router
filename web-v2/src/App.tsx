@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { AccountsPage } from "@/pages/accounts-page"
 import { SettingsPage } from "@/pages/settings-page"
 import { PreferencesPage } from "@/pages/preferences-page"
+import { RequestLogsPage } from "@/pages/request-logs-page"
 import type { GatewayService, GatewaySnapshot } from "@/services/contracts"
 import { createHttpGatewayService } from "@/services/http/gateway-service"
 import { toast } from "@/components/ui/toast"
@@ -38,6 +39,8 @@ export function App({
   const [page, setPage] = useState<AppPage>("accounts")
   const [snapshot, setSnapshot] = useState<GatewaySnapshot | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [logsRevision, setLogsRevision] = useState(0)
+  const [logsErrorsOnly, setLogsErrorsOnly] = useState(false)
   const { setTheme } = useTheme()
   const snapshotTheme = snapshot?.settings.theme
 
@@ -82,7 +85,8 @@ export function App({
     const connect = () => {
       unsubscribe()
       unsubscribe = service.subscribe(
-        () => {
+        (resources) => {
+          if (resources.includes("logs")) setLogsRevision((value) => value + 1)
           window.clearTimeout(debounce)
           debounce = window.setTimeout(refresh, 100)
         },
@@ -115,10 +119,14 @@ export function App({
   const activeAccount = snapshot?.accounts.accounts.find(
     (account) => account.id === snapshot.accounts.activeAccountId
   )
+  const navigate = (nextPage: AppPage) => {
+    if (nextPage === "logs") setLogsErrorsOnly(false)
+    setPage(nextPage)
+  }
 
   return (
     <SidebarProvider className="h-dvh min-h-0 overflow-hidden">
-      <AppSidebar page={page} onPageChange={setPage} activeAccount={activeAccount} />
+      <AppSidebar page={page} onPageChange={navigate} activeAccount={activeAccount} />
       <SidebarInset className="min-h-0 overflow-hidden">
         <AppHeader
           page={page}
@@ -158,6 +166,16 @@ export function App({
                 service={service}
                 reload={reload}
                 onShowAccounts={() => setPage("accounts")}
+                onShowLogs={() => { setLogsErrorsOnly(true); setPage("logs") }}
+              />
+            ) : page === "logs" ? (
+              <RequestLogsPage
+                service={service}
+                accounts={snapshot.accounts.accounts}
+                enabled={snapshot.settings.requestMetadataLogging}
+                initialErrorsOnly={logsErrorsOnly}
+                revision={logsRevision}
+                onShowPreferences={() => setPage("preferences")}
               />
             ) : (
               <PreferencesPage

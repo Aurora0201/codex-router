@@ -128,6 +128,7 @@ async function startInBackground(overrides: Partial<GatewayConfig>, logFileOptio
     detached: true,
     stdio: ["ignore", logFd.fd, logFd.fd],
     windowsHide: true,
+    env: { ...process.env, GATEWAY_LOG_FILE: logFile },
   });
   await logFd.close();
   child.unref();

@@ -107,11 +107,11 @@ describe("security and routing core", () => {
 
   it("parses rate limit responses in both case conventions", () => {
     const camel = parseRateLimitResponse({ rateLimits: { primary: { usedPercent: 63, resetsAt: 1, windowDurationMins: 300 }, secondary: null }, rateLimitReachedType: "unlimited" });
-    expect(camel.primary).toMatchObject({ usedPercent: 63, resetsAt: 1, windowDurationMins: 300 });
+    expect(camel.primary).toMatchObject({ usedPercent: 63, resetsAt: 1000, windowDurationMins: 300 });
     expect(camel.secondary).toBeNull();
     expect(camel.rateLimitReachedType).toBe("unlimited");
     const snake = parseRateLimitResponse({ rate_limits: { primary: { used_percent: 10, resets_at: 2, window_duration_mins: 60 }, secondary: { used_percent: 5 } } });
-    expect(snake.primary).toMatchObject({ usedPercent: 10, resetsAt: 2, windowDurationMins: 60 });
+    expect(snake.primary).toMatchObject({ usedPercent: 10, resetsAt: 2000, windowDurationMins: 60 });
     expect(snake.secondary).toMatchObject({ usedPercent: 5 });
   });
 });
@@ -156,6 +156,48 @@ describe("database migration v2", () => {
     expect(database.accounts.get("legacy-1")!.chatgptAccountId).toBe("acct-upgraded");
     database.setActiveAccountId("legacy-1");
     expect(database.getActiveAccountId()).toBe("legacy-1");
+    database.close();
+  });
+});
+
+describe("schema v4 diagnostics", () => {
+  it("migrates historical reset seconds while preserving millisecond timestamps", async () => {
+    const root = await tempDir();
+    const dbPath = path.join(root, "timestamps.db");
+    const database = new GatewayDatabase(dbPath);
+    database.accounts.insert({ id: "seconds", codexHome: path.join(root, "seconds") });
+    database.accounts.insert({ id: "milliseconds", codexHome: path.join(root, "milliseconds") });
+    database.raw.prepare("UPDATE accounts SET primary_resets_at = ?, secondary_resets_at = ? WHERE id = ?").run(1_786_000_000, null, "seconds");
+    database.raw.prepare("UPDATE accounts SET primary_resets_at = ? WHERE id = ?").run(1_786_000_000_000, "milliseconds");
+    database.raw.prepare("DELETE FROM schema_migrations WHERE version = 4").run();
+    database.close();
+
+    const migrated = new GatewayDatabase(dbPath);
+    expect(migrated.accounts.get("seconds")?.primaryResetsAt).toBe(1_786_000_000_000);
+    expect(migrated.accounts.get("seconds")?.secondaryResetsAt).toBeNull();
+    expect(migrated.accounts.get("milliseconds")?.primaryResetsAt).toBe(1_786_000_000_000);
+    migrated.close();
+  });
+
+  it("filters and summarizes structured request logs without request bodies", async () => {
+    const root = await tempDir();
+    const database = new GatewayDatabase(path.join(root, "logs.db"));
+    database.requestLog.log({ requestId: "req-ok", route: "/responses", transport: "http", statusCode: 200, durationMs: 20, bytesIn: 10, bytesOut: 30 });
+    database.requestLog.log({ requestId: "req-failed", route: "/responses", transport: "http", statusCode: 500, durationMs: 80, errorCode: "upstream_error" });
+    const result = database.requestLog.query({ since: 0, status: "error", limit: 50 });
+    expect(result.summary).toEqual({ requests: 1, errors: 1, averageDurationMs: 80 });
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]).toMatchObject({ requestId: "req-failed", errorCode: "upstream_error" });
+    expect(JSON.stringify(result)).not.toContain("body");
+    database.close();
+  });
+
+  it("persists supported logger levels and rejects invalid values", async () => {
+    const root = await tempDir();
+    const database = new GatewayDatabase(path.join(root, "settings.db"));
+    expect(database.settings.update({ logLevel: "warn" }).logLevel).toBe("warn");
+    expect(() => database.settings.update({ logLevel: "trace" })).toThrow("invalid_setting");
+    expect(database.settings.get().logLevel).toBe("warn");
     database.close();
   });
 });

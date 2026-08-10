@@ -42,6 +42,7 @@ export function loadConfig(overrides: Partial<GatewayConfig> = {}): GatewayConfi
     accountsDir,
     loginStagingDir,
     databasePath: path.resolve(overrides.databasePath ?? path.join(dataDir, "gateway.db")),
+    logFilePath: overrides.logFilePath ?? (process.env.GATEWAY_LOG_FILE ? path.resolve(process.env.GATEWAY_LOG_FILE) : null),
     webDistDir: path.resolve(overrides.webDistDir ?? process.env.GATEWAY_WEB_DIST ?? path.join(root, "web-v2", "dist")),
     codexCliPath: cliOverride ?? process.execPath,
     codexCliArgs: overrides.codexCliArgs ?? (cliOverride ? ["app-server"] : [bundledCodex, "app-server"]),

@@ -2,7 +2,7 @@ import type Database from "better-sqlite3";
 
 type SqliteDatabase = Database.Database;
 
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -83,6 +83,7 @@ export function migrate(db: SqliteDatabase): void {
   db.exec(SCHEMA);
   db.prepare("INSERT OR IGNORE INTO settings(key, value_json) VALUES ('requestMetadataLogging', 'true')").run();
   db.prepare("INSERT OR IGNORE INTO settings(key, value_json) VALUES ('theme', '\"system\"')").run();
+  db.prepare("INSERT OR IGNORE INTO settings(key, value_json) VALUES ('logLevel', '\"info\"')").run();
 
   const version = currentVersion(db);
   if (version < 2) {
@@ -97,6 +98,14 @@ export function migrate(db: SqliteDatabase): void {
     const logColumns = tableColumns(db, "request_log");
     if (logColumns.has("routing_key_hash")) db.exec("ALTER TABLE request_log DROP COLUMN routing_key_hash");
     db.exec("DROP TABLE IF EXISTS session_bindings");
+  }
+  if (version < 4) {
+    db.exec(`
+      UPDATE accounts SET primary_resets_at = primary_resets_at * 1000
+      WHERE primary_resets_at > 0 AND primary_resets_at < 100000000000;
+      UPDATE accounts SET secondary_resets_at = secondary_resets_at * 1000
+      WHERE secondary_resets_at > 0 AND secondary_resets_at < 100000000000;
+    `);
   }
 
   db.prepare("INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (?, ?)").run(SCHEMA_VERSION, Date.now());

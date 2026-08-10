@@ -63,6 +63,7 @@ export interface GatewayConfig {
   accountsDir: string;
   loginStagingDir: string;
   databasePath: string;
+  logFilePath: string | null;
   webDistDir: string;
   codexCliPath: string;
   codexCliArgs: string[];

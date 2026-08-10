@@ -16,6 +16,7 @@ const pageTitle: Record<AppPage, string> = {
   accounts: "账号路由",
   gateway: "Gateway",
   preferences: "偏好设置",
+  logs: "请求日志",
 }
 
 export function AppHeader({

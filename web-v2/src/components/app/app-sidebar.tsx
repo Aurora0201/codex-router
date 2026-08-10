@@ -4,6 +4,7 @@ import {
   Settings2Icon,
   SlidersHorizontalIcon,
   RouteIcon,
+  ScrollTextIcon,
   UsersRoundIcon,
 } from "lucide-react"
 
@@ -29,9 +30,14 @@ import {
 } from "@/components/ui/tooltip"
 import type { AccountView } from "@/services/contracts"
 
-export type AppPage = "accounts" | "gateway" | "preferences"
+export type AppPage = "accounts" | "gateway" | "logs" | "preferences"
 
 const navigation = [
+  {
+    value: "logs" as const,
+    label: "请求日志",
+    icon: ScrollTextIcon,
+  },
   {
     value: "accounts" as const,
     label: "账号路由",

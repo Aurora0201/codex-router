@@ -29,6 +29,7 @@ async function renderPage(
           service={service}
           reload={reload}
           onShowAccounts={onShowAccounts}
+          onShowLogs={vi.fn()}
         />
       </Toaster>
     </ThemeProvider>

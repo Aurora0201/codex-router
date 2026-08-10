@@ -16,12 +16,19 @@ function numberAt(value: unknown, ...keys: string[]): number | null {
   return null;
 }
 
+const MILLISECOND_TIMESTAMP_THRESHOLD = 100_000_000_000;
+
+export function normalizeResetTimestamp(value: number | null): number | null {
+  if (value === null) return null;
+  return value > 0 && value < MILLISECOND_TIMESTAMP_THRESHOLD ? value * 1000 : value;
+}
+
 function windowFrom(value: unknown): RateLimitWindow | null {
   const source = object(value);
   if (Object.keys(source).length === 0) return null;
   return {
     usedPercent: numberAt(source, "usedPercent", "used_percent"),
-    resetsAt: numberAt(source, "resetsAt", "resets_at"),
+    resetsAt: normalizeResetTimestamp(numberAt(source, "resetsAt", "resets_at")),
     windowDurationMins: numberAt(source, "windowDurationMins", "window_duration_mins"),
   };
 }

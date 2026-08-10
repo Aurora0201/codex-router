@@ -38,11 +38,13 @@ export function SettingsPage({
   service,
   reload,
   onShowAccounts,
+  onShowLogs,
 }: {
   snapshot: GatewaySnapshot
   service: GatewayService
   reload(): Promise<void>
   onShowAccounts(): void
+  onShowLogs(): void
 }) {
   const errorRate = snapshot.stats.requestsToday
     ? (snapshot.stats.errorsToday / snapshot.stats.requestsToday) * 100
@@ -83,7 +85,7 @@ export function SettingsPage({
                 </ItemTitle>
               </ItemContent>
             </Item>
-            <Item variant="muted" className="min-w-0" aria-label="请求错误指标">
+            <Item render={<button type="button" onClick={onShowLogs} />} variant="muted" className="min-w-0 text-left hover:bg-muted/80" aria-label="请求错误指标">
               <ItemMedia variant="icon">
                 <TriangleAlertIcon
                   className={cn(errorRate >= 1 && "text-destructive")}

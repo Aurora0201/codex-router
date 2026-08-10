@@ -10,12 +10,13 @@ export function registerSettingsRoutes(app: FastifyInstance, ctx: AdminContext):
     gatewayAddress: ctx.config.host,
     gatewayPort: ctx.config.port,
     upstream: ctx.config.upstreamBaseUrl,
-    promptLogging: false,
   }));
 
   app.patch("/api/settings", { preHandler: protect }, async (request, reply) => {
     await apiAction(reply, () => {
       const result = ctx.database.settings.update(jsonBody(request));
+      const logLevel = result.logLevel;
+      if (typeof logLevel === "string") app.log.level = logLevel;
       ctx.events.invalidate("settings");
       return result;
     });

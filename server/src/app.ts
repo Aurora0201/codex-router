@@ -17,6 +17,7 @@ import { CsrfGuard } from "./security/csrf.js";
 import { CodexConfigService } from "./codex/codex-config.js";
 import { CodexProcessMonitor } from "./codex/codex-process.js";
 import { AdminEventHub } from "./api/admin/admin-events.js";
+import { LOG_LEVELS } from "./db/repositories/settings-repository.js";
 
 export interface GatewayApp {
   app: FastifyInstance;
@@ -83,6 +84,13 @@ export async function buildGateway(overrides: Partial<GatewayConfig> = {}): Prom
   app.addContentTypeParser("*", { parseAs: "buffer" }, (_request, body, done) => done(null, body));
 
   const database = new GatewayDatabase(config.databasePath);
+  const environmentLogLevel = process.env.GATEWAY_LOG_LEVEL;
+  if (environmentLogLevel && LOG_LEVELS.includes(environmentLogLevel as (typeof LOG_LEVELS)[number])) {
+    database.settings.update({ logLevel: environmentLogLevel });
+  } else if (!environmentLogLevel) {
+    const persistedLogLevel = database.settings.get().logLevel;
+    if (typeof persistedLogLevel === "string") app.log.level = persistedLogLevel;
+  }
   await backfillChatgptAccountIds(database);
   const accounts = new AccountService(config, database);
   const logins = new AccountLoginService(config, database);
@@ -96,7 +104,7 @@ export async function buildGateway(overrides: Partial<GatewayConfig> = {}): Prom
   const rateLimitTimer = startUsageRefreshScheduler(accounts, usage, () => events.invalidate("accounts"));
   const codexProcess = new CodexProcessMonitor(() => events.invalidate("codex"));
   await codexProcess.start();
-  database.requestLog.onLogged = () => events.invalidate("stats");
+  database.requestLog.onLogged = () => events.invalidate("stats", "logs");
 
   await registerAdminApi(app, { config, database, accounts, auth, usage, logins, activeAccounts, csrf, startedAt, events, codexProcess }, codexConfig);
   await registerWebSocketProxy(app, { upstreamBaseUrl: config.upstreamBaseUrl, activeAccounts, auth, database });

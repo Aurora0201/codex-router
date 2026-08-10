@@ -45,6 +45,9 @@ export function createGatewayServiceFixture({
       accounts: accounts.length,
       csrfToken: "test-csrf",
       version: "0.2.0",
+      dataDir: "C:\\Users\\test\\.codex-router",
+      databasePath: "C:\\Users\\test\\.codex-router\\gateway.db",
+      logFilePath: "C:\\Users\\test\\.codex-router\\logs\\gateway.log",
     },
     stats: {
       uptimeSeconds: 76_440,
@@ -59,11 +62,12 @@ export function createGatewayServiceFixture({
       gatewayPort: 8317,
       upstream: "https://chatgpt.com/backend-api/codex",
       requestMetadataLogging: true,
-      promptLogging: false,
+      logLevel: "info",
       theme: "system",
     },
     codex: {
       configPath: "C:\\Users\\test\\.codex\\config.toml",
+      backupPath: "C:\\Users\\test\\.codex\\config.toml.gateway.bak",
       openaiBaseUrl: degraded
         ? "https://chatgpt.com/backend-api/codex"
         : "http://127.0.0.1:8317/backend-api/codex",
@@ -86,6 +90,9 @@ export function createGatewayServiceFixture({
     },
     async getAccounts() {
       return structuredClone(snapshot.accounts)
+    },
+    async getRequestLogs() {
+      return { items: [], summary: { requests: 0, errors: 0, averageDurationMs: null }, nextCursor: null }
     },
     async setActiveAccount(id) {
       snapshot.accounts.activeAccountId = id

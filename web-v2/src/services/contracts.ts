@@ -42,6 +42,9 @@ export interface HealthView {
   accounts: number
   csrfToken: string
   version: string
+  dataDir: string
+  databasePath: string
+  logFilePath: string | null
 }
 
 export interface StatsView {
@@ -56,7 +59,7 @@ export interface SettingsView {
   gatewayPort: number
   upstream: string
   requestMetadataLogging: boolean
-  promptLogging: false
+  logLevel: "debug" | "info" | "warn" | "error"
   theme: "system" | "light" | "dark"
 }
 
@@ -70,6 +73,7 @@ export interface LoginSessionView {
 
 export interface CodexStatusView {
   configPath: string
+  backupPath: string
   openaiBaseUrl: string | null
   gatewayBaseUrl: string
   applied: boolean
@@ -87,7 +91,37 @@ export interface GatewaySnapshot {
   codex: CodexStatusView
 }
 
-export type GatewayResource = "accounts" | "stats" | "settings" | "codex"
+export type GatewayResource = "accounts" | "stats" | "settings" | "codex" | "logs"
+
+export type RequestLogRange = "1h" | "24h" | "7d"
+export interface RequestLogFilters {
+  range: RequestLogRange
+  status?: "success" | "error"
+  transport?: "http" | "ws" | "compact" | "models" | "search"
+  accountId?: string
+  query?: string
+  cursor?: string
+  limit?: number
+}
+export interface RequestLogView {
+  id: string
+  requestId?: string
+  route: string
+  transport: "http" | "ws" | "compact" | "models" | "search"
+  accountId?: string
+  accountLabel: string | null
+  statusCode?: number
+  durationMs?: number
+  bytesIn?: number
+  bytesOut?: number
+  errorCode?: string
+  createdAt: number
+}
+export interface RequestLogsResponse {
+  items: RequestLogView[]
+  summary: { requests: number; errors: number; averageDurationMs: number | null }
+  nextCursor: string | null
+}
 
 export interface GatewayService {
   subscribe(
@@ -96,6 +130,7 @@ export interface GatewayService {
   ): () => void
   getSnapshot(): Promise<GatewaySnapshot>
   getAccounts(): Promise<AccountsResponse>
+  getRequestLogs(filters: RequestLogFilters): Promise<RequestLogsResponse>
   setActiveAccount(id: string): Promise<AccountView>
   clearActiveAccount(): Promise<void>
   updateAccount(id: string, values: { enabled: boolean }): Promise<AccountView>
@@ -106,7 +141,7 @@ export interface GatewayService {
   getLoginStatus(loginId: string): Promise<LoginSessionView>
   cancelLogin(loginId: string): Promise<void>
   saveSettings(
-    values: Partial<Pick<SettingsView, "requestMetadataLogging" | "theme">>
+    values: Partial<Pick<SettingsView, "requestMetadataLogging" | "theme" | "logLevel">>
   ): Promise<SettingsView>
   applyCodexConfig(): Promise<CodexStatusView>
   restoreCodexConfig(): Promise<CodexStatusView>

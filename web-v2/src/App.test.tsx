@@ -46,9 +46,9 @@ describe("App", () => {
     expect(
       await screen.findByRole("heading", { name: "Gateway" })
     ).toBeInTheDocument()
-    expect(screen.queryByRole("switch", { name: "Request metadata logging" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("switch", { name: "请求元数据记录" })).not.toBeInTheDocument()
     await user.click(screen.getByRole("button", { name: "偏好设置" }))
-    expect(screen.getByRole("switch", { name: "Request metadata logging" })).toBeChecked()
+    expect(screen.getByRole("switch", { name: "请求元数据记录" })).toBeChecked()
   })
 
   it("keeps the last snapshot while offline and recovers on polling", async () => {

@@ -21,7 +21,7 @@ const settings = {
   gatewayPort: 8317,
   upstream: "https://chatgpt.com/backend-api/codex",
   requestMetadataLogging: true,
-  promptLogging: false,
+  logLevel: "info",
   theme: "system",
 }
 const codex = {

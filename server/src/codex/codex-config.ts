@@ -70,6 +70,7 @@ function injectRootKey(content: string, line: string): string {
 
 export interface CodexConfigStatus {
   configPath: string;
+  backupPath: string;
   openaiBaseUrl: string | null;
   gatewayBaseUrl: string;
   applied: boolean;
@@ -86,6 +87,7 @@ export class CodexConfigService {
     const content = configExists ? await readFile(configPath, "utf8") : "";
     return {
       configPath,
+      backupPath: path.join(path.dirname(configPath), BACKUP_NAME),
       openaiBaseUrl: rootKey(content, "openai_base_url"),
       gatewayBaseUrl: gatewayUrl,
       applied: rootKey(content, "openai_base_url") === gatewayUrl,

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 
-export type AdminResource = "accounts" | "stats" | "settings" | "codex";
+export type AdminResource = "accounts" | "stats" | "settings" | "codex" | "logs";
 type Listener = (resources: AdminResource[]) => void;
 
 export class AdminEventHub {
