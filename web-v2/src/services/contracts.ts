@@ -101,6 +101,7 @@ export interface RequestLogFilters {
   accountId?: string
   query?: string
   cursor?: string
+  page?: number
   limit?: number
 }
 export interface RequestLogView {
@@ -127,6 +128,12 @@ export interface RequestLogsResponse {
     statusCode: number | null
   }>
   nextCursor: string | null
+  pagination: {
+    page: number
+    pageSize: number
+    totalItems: number
+    totalPages: number
+  }
 }
 
 export interface GatewayService {

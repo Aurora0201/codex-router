@@ -24,6 +24,7 @@ export interface RequestLogFilters {
   accountId?: string;
   query?: string;
   cursor?: { createdAt: number; id: string };
+  page?: number;
   limit: number;
 }
 
@@ -85,6 +86,7 @@ export class RequestLogRepository {
     summary: { requests: number; errors: number; averageDurationMs: number | null };
     timeline: Array<{ id: string; createdAt: number; durationMs: number; statusCode: number | null }>;
     nextCursor: { createdAt: number; id: string } | null;
+    pagination: { page: number; pageSize: number; totalItems: number; totalPages: number };
   } {
     const where = ["request_log.created_at >= ?"];
     const values: Array<string | number> = [filters.since];
@@ -123,18 +125,23 @@ export class RequestLogRepository {
       status_code: number | null;
     }>;
 
+    const totalItems = summary.requests ?? 0;
+    const totalPages = Math.ceil(totalItems / filters.limit);
+    const requestedPage = filters.page ?? 1;
+    const currentPage = totalPages === 0 ? 1 : Math.min(requestedPage, totalPages);
     const pageWhere = [...where];
     const pageValues = [...values];
     if (filters.cursor) {
       pageWhere.push("(request_log.created_at < ? OR (request_log.created_at = ? AND request_log.id < ?))");
       pageValues.push(filters.cursor.createdAt, filters.cursor.createdAt, filters.cursor.id);
     }
+    const offset = filters.page ? (currentPage - 1) * filters.limit : 0;
     const rows = this.db.prepare(`
       SELECT request_log.*, COALESCE(accounts.email, accounts.chatgpt_account_id, accounts.id) AS account_label
       FROM request_log LEFT JOIN accounts ON accounts.id = request_log.account_id
       WHERE ${pageWhere.join(" AND ")}
-      ORDER BY request_log.created_at DESC, request_log.id DESC LIMIT ?
-    `).all(...pageValues, filters.limit + 1) as RequestLogRow[];
+      ORDER BY request_log.created_at DESC, request_log.id DESC LIMIT ? OFFSET ?
+    `).all(...pageValues, filters.limit + 1, offset) as RequestLogRow[];
     const hasMore = rows.length > filters.limit;
     const page = rows.slice(0, filters.limit);
     const items = page.map((row) => ({
@@ -166,6 +173,12 @@ export class RequestLogRepository {
         statusCode: row.status_code,
       })),
       nextCursor: hasMore && last ? { createdAt: last.created_at, id: last.id } : null,
+      pagination: {
+        page: currentPage,
+        pageSize: filters.limit,
+        totalItems,
+        totalPages,
+      },
     };
   }
 }

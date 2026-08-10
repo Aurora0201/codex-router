@@ -195,8 +195,29 @@ describe("schema v4 diagnostics", () => {
     expect(result.summary).toEqual({ requests: 1, errors: 1, averageDurationMs: 80 });
     expect(result.items).toHaveLength(1);
     expect(result.timeline).toHaveLength(1);
+    expect(result.pagination).toEqual({ page: 1, pageSize: 50, totalItems: 1, totalPages: 1 });
     expect(result.items[0]).toMatchObject({ requestId: "req-failed", errorCode: "upstream_error" });
     expect(JSON.stringify(result)).not.toContain("body");
+    database.close();
+  });
+
+  it("supports direct request-log page access and clamps pages after the end", async () => {
+    const root = await tempDir();
+    const database = new GatewayDatabase(path.join(root, "paged-logs.db"));
+    const insert = database.raw.prepare(`
+      INSERT INTO request_log(id, route, transport, status_code, duration_ms, created_at)
+      VALUES (?, '/responses', 'http', 200, 10, ?)
+    `);
+    database.raw.transaction(() => {
+      for (let index = 0; index < 45; index++) insert.run(`log-${index}`, 1_000 + index);
+    })();
+    const middle = database.requestLog.query({ since: 0, page: 2, limit: 20 });
+    expect(middle.pagination).toEqual({ page: 2, pageSize: 20, totalItems: 45, totalPages: 3 });
+    expect(middle.items).toHaveLength(20);
+    expect(middle.items[0]?.id).toBe("log-24");
+    const clamped = database.requestLog.query({ since: 0, page: 99, limit: 20 });
+    expect(clamped.pagination.page).toBe(3);
+    expect(clamped.items).toHaveLength(5);
     database.close();
   });
 

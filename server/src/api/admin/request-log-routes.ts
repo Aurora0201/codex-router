@@ -22,9 +22,12 @@ export function registerRequestLogRoutes(app: FastifyInstance, ctx: AdminContext
       const query = request.query as Record<string, string | undefined>;
       const range = query.range ?? "24h";
       const limit = query.limit === undefined ? 50 : Number(query.limit);
+      const page = query.page === undefined ? undefined : Number(query.page);
       const status = query.status;
       const transport = query.transport;
       if (!RANGES[range] || !Number.isInteger(limit) || limit < 1 || limit > 100) throw new Error();
+      if (page !== undefined && (!Number.isInteger(page) || page < 1)) throw new Error();
+      if (page !== undefined && query.cursor !== undefined) throw new Error();
       if (status && status !== "success" && status !== "error") throw new Error();
       if (transport && !TRANSPORTS.has(transport as Transport)) throw new Error();
       if ((query.q?.length ?? 0) > 100) throw new Error();
@@ -35,6 +38,7 @@ export function registerRequestLogRoutes(app: FastifyInstance, ctx: AdminContext
         accountId: query.accountId,
         query: query.q?.trim() || undefined,
         cursor: decodeCursor(query.cursor),
+        page,
         limit,
       });
       return {

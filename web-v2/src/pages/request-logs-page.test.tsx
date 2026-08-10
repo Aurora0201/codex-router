@@ -14,10 +14,14 @@ describe("RequestLogsPage", () => {
       summary: { requests: 8, errors: 1, averageDurationMs: 31 },
       timeline: [{ id: "log-1", createdAt: Date.now(), durationMs: 81, statusCode: 502 }],
       nextCursor: null,
+      pagination: { page: 1, pageSize: 20, totalItems: 8, totalPages: 1 },
     })
     render(<Toaster><RequestLogsPage service={service} accounts={service.snapshot.accounts.accounts} enabled initialErrorsOnly revision={0} onShowPreferences={vi.fn()} /></Toaster>)
     expect(await screen.findByText("8")).toBeInTheDocument()
+    expect(screen.getByText("87.5%")).toBeInTheDocument()
+    expect(screen.getByText("成功 7 / 共 8")).toBeInTheDocument()
     expect(screen.getByRole("img", { name: "API 请求可用性阵列" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /1 个请求，1 个错误/ })).toHaveClass("h-6")
     expect(screen.queryByText("upstream_error")).not.toBeInTheDocument()
     expect(screen.getByRole("columnheader", { name: "时间与状态" })).toHaveStyle({ width: "190px" })
     expect(screen.getByRole("button", { name: "查看请求 req-1" }).closest("[data-slot=scroll-area]")).toBeInTheDocument()
@@ -40,7 +44,7 @@ describe("RequestLogsPage", () => {
   it("searches long account labels with the account Combobox", async () => {
     const service = createGatewayServiceFixture()
     service.snapshot.accounts.accounts[1].email = "a-very-long-account-name@example.enterprise.test"
-    const requestLogs = vi.fn().mockResolvedValue({ ...service.snapshot, items: [], summary: { requests: 0, errors: 0, averageDurationMs: null }, timeline: [], nextCursor: null })
+    const requestLogs = vi.fn().mockResolvedValue({ items: [], summary: { requests: 0, errors: 0, averageDurationMs: null }, timeline: [], nextCursor: null, pagination: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0 } })
     service.getRequestLogs = requestLogs
     render(<RequestLogsPage service={service} accounts={service.snapshot.accounts.accounts} enabled initialErrorsOnly={false} revision={0} onShowPreferences={vi.fn()} />)
     const input = screen.getByRole("combobox", { name: "账号筛选" })
@@ -52,16 +56,28 @@ describe("RequestLogsPage", () => {
     await waitFor(() => expect(requestLogs).toHaveBeenLastCalledWith(expect.objectContaining({ accountId: "account-2" })))
   })
 
-  it("uses cursor-backed previous and next pagination", async () => {
+  it("uses numbered server pagination with direct middle-page access", async () => {
     const service = createGatewayServiceFixture()
-    const first = { items: [], summary: { requests: 21, errors: 0, averageDurationMs: 10 }, timeline: [], nextCursor: "next-page" }
-    const second = { ...first, nextCursor: null }
-    service.getRequestLogs = vi.fn().mockResolvedValueOnce(first).mockResolvedValueOnce(second)
+    service.getRequestLogs = vi.fn().mockImplementation(async (filters) => ({
+      items: [{ id: `log-${filters.page}`, route: "/responses", transport: "http", accountLabel: "account@example.com", statusCode: 200, durationMs: 10, createdAt: Date.now() }],
+      summary: { requests: 200, errors: 0, averageDurationMs: 10 },
+      timeline: [],
+      nextCursor: null,
+      pagination: { page: filters.page ?? 1, pageSize: 20, totalItems: 200, totalPages: 10 },
+    }))
     render(<RequestLogsPage service={service} accounts={[]} enabled initialErrorsOnly={false} revision={0} onShowPreferences={vi.fn()} />)
-    await userEvent.click(await screen.findByText("下一页"))
-    expect(await screen.findByText("第 2 页")).toBeInTheDocument()
-    expect(service.getRequestLogs).toHaveBeenLastCalledWith(expect.objectContaining({ cursor: "next-page", limit: 20 }))
-    await userEvent.click(screen.getByText("上一页"))
-    expect(screen.getByText("第 1 页")).toBeInTheDocument()
+    await screen.findByText("共 200 条 · 每页 20 条")
+    await userEvent.click(screen.getByLabelText("第 5 页"))
+    await waitFor(() => expect(service.getRequestLogs).toHaveBeenLastCalledWith(expect.objectContaining({ page: 5, limit: 20 })))
+    expect(await screen.findByLabelText("第 5 页")).toHaveAttribute("aria-current", "page")
+    expect(screen.getAllByText("More pages")).toHaveLength(2)
+    expect(screen.getByText("共 200 条 · 每页 20 条")).toBeInTheDocument()
+  })
+
+  it("shows an undefined availability when no requests match", async () => {
+    const service = createGatewayServiceFixture()
+    render(<RequestLogsPage service={service} accounts={[]} enabled initialErrorsOnly={false} revision={0} onShowPreferences={vi.fn()} />)
+    expect(await screen.findByText("成功 0 / 共 0")).toBeInTheDocument()
+    expect(screen.getAllByText("—").length).toBeGreaterThan(0)
   })
 })

@@ -109,6 +109,7 @@ export function createHttpGatewayService(): GatewayService {
       if (filters.accountId) query.set("accountId", filters.accountId)
       if (filters.query) query.set("q", filters.query)
       if (filters.cursor) query.set("cursor", filters.cursor)
+      if (filters.page) query.set("page", String(filters.page))
       if (filters.limit) query.set("limit", String(filters.limit))
       return request<RequestLogsResponse>(`/api/request-logs?${query}`)
     },

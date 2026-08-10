@@ -353,6 +353,20 @@ describe("security and admin API", () => {
     expect(accepted.headers.get("access-control-allow-origin")).toBeNull();
   });
 
+  it("supports direct request-log pages and rejects page/cursor conflicts", async () => {
+    const response = await gateway.app.inject({ method: "GET", url: "/api/request-logs?range=24h&transport=http&page=1&limit=2" });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as {
+      items: unknown[];
+      pagination: { page: number; pageSize: number; totalItems: number; totalPages: number };
+    };
+    expect(body.items.length).toBeLessThanOrEqual(2);
+    expect(body.pagination).toMatchObject({ page: 1, pageSize: 2 });
+    expect(body.pagination.totalPages).toBe(Math.ceil(body.pagination.totalItems / 2));
+    expect((await gateway.app.inject({ method: "GET", url: "/api/request-logs?page=0" })).statusCode).toBe(400);
+    expect((await gateway.app.inject({ method: "GET", url: "/api/request-logs?page=1&cursor=e30" })).statusCode).toBe(400);
+  });
+
   it("returns an explicit 503 for models when no account is enabled", async () => {
     gateway.accounts.setEnabled("local", false);
     const response = await fetch(`${gatewayUrl}/backend-api/codex/models`);

@@ -3,11 +3,11 @@ import { type ColumnDef, flexRender, getCoreRowModel, useReactTable } from "@tan
 import { CheckCircle2Icon, ClipboardIcon, FileClockIcon, SearchIcon, TriangleAlertIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList } from "@/components/ui/combobox"
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { Input } from "@/components/ui/input"
-import { Pagination, PaginationContent, PaginationItem, PaginationNext, PaginationPrevious } from "@/components/ui/pagination"
+import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination"
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet"
@@ -21,14 +21,15 @@ type TimelinePoint = RequestLogsResponse["timeline"][number]
 type SelectedRequest = RequestLogView | TimelinePoint
 type AccountOption = { value: string; label: string }
 
+const PAGE_SIZE = 20
+const AVAILABILITY_BUCKETS = 72
 const EMPTY_RESULT: RequestLogsResponse = {
   items: [],
   summary: { requests: 0, errors: 0, averageDurationMs: null },
   timeline: [],
   nextCursor: null,
+  pagination: { page: 1, pageSize: PAGE_SIZE, totalItems: 0, totalPages: 0 },
 }
-const PAGE_SIZE = 20
-const AVAILABILITY_BUCKETS = 72
 
 const formatBytes = (value?: number) => value == null ? "—" : value < 1024 ? `${value} B` : `${(value / 1024).toFixed(1)} KB`
 const isFullRequest = (value: SelectedRequest): value is RequestLogView => "route" in value
@@ -66,7 +67,7 @@ function AccountCombobox({ accounts, value, onChange }: { accounts: AccountView[
   )
 }
 
-function RequestAvailability({ points, range, end, onSelect }: { points: TimelinePoint[]; range: RequestLogFilters["range"]; end: number; onSelect(point: TimelinePoint): void }) {
+function RequestAvailability({ points, range, end, requests, errors, onSelect }: { points: TimelinePoint[]; range: RequestLogFilters["range"]; end: number; requests: number; errors: number; onSelect(point: TimelinePoint): void }) {
   const duration = range === "1h" ? 60 * 60_000 : range === "7d" ? 7 * 24 * 60 * 60_000 : 24 * 60 * 60_000
   const start = end - duration
   const bucketSize = duration / AVAILABILITY_BUCKETS
@@ -75,17 +76,26 @@ function RequestAvailability({ points, range, end, onSelect }: { points: Timelin
     const index = Math.floor((point.createdAt - start) / bucketSize)
     if (index >= 0 && index < buckets.length) buckets[index].points.push(point)
   }
+  const successful = Math.max(0, requests - errors)
+  const availability = requests === 0 ? null : successful / requests * 100
   return (
-    <Card>
-      <CardHeader><CardTitle>API 可用性</CardTitle><CardDescription>从左到右按时间排列；每格汇总该时段的请求结果与平均耗时。</CardDescription></CardHeader>
+    <Card size="sm">
+      <CardHeader>
+        <CardTitle>API 可用性</CardTitle>
+        <CardDescription>从左到右按时间排列；每格汇总该时段的请求结果与平均耗时。</CardDescription>
+        <CardAction className="text-right">
+          <div className="text-lg font-semibold tabular-nums">{availability == null ? "—" : `${availability.toFixed(1)}%`}</div>
+          <div className="text-xs text-muted-foreground tabular-nums">成功 {successful} / 共 {requests}</div>
+        </CardAction>
+      </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-[repeat(72,minmax(0,1fr))] gap-1" role="img" aria-label="API 请求可用性阵列">
+        <div className="grid grid-cols-[repeat(72,minmax(0,1fr))] gap-0.5" role="img" aria-label="API 请求可用性阵列">
           {buckets.map((bucket) => {
             const errors = bucket.points.filter((point) => (point.statusCode ?? 0) >= 400).length
             const average = bucket.points.length ? Math.round(bucket.points.reduce((sum, point) => sum + point.durationMs, 0) / bucket.points.length) : null
             const state = bucket.points.length === 0 ? "empty" : errors === 0 ? "success" : errors === bucket.points.length ? "error" : "mixed"
-            const latest = bucket.points.at(-1)
-            return <Tooltip key={bucket.start}><TooltipTrigger render={<button type="button" disabled={!latest} onClick={() => latest && onSelect(latest)} aria-label={`${new Date(bucket.start).toLocaleString()}，${bucket.points.length} 个请求，${errors} 个错误`} className={cn("h-12 min-w-0 rounded-sm outline-none transition-transform hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none", state === "empty" && "bg-muted", state === "success" && "bg-success/70", state === "mixed" && "bg-destructive/40", state === "error" && "bg-destructive")} />}><span className="sr-only">查看该时段请求</span></TooltipTrigger><TooltipContent><div className="flex flex-col gap-1 text-xs"><span>{new Date(bucket.start).toLocaleString()} – {new Date(bucket.end).toLocaleTimeString()}</span><span className="tabular-nums">请求 {bucket.points.length} · 错误 {errors} · 平均 {average == null ? "—" : `${average} ms`}</span></div></TooltipContent></Tooltip>
+            const latest = bucket.points[0]
+            return <Tooltip key={bucket.start}><TooltipTrigger render={<button type="button" disabled={!latest} onClick={() => latest && onSelect(latest)} aria-label={`${new Date(bucket.start).toLocaleString()}，${bucket.points.length} 个请求，${errors} 个错误`} className={cn("h-6 min-w-0 rounded-sm outline-none transition-transform hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none", state === "empty" && "bg-muted", state === "success" && "bg-success/70", state === "mixed" && "bg-destructive/40", state === "error" && "bg-destructive")} />}><span className="sr-only">查看该时段请求</span></TooltipTrigger><TooltipContent><div className="flex flex-col gap-1 text-xs"><span>{new Date(bucket.start).toLocaleString()} – {new Date(bucket.end).toLocaleTimeString()}</span><span className="tabular-nums">请求 {bucket.points.length} · 错误 {errors} · 平均 {average == null ? "—" : `${average} ms`}</span></div></TooltipContent></Tooltip>
           })}
         </div>
         <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground"><span>{new Date(start).toLocaleString()}</span><div className="flex items-center gap-3"><span className="inline-flex items-center gap-1.5"><span className="size-2 rounded-sm bg-success/70" />正常</span><span className="inline-flex items-center gap-1.5"><span className="size-2 rounded-sm bg-destructive/40" />部分错误</span><span className="inline-flex items-center gap-1.5"><span className="size-2 rounded-sm bg-destructive" />全部错误</span></div><span>现在</span></div>
@@ -94,7 +104,14 @@ function RequestAvailability({ points, range, end, onSelect }: { points: Timelin
   )
 }
 
-function RequestDataTable({ items, newIds, onSelect }: { items: RequestLogView[]; newIds: Set<string>; onSelect(item: RequestLogView): void }) {
+function RequestDataTable({ items, newIds, page, onSelect }: { items: RequestLogView[]; newIds: Set<string>; page: number; onSelect(item: RequestLogView): void }) {
+  const scrollAreaRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const viewport = scrollAreaRef.current?.querySelector<HTMLElement>("[data-slot=scroll-area-viewport]")
+    if (!viewport) return
+    if (typeof viewport.scrollTo === "function") viewport.scrollTo({ top: 0 })
+    else viewport.scrollTop = 0
+  }, [page])
   const columns = useMemo<ColumnDef<RequestLogView>[]>(() => [
     { id: "status", size: 190, header: "时间与状态", cell: ({ row }) => { const item = row.original; const failed = (item.statusCode ?? 0) >= 400; return <div className={cn("grid grid-cols-[1em_5rem_2.5rem] items-center gap-2", failed && "text-destructive")}>{failed ? <TriangleAlertIcon className="size-[1em]" aria-hidden="true" /> : <CheckCircle2Icon className="size-[1em] text-success" aria-hidden="true" />}<span className="tabular-nums">{new Date(item.createdAt).toLocaleTimeString()}</span><span className="text-right tabular-nums">{item.statusCode ?? "—"}</span></div> } },
     { accessorKey: "route", size: 310, header: "路由", cell: ({ row }) => <span className="block truncate font-mono text-xs" title={row.original.route}>{row.original.route}</span> },
@@ -106,9 +123,9 @@ function RequestDataTable({ items, newIds, onSelect }: { items: RequestLogView[]
   // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({ data: items, columns, getCoreRowModel: getCoreRowModel() })
   return (
-    <ScrollArea className="h-[31rem]">
+    <ScrollArea ref={scrollAreaRef} className="h-[31rem] [&_[data-slot=table-container]]:overflow-visible">
       <Table className="table-fixed" style={{ minWidth: table.getTotalSize() }}>
-        <TableHeader className="sticky top-0 z-10 [&_th]:bg-card">
+        <TableHeader className="sticky top-0 z-10 [&_tr]:shadow-sm [&_th]:bg-card">
           {table.getHeaderGroups().map((group) => <TableRow key={group.id}>{group.headers.map((header) => <TableHead className="px-4" key={header.id} style={{ width: header.getSize() }}>{flexRender(header.column.columnDef.header, header.getContext())}</TableHead>)}</TableRow>)}
         </TableHeader>
         <TableBody>{table.getRowModel().rows.map((row) => <TableRow key={row.id} tabIndex={0} role="button" aria-label={`查看请求 ${row.original.requestId ?? row.original.id}`} onClick={() => onSelect(row.original)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") onSelect(row.original) }} className={cn("h-11 cursor-pointer motion-reduce:transition-none", newIds.has(row.original.id) && "animate-in fade-in slide-in-from-top-1 duration-300 motion-reduce:animate-none")}>{row.getVisibleCells().map((cell) => <TableCell className="px-4" key={cell.id} style={{ width: cell.column.getSize() }}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>)}</TableRow>)}</TableBody>
@@ -116,6 +133,15 @@ function RequestDataTable({ items, newIds, onSelect }: { items: RequestLogView[]
       <ScrollBar orientation="horizontal" />
     </ScrollArea>
   )
+}
+
+type PaginationToken = number | "start-ellipsis" | "end-ellipsis"
+
+function paginationTokens(page: number, totalPages: number): PaginationToken[] {
+  if (totalPages <= 7) return Array.from({ length: totalPages }, (_, index) => index + 1)
+  if (page <= 4) return [1, 2, 3, 4, 5, "end-ellipsis", totalPages]
+  if (page >= totalPages - 3) return [1, "start-ellipsis", totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages]
+  return [1, "start-ellipsis", page - 1, page, page + 1, "end-ellipsis", totalPages]
 }
 
 function RequestDetailSheet({ selected, onClose }: { selected: SelectedRequest | null; onClose(): void }) {
@@ -143,11 +169,9 @@ function RequestDetailSheet({ selected, onClose }: { selected: SelectedRequest |
 }
 
 export function RequestLogsPage({ service, accounts, enabled, initialErrorsOnly, revision, onShowPreferences }: { service: GatewayService; accounts: AccountView[]; enabled: boolean; initialErrorsOnly: boolean; revision: number; onShowPreferences(): void }) {
-  const [filters, setFilters] = useState<RequestLogFilters>({ range: "24h", status: initialErrorsOnly ? "error" : undefined, limit: PAGE_SIZE })
+  const [filters, setFilters] = useState<RequestLogFilters>({ range: "24h", status: initialErrorsOnly ? "error" : undefined, page: 1, limit: PAGE_SIZE })
   const [result, setResult] = useState(EMPTY_RESULT)
   const [availabilityEnd, setAvailabilityEnd] = useState(() => Date.now())
-  const [pages, setPages] = useState<RequestLogsResponse[]>([])
-  const [pageIndex, setPageIndex] = useState(0)
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<SelectedRequest | null>(null)
   const [newIds, setNewIds] = useState<Set<string>>(new Set())
@@ -166,34 +190,19 @@ export function RequestLogsPage({ service, accounts, enabled, initialErrorsOnly,
         setNewIds(incoming)
         setResult(next)
         setAvailabilityEnd(Date.now())
-        setPages([next])
-        setPageIndex(0)
+        if (next.pagination.page !== filters.page) {
+          setFilters((current) => ({ ...current, page: next.pagination.page }))
+        }
         window.setTimeout(() => setNewIds(new Set()), 500)
       }).catch((error) => toast.add({ title: "请求日志载入失败", description: (error as Error).message, type: "error" })).finally(() => sequence === requestSequence.current && setLoading(false))
     }, revision ? 150 : 0)
     return () => window.clearTimeout(timer)
   }, [enabled, filters, revision, service])
 
-  const update = (values: Partial<RequestLogFilters>) => setFilters((current) => ({ ...current, ...values, cursor: undefined }))
-  const nextPage = async () => {
-    const cached = pages[pageIndex + 1]
-    if (cached) {
-      setPageIndex(pageIndex + 1)
-      setResult(cached)
-      return
-    }
-    if (!result.nextCursor) return
-    const next = await service.getRequestLogs({ ...filters, cursor: result.nextCursor })
-    setPages((current) => [...current, next])
-    setPageIndex((current) => current + 1)
-    setResult(next)
-  }
-  const previousPage = () => {
-    if (pageIndex === 0) return
-    const previous = pages[pageIndex - 1]
-    if (!previous) return
-    setPageIndex((current) => current - 1)
-    setResult(previous)
+  const update = (values: Partial<RequestLogFilters>) => setFilters((current) => ({ ...current, ...values, cursor: undefined, page: 1 }))
+  const goToPage = (page: number) => {
+    if (loading || page < 1 || page > result.pagination.totalPages || page === result.pagination.page) return
+    setFilters((current) => ({ ...current, cursor: undefined, page }))
   }
   const selectTimelinePoint = (point: TimelinePoint) => setSelected(result.items.find((item) => item.id === point.id) ?? point)
 
@@ -208,10 +217,10 @@ export function RequestLogsPage({ service, accounts, enabled, initialErrorsOnly,
         <div className="relative min-w-64 flex-1"><SearchIcon className="pointer-events-none absolute top-2 left-2.5 size-4 text-muted-foreground" /><Input className="pl-8" value={filters.query ?? ""} onChange={(event) => update({ query: event.target.value || undefined })} placeholder="搜索路由、请求 ID 或错误码" /></div>
       </CardContent></Card>
       <div className="grid grid-cols-3 gap-4">{[["请求数量", result.summary.requests], ["错误数量", result.summary.errors], ["平均耗时", result.summary.averageDurationMs == null ? "—" : `${Math.round(result.summary.averageDurationMs)} ms`]].map(([label, value], index) => <Card key={String(label)} size="sm"><CardHeader><CardDescription>{label}</CardDescription><CardTitle className={cn("text-2xl tabular-nums", index === 1 && Number(value) > 0 && "text-destructive")}>{value}</CardTitle></CardHeader></Card>)}</div>
-      <RequestAvailability points={result.timeline ?? []} range={filters.range} end={availabilityEnd} onSelect={selectTimelinePoint} />
+      <RequestAvailability points={result.timeline ?? []} range={filters.range} end={availabilityEnd} requests={result.summary.requests} errors={result.summary.errors} onSelect={selectTimelinePoint} />
       <Card className="min-h-0 overflow-hidden"><CardHeader className="border-b"><CardTitle>请求记录</CardTitle><CardDescription>按时间倒序显示，选择一行查看允许记录的完整元数据。</CardDescription></CardHeader><CardContent className="p-0">
-        {!enabled || (!loading && result.items.length === 0) ? <Empty className="min-h-80 border-0"><EmptyHeader><EmptyMedia variant="icon"><FileClockIcon /></EmptyMedia><EmptyTitle>{enabled ? "没有匹配的请求记录" : "请求元数据记录已关闭"}</EmptyTitle><EmptyDescription>{enabled ? "调整筛选条件后重试。" : "启用后只记录状态、耗时和路由等安全元数据。"}</EmptyDescription></EmptyHeader>{!enabled && <EmptyContent><Button variant="outline" onClick={onShowPreferences}>前往偏好设置</Button></EmptyContent>}</Empty> : <RequestDataTable items={result.items} newIds={newIds} onSelect={setSelected} />}
-      </CardContent>{(pageIndex > 0 || result.nextCursor) && <CardFooter className="border-t py-3"><Pagination aria-label="请求日志分页"><PaginationContent><PaginationItem><PaginationPrevious href="#" text="上一页" aria-label="上一页" aria-disabled={pageIndex === 0} className={cn(pageIndex === 0 && "pointer-events-none opacity-50")} onClick={(event) => { event.preventDefault(); previousPage() }} /></PaginationItem><PaginationItem><span className="flex h-8 items-center px-3 text-sm tabular-nums">第 {pageIndex + 1} 页</span></PaginationItem><PaginationItem><PaginationNext href="#" text="下一页" aria-label="下一页" aria-disabled={!result.nextCursor && !pages[pageIndex + 1]} className={cn(!result.nextCursor && !pages[pageIndex + 1] && "pointer-events-none opacity-50")} onClick={(event) => { event.preventDefault(); void nextPage() }} /></PaginationItem></PaginationContent></Pagination></CardFooter>}</Card>
+        {!enabled || (!loading && result.items.length === 0) ? <Empty className="min-h-80 border-0"><EmptyHeader><EmptyMedia variant="icon"><FileClockIcon /></EmptyMedia><EmptyTitle>{enabled ? "没有匹配的请求记录" : "请求元数据记录已关闭"}</EmptyTitle><EmptyDescription>{enabled ? "调整筛选条件后重试。" : "启用后只记录状态、耗时和路由等安全元数据。"}</EmptyDescription></EmptyHeader>{!enabled && <EmptyContent><Button variant="outline" onClick={onShowPreferences}>前往偏好设置</Button></EmptyContent>}</Empty> : <RequestDataTable items={result.items} newIds={newIds} page={result.pagination.page} onSelect={setSelected} />}
+      </CardContent>{result.pagination.totalPages > 0 && <CardFooter className="justify-between py-3"><span className="text-sm text-muted-foreground tabular-nums">共 {result.pagination.totalItems} 条 · 每页 {result.pagination.pageSize} 条</span><Pagination className="mx-0 w-auto" aria-label="请求日志分页"><PaginationContent><PaginationItem><PaginationPrevious href="#" text="上一页" aria-label="上一页" aria-disabled={loading || result.pagination.page === 1} className={cn((loading || result.pagination.page === 1) && "pointer-events-none opacity-50")} onClick={(event) => { event.preventDefault(); goToPage(result.pagination.page - 1) }} /></PaginationItem>{paginationTokens(result.pagination.page, result.pagination.totalPages).map((token) => typeof token === "number" ? <PaginationItem key={token}><PaginationLink href="#" isActive={token === result.pagination.page} aria-label={`第 ${token} 页`} onClick={(event) => { event.preventDefault(); goToPage(token) }}>{token}</PaginationLink></PaginationItem> : <PaginationItem key={token}><PaginationEllipsis /></PaginationItem>)}<PaginationItem><PaginationNext href="#" text="下一页" aria-label="下一页" aria-disabled={loading || result.pagination.page === result.pagination.totalPages} className={cn((loading || result.pagination.page === result.pagination.totalPages) && "pointer-events-none opacity-50")} onClick={(event) => { event.preventDefault(); goToPage(result.pagination.page + 1) }} /></PaginationItem></PaginationContent></Pagination></CardFooter>}</Card>
       <RequestDetailSheet selected={selected} onClose={() => setSelected(null)} />
     </section>
   )

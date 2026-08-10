@@ -214,12 +214,13 @@ describe("HTTP GatewayService", () => {
       summary: { requests: 1, errors: 1, averageDurationMs: 42 },
       timeline: [{ id: "log-1", createdAt: 1000, durationMs: 42, statusCode: 500 }],
       nextCursor: null,
+      pagination: { page: 3, pageSize: 50, totalItems: 121, totalPages: 3 },
     }
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse(payload))
     vi.stubGlobal("fetch", fetchMock)
-    await expect(createHttpGatewayService().getRequestLogs({ range: "24h", status: "error", transport: "http", accountId: "account/one", query: "upstream error", limit: 50 })).resolves.toEqual(payload)
+    await expect(createHttpGatewayService().getRequestLogs({ range: "24h", status: "error", transport: "http", accountId: "account/one", query: "upstream error", page: 3, limit: 50 })).resolves.toEqual(payload)
     expect(fetchMock).toHaveBeenCalledWith(
-      "/api/request-logs?range=24h&status=error&transport=http&accountId=account%2Fone&q=upstream+error&limit=50",
+      "/api/request-logs?range=24h&status=error&transport=http&accountId=account%2Fone&q=upstream+error&page=3&limit=50",
       expect.objectContaining({ credentials: "same-origin" })
     )
   })
