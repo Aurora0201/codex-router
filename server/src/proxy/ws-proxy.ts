@@ -11,6 +11,11 @@ import { IMPORTANT_WS_RESPONSE_HEADERS, websocketUpgradeHeaders } from "./header
 
 const MAX_PENDING_FRAMES = 32;
 const MAX_PENDING_BYTES = 2 * 1024 * 1024;
+// Single-frame cap on the client->gateway WebSocket. Kept in line with the ws
+// client default used for the upstream leg: Codex serializes the whole request
+// (including images) into one frame, and a proxy must not impose a smaller
+// limit than the upstream it forwards to.
+const MAX_PAYLOAD_BYTES = 100 * 1024 * 1024;
 
 interface WsProxyOptions {
   upstreamBaseUrl: string;
@@ -92,7 +97,7 @@ async function connectWithAuthRetry(
 }
 
 export async function registerWebSocketProxy(app: FastifyInstance, options: WsProxyOptions): Promise<void> {
-  await app.register(websocket, { options: { maxPayload: MAX_PENDING_BYTES, autoPong: false } });
+  await app.register(websocket, { options: { maxPayload: MAX_PAYLOAD_BYTES, autoPong: false } });
   const prepared = new WeakMap<FastifyRequest, PreparedConnection>();
   const upgradeHeaders = new WeakMap<IncomingMessage, Record<string, string>>();
   app.websocketServer.on("headers", (headers, request) => {
