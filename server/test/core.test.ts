@@ -11,7 +11,7 @@ import { AccountUsageService } from "../src/accounts/account-usage-service.js";
 import { CredentialReader } from "../src/accounts/credential-reader.js";
 import { loadConfig } from "../src/config.js";
 import { GatewayDatabase } from "../src/db/database.js";
-import { buildUpstreamHeaders } from "../src/proxy/headers.js";
+import { buildUpstreamHeaders, isCompactionRequest } from "../src/proxy/headers.js";
 import { ActiveAccountService } from "../src/routing/active-account-service.js";
 import { parseRateLimitResponse } from "../src/accounts/rate-limit-parser.js";
 import Database from "better-sqlite3";
@@ -177,6 +177,13 @@ describe("schema v4 diagnostics", () => {
     expect(migrated.accounts.get("seconds")?.secondaryResetsAt).toBeNull();
     expect(migrated.accounts.get("milliseconds")?.primaryResetsAt).toBe(1_786_000_000_000);
     migrated.close();
+  });
+
+  it("recognizes only bounded Codex compaction metadata", () => {
+    expect(isCompactionRequest({ "x-codex-turn-metadata": JSON.stringify({ request_kind: "compaction" }) })).toBe(true);
+    expect(isCompactionRequest({ "x-codex-turn-metadata": JSON.stringify({ request_kind: "turn" }) })).toBe(false);
+    expect(isCompactionRequest({ "x-codex-turn-metadata": "not-json" })).toBe(false);
+    expect(isCompactionRequest({ "x-codex-turn-metadata": "x".repeat(8 * 1024 + 1) })).toBe(false);
   });
 
   it("filters and summarizes structured request logs without request bodies", async () => {

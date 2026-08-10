@@ -50,3 +50,16 @@ export const IMPORTANT_WS_RESPONSE_HEADERS = new Set([
   "x-reasoning-included",
   "openai-model",
 ]);
+
+const MAX_TURN_METADATA_HEADER_BYTES = 8 * 1024;
+
+export function isCompactionRequest(headers: IncomingHttpHeaders): boolean {
+  const value = headers["x-codex-turn-metadata"];
+  if (typeof value !== "string" || Buffer.byteLength(value) > MAX_TURN_METADATA_HEADER_BYTES) return false;
+  try {
+    const metadata = JSON.parse(value) as { request_kind?: unknown };
+    return metadata.request_kind === "compaction";
+  } catch {
+    return false;
+  }
+}

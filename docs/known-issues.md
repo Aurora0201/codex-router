@@ -10,9 +10,12 @@ Observed behavior:
 - The exception path does not retain the account that had already been selected, so
   these rows can have an empty account label even though routing succeeded.
 
+Implemented safeguards:
+
+- Proxy exceptions retain the selected account ID when one was resolved.
+
 Follow-up work:
 
-- Retain the selected account ID when logging proxy exceptions.
 - Distinguish client cancellation from an upstream gateway failure in structured logs
   and error summaries.
 - Add tests for upstream connect timeout, client cancellation, and account attribution.
@@ -29,11 +32,12 @@ V2 sends a normal Responses stream (HTTP or WebSocket) with
 `http` or `ws`. Consequently, an empty `compact` transport does not mean that no
 compaction occurred.
 
-Follow-up work:
+Current behavior:
 
-- Read only the bounded `x-codex-turn-metadata` compatibility header and classify
-  `request_kind = "compaction"` as `compact` for both HTTP and WebSocket requests.
+- HTTP and WebSocket handshakes read only the bounded `x-codex-turn-metadata`
+  compatibility header and classify `request_kind = "compaction"` as `compact`.
 - Keep the data-plane body opaque; never inspect the compaction trigger or other
   request content to perform this classification.
-- Preserve the physical transport separately if the UI needs to distinguish HTTP
-  from WebSocket.
+- A compaction request sent later over an already-reused WebSocket cannot be
+  reclassified without inspecting the request frame, so it remains `ws` under the
+  current opaque data-plane contract.

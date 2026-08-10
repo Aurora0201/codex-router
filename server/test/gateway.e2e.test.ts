@@ -187,6 +187,17 @@ describe("HTTP, SSE, compact and models", () => {
     expect(received.findLast((entry) => entry.url.endsWith("/responses/compact"))!.headers.authorization).toBe("Bearer second-secret");
     gateway.activeAccounts.select("local");
   });
+
+  it("classifies Responses compaction v2 from bounded Codex metadata without reading the body", async () => {
+    const raw = Buffer.from('{"opaque":"compaction-v2-body"}');
+    const result = await streamRequest(`${gatewayUrl}/backend-api/codex/responses`, raw, {
+      "x-codex-turn-metadata": JSON.stringify({ request_kind: "compaction", compaction: { implementation: "responses_compaction_v2" } }),
+    });
+    expect(result.status).toBe(200);
+    expect(received.findLast((entry) => entry.url.endsWith("/responses"))!.body.equals(raw)).toBe(true);
+    const logs = gateway.database.requestLog.query({ since: 0, transport: "compact", limit: 100 });
+    expect(logs.items.some((entry) => entry.route === "/responses")).toBe(true);
+  });
   it("proxies the standalone web-search endpoint opaquely on the active account", async () => {
     const raw = Buffer.from('{"id":"search-session","model":"mock-codex","input":[{"type":"message","role":"user","content":[{"type":"input_text","text":"find this"}]}],"commands":{"search_query":[{"q":"OpenAI news"}]},"settings":{"external_web_access":true}}');
     const result = await streamRequest(`${gatewayUrl}/backend-api/codex/alpha/search`, raw, { authorization: "Bearer client-secret", "chatgpt-account-id": "client-account", "x-codex-turn-metadata": "turn-1", originator: "chatgpt_cca" });

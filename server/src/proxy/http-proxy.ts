@@ -2,13 +2,14 @@ import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { request as undiciRequest, type Dispatcher } from "undici";
+import type { AccountRecord } from "../types.js";
 import type { Transport } from "../types.js";
 import { AccountAuthService } from "../accounts/account-auth-service.js";
 import { AccountUsageService } from "../accounts/account-usage-service.js";
 import { GatewayDatabase } from "../db/database.js";
 import { ActiveAccountService } from "../routing/active-account-service.js";
 import { hasBrowserOrigin } from "../security/origin-guard.js";
-import { buildUpstreamHeaders, copyResponseHeaders } from "./headers.js";
+import { buildUpstreamHeaders, copyResponseHeaders, isCompactionRequest } from "./headers.js";
 
 export type ProxyPath = "/responses" | "/responses/compact" | "/models" | "/alpha/search";
 
@@ -45,11 +46,13 @@ export class HttpProxy {
 
     const startedAt = Date.now();
     const rawBody = request.method === "GET" ? Buffer.alloc(0) : this.rawBody(request.body);
-    const transport: Transport = path === "/models" ? "models" : path === "/responses/compact" ? "compact" : path === "/alpha/search" ? "search" : "http";
+    const transport: Transport = path === "/models" ? "models" : path === "/responses/compact" || (path === "/responses" && isCompactionRequest(request.headers)) ? "compact" : path === "/alpha/search" ? "search" : "http";
 
+    let selectedAccount: AccountRecord | null = null;
     try {
       const account = this.options.activeAccounts.get();
       if (!account) throw new Error("no_active_account_selected");
+      selectedAccount = account;
       if (account.fedRamp) throw new Error("fedramp_accounts_not_supported");
       let credential = await this.options.auth.getCredential(account.id);
       const controller = new AbortController();
@@ -106,6 +109,7 @@ export class HttpProxy {
         requestId: request.id,
         route: path,
         transport,
+        accountId: selectedAccount?.id,
         statusCode: status,
         durationMs: Date.now() - startedAt,
         bytesIn: rawBody.byteLength,

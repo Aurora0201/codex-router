@@ -7,7 +7,7 @@ import { AccountAuthService } from "../accounts/account-auth-service.js";
 import { GatewayDatabase } from "../db/database.js";
 import { ActiveAccountService } from "../routing/active-account-service.js";
 import { hasBrowserOrigin } from "../security/origin-guard.js";
-import { IMPORTANT_WS_RESPONSE_HEADERS, websocketUpgradeHeaders } from "./headers.js";
+import { IMPORTANT_WS_RESPONSE_HEADERS, isCompactionRequest, websocketUpgradeHeaders } from "./headers.js";
 
 const MAX_PENDING_FRAMES = 32;
 const MAX_PENDING_BYTES = 2 * 1024 * 1024;
@@ -33,6 +33,7 @@ interface PreparedConnection {
   upstream: WebSocket;
   account: AccountRecord;
   startedAt: number;
+  transport: "ws" | "compact";
 }
 
 class WebSocketHandshakeError extends Error {
@@ -112,12 +113,13 @@ export async function registerWebSocketProxy(app: FastifyInstance, options: WsPr
         return;
       }
       const startedAt = Date.now();
+      const transport = isCompactionRequest(request.headers) ? "compact" : "ws";
       const account = options.activeAccounts.get();
       if (!account) {
         options.database.requestLog.log({
           requestId: request.id,
           route: "/responses",
-          transport: "ws",
+          transport,
           statusCode: 503,
           durationMs: Date.now() - startedAt,
           errorCode: "no_active_account_selected",
@@ -129,7 +131,7 @@ export async function registerWebSocketProxy(app: FastifyInstance, options: WsPr
         options.database.requestLog.log({
           requestId: request.id,
           route: "/responses",
-          transport: "ws",
+          transport,
           statusCode: 409,
           durationMs: Date.now() - startedAt,
           errorCode: "fedramp_accounts_not_supported",
@@ -141,13 +143,13 @@ export async function registerWebSocketProxy(app: FastifyInstance, options: WsPr
         const connection = await connectWithAuthRetry(options, request, account);
         upgradeHeaders.set(request.raw, connection.responseHeaders);
         for (const [name, value] of Object.entries(connection.responseHeaders)) reply.header(name, value);
-        prepared.set(request, { upstream: connection.socket, account, startedAt });
+        prepared.set(request, { upstream: connection.socket, account, startedAt, transport });
       } catch (error) {
         const status = error instanceof WebSocketHandshakeError ? error.statusCode : 502;
         options.database.requestLog.log({
           requestId: request.id,
           route: "/responses",
-          transport: "ws",
+          transport,
           accountId: account.id,
           statusCode: status,
           durationMs: Date.now() - startedAt,
@@ -175,7 +177,7 @@ export async function registerWebSocketProxy(app: FastifyInstance, options: WsPr
       options.database.requestLog.log({
         requestId: request.id,
         route: "/responses",
-        transport: "ws",
+        transport: context.transport,
         accountId: context.account.id,
         statusCode,
         durationMs: Date.now() - context.startedAt,
