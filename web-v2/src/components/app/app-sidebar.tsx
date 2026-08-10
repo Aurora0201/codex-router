@@ -34,19 +34,19 @@ export type AppPage = "accounts" | "gateway" | "logs" | "preferences"
 
 const navigation = [
   {
-    value: "logs" as const,
-    label: "请求日志",
-    icon: ScrollTextIcon,
-  },
-  {
     value: "accounts" as const,
     label: "账号路由",
     icon: UsersRoundIcon,
   },
   {
     value: "gateway" as const,
-    label: "Gateway",
+    label: "运行状态",
     icon: Settings2Icon,
+  },
+  {
+    value: "logs" as const,
+    label: "请求日志",
+    icon: ScrollTextIcon,
   },
   {
     value: "preferences" as const,

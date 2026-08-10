@@ -21,7 +21,7 @@ const defaultGatewayService = createHttpGatewayService()
 
 function LoadingPage() {
   return (
-    <div className="flex flex-col gap-5" aria-label="正在载入 Gateway 数据">
+    <div className="flex flex-col gap-5" aria-label="正在载入 Codex Router 数据">
       <div className="flex flex-col gap-2">
         <Skeleton className="h-8 w-48" />
         <Skeleton className="h-4 w-96 max-w-full" />
@@ -139,7 +139,7 @@ export function App({
             {error ? (
               <Alert variant="destructive" className="mb-6">
                 <TriangleAlertIcon />
-                <AlertTitle>无法读取 Gateway</AlertTitle>
+                <AlertTitle>无法连接 Codex Router</AlertTitle>
                 <AlertDescription className="flex flex-wrap items-center gap-3">
                   <span>{error}</span>
                   <Button

@@ -130,7 +130,7 @@ export function OAuthDialog({
           <DialogHeader>
             <DialogTitle>添加 ChatGPT/Codex 账号</DialogTitle>
             <DialogDescription>
-              使用 Codex 官方 Browser OAuth。Gateway 不会读取浏览器
+              使用 Codex 官方 Browser OAuth。Codex Router 不会读取浏览器
               Cookie，账号凭据保存在独立目录中。
             </DialogDescription>
           </DialogHeader>
@@ -160,7 +160,7 @@ export function OAuthDialog({
                 {session.status === "waiting"
                   ? "授权会话已准备好，请打开下面的链接完成登录。"
                   : session.status === "complete"
-                    ? "新账号已安全写入 Gateway 账号池。"
+                    ? "新账号已安全写入 Codex Router 账号池。"
                     : (session.error ?? "登录流程未完成。")}
               </p>
               <div className="rounded-xl bg-muted p-3 font-mono text-xs break-all">

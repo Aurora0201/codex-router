@@ -83,6 +83,7 @@ export class RequestLogRepository {
   query(filters: RequestLogFilters): {
     items: RequestLogView[];
     summary: { requests: number; errors: number; averageDurationMs: number | null };
+    timeline: Array<{ id: string; createdAt: number; durationMs: number; statusCode: number | null }>;
     nextCursor: { createdAt: number; id: string } | null;
   } {
     const where = ["request_log.created_at >= ?"];
@@ -110,6 +111,17 @@ export class RequestLogRepository {
       FROM request_log LEFT JOIN accounts ON accounts.id = request_log.account_id
       WHERE ${baseWhere}
     `).get(...values) as { requests: number; errors: number | null; average_duration_ms: number | null };
+    const timelineRows = this.db.prepare(`
+      SELECT request_log.id, request_log.created_at, request_log.duration_ms, request_log.status_code
+      FROM request_log LEFT JOIN accounts ON accounts.id = request_log.account_id
+      WHERE ${baseWhere} AND request_log.duration_ms IS NOT NULL
+      ORDER BY request_log.created_at DESC, request_log.id DESC LIMIT 500
+    `).all(...values) as Array<{
+      id: string;
+      created_at: number;
+      duration_ms: number;
+      status_code: number | null;
+    }>;
 
     const pageWhere = [...where];
     const pageValues = [...values];
@@ -147,6 +159,12 @@ export class RequestLogRepository {
         errors: summary.errors ?? 0,
         averageDurationMs: summary.average_duration_ms,
       },
+      timeline: timelineRows.map((row) => ({
+        id: row.id,
+        createdAt: row.created_at,
+        durationMs: row.duration_ms,
+        statusCode: row.status_code,
+      })),
       nextCursor: hasMore && last ? { createdAt: last.created_at, id: last.id } : null,
     };
   }

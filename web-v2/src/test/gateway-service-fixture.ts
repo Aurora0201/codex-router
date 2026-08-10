@@ -92,7 +92,7 @@ export function createGatewayServiceFixture({
       return structuredClone(snapshot.accounts)
     },
     async getRequestLogs() {
-      return { items: [], summary: { requests: 0, errors: 0, averageDurationMs: null }, nextCursor: null }
+      return { items: [], summary: { requests: 0, errors: 0, averageDurationMs: null }, timeline: [], nextCursor: null }
     },
     async setActiveAccount(id) {
       snapshot.accounts.activeAccountId = id

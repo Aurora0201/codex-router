@@ -207,4 +207,20 @@ describe("HTTP GatewayService", () => {
     )
     await expect(service.getAccounts()).rejects.toThrow("account_not_found")
   })
+
+  it("maps request-log filters and preserves timeline metadata", async () => {
+    const payload = {
+      items: [],
+      summary: { requests: 1, errors: 1, averageDurationMs: 42 },
+      timeline: [{ id: "log-1", createdAt: 1000, durationMs: 42, statusCode: 500 }],
+      nextCursor: null,
+    }
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse(payload))
+    vi.stubGlobal("fetch", fetchMock)
+    await expect(createHttpGatewayService().getRequestLogs({ range: "24h", status: "error", transport: "http", accountId: "account/one", query: "upstream error", limit: 50 })).resolves.toEqual(payload)
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/request-logs?range=24h&status=error&transport=http&accountId=account%2Fone&q=upstream+error&limit=50",
+      expect.objectContaining({ credentials: "same-origin" })
+    )
+  })
 })

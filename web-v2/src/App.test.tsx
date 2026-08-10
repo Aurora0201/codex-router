@@ -42,9 +42,9 @@ describe("App", () => {
       screen.getByRole("textbox", { name: "搜索授权账号" })
     ).toBeInTheDocument()
 
-    await user.click(screen.getByRole("button", { name: "Gateway" }))
+    await user.click(screen.getByRole("button", { name: "运行状态" }))
     expect(
-      await screen.findByRole("heading", { name: "Gateway" })
+      await screen.findByRole("heading", { name: "运行状态" })
     ).toBeInTheDocument()
     expect(screen.queryByRole("switch", { name: "请求元数据记录" })).not.toBeInTheDocument()
     await user.click(screen.getByRole("button", { name: "偏好设置" }))

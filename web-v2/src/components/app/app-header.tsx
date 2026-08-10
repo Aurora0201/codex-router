@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils"
 
 const pageTitle: Record<AppPage, string> = {
   accounts: "账号路由",
-  gateway: "Gateway",
+  gateway: "运行状态",
   preferences: "偏好设置",
   logs: "请求日志",
 }
@@ -45,7 +45,7 @@ export function AppHeader({
           role="status"
         >
           <CircleIcon className="fill-current" aria-hidden="true" />
-          <span>{online ? `在线 · v${version ?? "—"}` : "Gateway 离线"}</span>
+          <span>{online ? `Codex Router 在线 · v${version ?? "—"}` : "Codex Router 离线"}</span>
         </div>
         <Tooltip>
           <TooltipTrigger

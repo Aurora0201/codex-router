@@ -187,6 +187,7 @@ describe("schema v4 diagnostics", () => {
     const result = database.requestLog.query({ since: 0, status: "error", limit: 50 });
     expect(result.summary).toEqual({ requests: 1, errors: 1, averageDurationMs: 80 });
     expect(result.items).toHaveLength(1);
+    expect(result.timeline).toHaveLength(1);
     expect(result.items[0]).toMatchObject({ requestId: "req-failed", errorCode: "upstream_error" });
     expect(JSON.stringify(result)).not.toContain("body");
     database.close();
@@ -198,6 +199,25 @@ describe("schema v4 diagnostics", () => {
     expect(database.settings.update({ logLevel: "warn" }).logLevel).toBe("warn");
     expect(() => database.settings.update({ logLevel: "trace" })).toThrow("invalid_setting");
     expect(database.settings.get().logLevel).toBe("warn");
+    database.close();
+  });
+
+  it("caps the filtered request timeline at 500 rows and excludes missing durations", async () => {
+    const root = await tempDir();
+    const database = new GatewayDatabase(path.join(root, "timeline.db"));
+    const insert = database.raw.prepare(`
+      INSERT INTO request_log(id, route, transport, status_code, duration_ms, created_at)
+      VALUES (?, '/responses', 'http', ?, ?, ?)
+    `);
+    database.raw.transaction(() => {
+      for (let index = 0; index < 502; index++) insert.run(`log-${index}`, index % 2 ? 200 : 500, index === 501 ? null : index + 1, Date.now() + index);
+    })();
+    const result = database.requestLog.query({ since: 0, status: "error", limit: 10 });
+    expect(result.timeline).toHaveLength(251);
+    expect(result.timeline.every((point) => (point.statusCode ?? 0) >= 400)).toBe(true);
+    const all = database.requestLog.query({ since: 0, limit: 10 });
+    expect(all.timeline).toHaveLength(500);
+    expect(all.timeline.every((point) => point.durationMs !== null)).toBe(true);
     database.close();
   });
 });

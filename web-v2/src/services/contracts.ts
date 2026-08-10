@@ -120,6 +120,12 @@ export interface RequestLogView {
 export interface RequestLogsResponse {
   items: RequestLogView[]
   summary: { requests: number; errors: number; averageDurationMs: number | null }
+  timeline: Array<{
+    id: string
+    createdAt: number
+    durationMs: number
+    statusCode: number | null
+  }>
   nextCursor: string | null
 }
 

@@ -46,7 +46,7 @@ describe("SettingsPage", () => {
     expect(screen.getByText("接管正常").closest("span")).toHaveClass(
       "text-success"
     )
-    expect(screen.getByText("Codex 已通过 Gateway 接管")).toBeInTheDocument()
+    expect(screen.getByText("Codex 已通过 Codex Router 接管")).toBeInTheDocument()
     expect(screen.getByText("Codex 正在运行").closest("span")).toHaveClass(
       "text-success"
     )
@@ -72,7 +72,7 @@ describe("SettingsPage", () => {
   it("elevates takeover and request failures in a degraded scenario", async () => {
     await renderPage("degraded")
 
-    expect(screen.getByText("Codex 尚未接入 Gateway")).toBeInTheDocument()
+    expect(screen.getByText("Codex 尚未接入 Codex Router")).toBeInTheDocument()
     expect(screen.getByText("Codex 尚未接管")).toBeInTheDocument()
     const errorMetric = screen.getByLabelText("请求错误指标")
     expect(within(errorMetric).getByText("19")).toHaveClass("text-destructive")

@@ -60,12 +60,12 @@ export function CodexTakeoverCard({
   const [busy, setBusy] = useState<CodexAction | null>(null)
   const actionCopy = {
     apply: [
-      "应用 Gateway 配置？",
-      "将备份当前配置并把 Codex 的 openai_base_url 指向本地 Gateway。",
+      "应用 Codex Router 配置？",
+      "将备份当前配置并把 Codex 的 openai_base_url 指向本地 Codex Router。",
     ],
     restore: [
       "恢复原始 Codex 配置？",
-      "将从 Gateway 创建的备份恢复配置，之后请求不会再经过本地 Gateway。",
+      "将从 Codex Router 创建的备份恢复配置，之后请求不会再经过本地 Codex Router。",
     ],
     restart: ["重启 Codex？", "Codex 将短暂关闭并重新启动，以读取当前配置。"],
   } as const
@@ -83,7 +83,7 @@ export function CodexTakeoverCard({
       toast.add({
         title:
           action === "apply"
-            ? "Gateway 配置已应用"
+            ? "Codex Router 配置已应用"
             : action === "restore"
               ? "Codex 配置已恢复"
               : "Codex 已重启",
@@ -102,15 +102,15 @@ export function CodexTakeoverCard({
 
   const takeoverReady = status.applied && status.codexRunning
   const title = takeoverReady
-    ? "Codex 已通过 Gateway 接管"
+    ? "Codex 已通过 Codex Router 接管"
     : status.applied
-      ? "Gateway 已配置，Codex 未运行"
-      : "Codex 尚未接入 Gateway"
+      ? "Codex Router 已配置，Codex 未运行"
+      : "Codex 尚未接入 Codex Router"
   const description = takeoverReady
-    ? "后续 Codex 请求将进入本地 Gateway，并由手动选定的账号处理。"
+    ? "后续 Codex 请求将进入本地 Codex Router，并由手动选定的账号处理。"
     : status.applied
-      ? "重启 Codex 以加载已经写入的 Gateway 配置。"
-      : "应用配置后，Codex 请求才会经过本地 Gateway。"
+      ? "重启 Codex 以加载已经写入的 Codex Router 配置。"
+      : "应用配置后，Codex 请求才会经过本地 Codex Router。"
 
   return (
     <Card>
@@ -148,7 +148,7 @@ export function CodexTakeoverCard({
           <Alert variant="destructive">
             <AlertTitle>找不到配置文件</AlertTitle>
             <AlertDescription>
-              请先启动一次 Codex，再尝试应用 Gateway 配置。
+              请先启动一次 Codex，再尝试应用 Codex Router 配置。
             </AlertDescription>
           </Alert>
         ) : !status.applied ? (
@@ -164,7 +164,7 @@ export function CodexTakeoverCard({
             <CircleXIcon />
             <AlertTitle>Codex 未运行</AlertTitle>
             <AlertDescription>
-              Gateway 配置已经写入，重启 Codex 后才会开始接管请求。
+              Codex Router 配置已经写入，重启 Codex 后才会开始接管请求。
             </AlertDescription>
           </Alert>
         ) : null}
@@ -174,7 +174,7 @@ export function CodexTakeoverCard({
               <NetworkIcon />
             </ItemMedia>
             <ItemContent className="min-w-0">
-              <ItemTitle>Gateway 请求入口</ItemTitle>
+              <ItemTitle>Codex Router 请求入口</ItemTitle>
               <ItemDescription className="truncate font-mono text-xs">
                 {status.gatewayBaseUrl}
               </ItemDescription>
@@ -260,7 +260,7 @@ export function CodexTakeoverCard({
           ) : (
             <ShieldCheckIcon data-icon="inline-start" />
           )}
-          应用 Gateway
+          应用 Codex Router
         </Button>
       </CardFooter>
       <AlertDialog

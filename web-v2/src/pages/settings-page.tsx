@@ -55,9 +55,9 @@ export function SettingsPage({
   return (
     <section className="flex flex-col gap-5">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Gateway</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">运行状态</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          管理 Codex 接管、本地网络边界和运行诊断信息。
+          查看 Codex Router 接管、本地网络边界和运行诊断信息。
         </p>
       </div>
 
@@ -70,7 +70,7 @@ export function SettingsPage({
       <Card size="sm" aria-label="运行摘要">
         <CardHeader className="sr-only">
           <CardTitle>运行摘要</CardTitle>
-          <CardDescription>Gateway 今日请求与账号可用情况。</CardDescription>
+          <CardDescription>Codex Router 今日请求与账号可用情况。</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           <ItemGroup className="grid grid-cols-2 gap-3">
@@ -157,7 +157,7 @@ export function SettingsPage({
           <CardHeader>
             <CardTitle>网络与安全边界</CardTitle>
             <CardDescription>
-              Gateway 只读取路由元数据，敏感请求内容始终保持不透明。
+              Codex Router 只读取路由元数据，敏感请求内容始终保持不透明。
             </CardDescription>
             <CardAction>
               <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground [&_svg]:size-3.5">
