@@ -48,4 +48,12 @@ describe("AccountStatus", () => {
 
     expect(screen.getByRole("status", { name: "Loading" })).toBeInTheDocument()
   })
+
+  it("uses the success semantic color only for a ready account", () => {
+    render(<AccountStatus account={accountWithStatus("ready")} />)
+
+    const status = screen.getByText("认证就绪").closest("span")
+    expect(status).toHaveClass("text-success")
+    expect(status).not.toHaveClass("text-primary")
+  })
 })

@@ -41,7 +41,7 @@ function LoginStatus({ status }: { status: LoginSessionView["status"] }) {
     <span
       className={cn(
         "inline-flex items-center gap-1.5 text-sm font-medium [&_svg]:size-4",
-        status === "complete" && "text-primary",
+        status === "complete" && "text-success",
         status === "waiting" && "text-muted-foreground",
         status === "cancelled" && "text-muted-foreground",
         status === "failed" && "text-destructive"
@@ -130,14 +130,14 @@ export function OAuthDialog({
           <DialogHeader>
             <DialogTitle>添加 ChatGPT/Codex 账号</DialogTitle>
             <DialogDescription>
-              模拟 Codex 官方 Browser
-              OAuth。此版本不会连接真实登录服务，也不会读取浏览器 Cookie。
+              使用 Codex 官方 Browser OAuth。Gateway 不会读取浏览器
+              Cookie，账号凭据保存在独立目录中。
             </DialogDescription>
           </DialogHeader>
           {!session ? (
             <div className="flex flex-col gap-4">
               <p className="text-sm text-muted-foreground">
-                启动后将生成一个模拟授权会话，并自动演示等待与完成状态。
+                启动登录会话后，请在官方授权页面完成账号登录。
               </p>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setOpen(false)}>
@@ -149,7 +149,7 @@ export function OAuthDialog({
                   ) : (
                     <ExternalLinkIcon data-icon="inline-start" />
                   )}
-                  {busy ? "启动中" : "启动模拟登录"}
+                  {busy ? "启动中" : "启动登录"}
                 </Button>
               </DialogFooter>
             </div>
@@ -158,9 +158,9 @@ export function OAuthDialog({
               <LoginStatus status={session.status} />
               <p className="text-sm text-muted-foreground">
                 {session.status === "waiting"
-                  ? "模拟登录窗口已准备好，稍后将自动完成授权。"
+                  ? "授权会话已准备好，请打开下面的链接完成登录。"
                   : session.status === "complete"
-                    ? "新账号已写入 Mock 数据。"
+                    ? "新账号已安全写入 Gateway 账号池。"
                     : (session.error ?? "登录流程未完成。")}
               </p>
               <div className="rounded-xl bg-muted p-3 font-mono text-xs break-all">
@@ -169,6 +169,18 @@ export function OAuthDialog({
               <DialogFooter>
                 {session.status === "waiting" ? (
                   <>
+                    <Button
+                      render={
+                        <a
+                          href={session.authUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                        />
+                      }
+                    >
+                      <ExternalLinkIcon data-icon="inline-start" />
+                      打开授权页面
+                    </Button>
                     <Button
                       variant="outline"
                       onClick={() => {

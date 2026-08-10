@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { TriangleAlertIcon } from "lucide-react"
 
 import { AppSidebar, type AppPage } from "@/components/app/app-sidebar"
 import { AppHeader } from "@/components/app/app-header"
+import { useTheme, type Theme } from "@/components/theme-provider"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -10,15 +11,16 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { Skeleton } from "@/components/ui/skeleton"
 import { AccountsPage } from "@/pages/accounts-page"
 import { SettingsPage } from "@/pages/settings-page"
-import type { GatewaySnapshot, MockScenario } from "@/services/contracts"
-import {
-  createMockGatewayService,
-  scenarioFromUrl,
-} from "@/services/mock/gateway-service"
+import { PreferencesPage } from "@/pages/preferences-page"
+import type { GatewayService, GatewaySnapshot } from "@/services/contracts"
+import { createHttpGatewayService } from "@/services/http/gateway-service"
+import { toast } from "@/components/ui/toast"
+
+const defaultGatewayService = createHttpGatewayService()
 
 function LoadingPage() {
   return (
-    <div className="flex flex-col gap-5" aria-label="正在载入 Mock 数据">
+    <div className="flex flex-col gap-5" aria-label="正在载入 Gateway 数据">
       <div className="flex flex-col gap-2">
         <Skeleton className="h-8 w-48" />
         <Skeleton className="h-4 w-96 max-w-full" />
@@ -28,16 +30,16 @@ function LoadingPage() {
   )
 }
 
-export function App() {
-  const initialScenario = useMemo(() => scenarioFromUrl(), [])
-  const service = useMemo(
-    () => createMockGatewayService(initialScenario),
-    [initialScenario]
-  )
+export function App({
+  service = defaultGatewayService,
+}: {
+  service?: GatewayService
+}) {
   const [page, setPage] = useState<AppPage>("accounts")
-  const [scenario, setScenario] = useState<MockScenario>(initialScenario)
   const [snapshot, setSnapshot] = useState<GatewaySnapshot | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const { setTheme } = useTheme()
+  const snapshotTheme = snapshot?.settings.theme
 
   const reload = useCallback(async () => {
     try {
@@ -49,36 +51,87 @@ export function App() {
   }, [service])
 
   useEffect(() => {
-    const timer = window.setTimeout(() => void reload(), 0)
-    return () => window.clearTimeout(timer)
-  }, [reload])
+    if (snapshotTheme) setTheme(snapshotTheme)
+  }, [snapshotTheme, setTheme])
 
-  const changeScenario = (next: MockScenario) => {
-    service.setScenario(next)
-    setScenario(next)
-    const url = new URL(window.location.href)
-    url.searchParams.set("scenario", next)
-    window.history.replaceState(null, "", url)
-    void reload()
-  }
+  const changeTheme = useCallback(
+    async (nextTheme: Theme) => {
+      const previous = snapshot?.settings.theme ?? "system"
+      setTheme(nextTheme)
+      try {
+        await service.saveSettings({ theme: nextTheme })
+        await reload()
+      } catch (reason) {
+        setTheme(previous)
+        toast.add({
+          title: "主题保存失败",
+          description: (reason as Error).message,
+          type: "error",
+        })
+      }
+    },
+    [reload, service, setTheme, snapshot?.settings.theme]
+  )
+
+  useEffect(() => {
+    const refresh = () => {
+      if (!document.hidden) void reload()
+    }
+    let unsubscribe: () => void = () => undefined
+    let debounce: number | undefined
+    const connect = () => {
+      unsubscribe()
+      unsubscribe = service.subscribe(
+        () => {
+          window.clearTimeout(debounce)
+          debounce = window.setTimeout(refresh, 100)
+        },
+        () => undefined
+      )
+    }
+    const initial = window.setTimeout(() => {
+      refresh()
+      connect()
+    }, 0)
+    const timer = window.setInterval(refresh, 30_000)
+    const handleVisibility = () => {
+      if (document.hidden) {
+        unsubscribe()
+      } else {
+        void reload()
+        connect()
+      }
+    }
+    document.addEventListener("visibilitychange", handleVisibility)
+    return () => {
+      window.clearTimeout(initial)
+      window.clearInterval(timer)
+      window.clearTimeout(debounce)
+      unsubscribe()
+      document.removeEventListener("visibilitychange", handleVisibility)
+    }
+  }, [reload, service])
+
+  const activeAccount = snapshot?.accounts.accounts.find(
+    (account) => account.id === snapshot.accounts.activeAccountId
+  )
 
   return (
     <SidebarProvider className="h-dvh min-h-0 overflow-hidden">
-      <AppSidebar page={page} onPageChange={setPage} />
+      <AppSidebar page={page} onPageChange={setPage} activeAccount={activeAccount} />
       <SidebarInset className="min-h-0 overflow-hidden">
         <AppHeader
           page={page}
           online={!error}
           version={snapshot?.health.version}
-          scenario={scenario}
-          onScenarioChange={changeScenario}
+          onThemeChange={changeTheme}
         />
         <ScrollArea className="min-h-0 flex-1">
           <div className="mx-auto w-full max-w-[88rem] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
             {error ? (
               <Alert variant="destructive" className="mb-6">
                 <TriangleAlertIcon />
-                <AlertTitle>无法读取 Gateway Mock</AlertTitle>
+                <AlertTitle>无法读取 Gateway</AlertTitle>
                 <AlertDescription className="flex flex-wrap items-center gap-3">
                   <span>{error}</span>
                   <Button
@@ -99,11 +152,19 @@ export function App() {
                 service={service}
                 reload={reload}
               />
-            ) : (
+            ) : page === "gateway" ? (
               <SettingsPage
                 snapshot={snapshot}
                 service={service}
                 reload={reload}
+                onShowAccounts={() => setPage("accounts")}
+              />
+            ) : (
+              <PreferencesPage
+                snapshot={snapshot}
+                service={service}
+                reload={reload}
+                onThemeChange={changeTheme}
               />
             )}
           </div>

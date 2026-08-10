@@ -8,6 +8,7 @@ import { registerSettingsRoutes } from "./settings-routes.js";
 import { registerStatsRoutes } from "./stats-routes.js";
 import { registerCodexRoutes } from "./codex-routes.js";
 import { CodexConfigService } from "../../codex/codex-config.js";
+import { registerAdminEventRoutes } from "./admin-events.js";
 
 export async function registerAdminApi(
   app: FastifyInstance,
@@ -15,6 +16,7 @@ export async function registerAdminApi(
   codexConfig: CodexConfigService,
 ): Promise<void> {
   registerHealthRoutes(app, ctx);
+  registerAdminEventRoutes(app, ctx.events);
   registerAccountRoutes(app, ctx);
   registerAccountLoginRoutes(app, ctx);
   registerActiveAccountRoutes(app, ctx);

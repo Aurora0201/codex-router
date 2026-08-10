@@ -14,6 +14,10 @@ export function registerSettingsRoutes(app: FastifyInstance, ctx: AdminContext):
   }));
 
   app.patch("/api/settings", { preHandler: protect }, async (request, reply) => {
-    await apiAction(reply, () => ctx.database.settings.update(jsonBody(request)));
+    await apiAction(reply, () => {
+      const result = ctx.database.settings.update(jsonBody(request));
+      ctx.events.invalidate("settings");
+      return result;
+    });
   });
 }

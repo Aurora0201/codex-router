@@ -3,13 +3,11 @@ import { describe, expect, it, vi } from "vitest"
 
 import { TooltipProvider } from "@/components/ui/tooltip"
 import type { GatewaySnapshot } from "@/services/contracts"
-import { createMockGatewayService } from "@/services/mock/gateway-service"
+import type { GatewayService } from "@/services/contracts"
+import { createGatewayServiceFixture } from "@/test/gateway-service-fixture"
 import { AccountsPage } from "./accounts-page"
 
-function renderPage(
-  snapshot: GatewaySnapshot,
-  service: ReturnType<typeof createMockGatewayService>
-) {
+function renderPage(snapshot: GatewaySnapshot, service: GatewayService) {
   return render(
     <TooltipProvider>
       <AccountsPage snapshot={snapshot} service={service} reload={vi.fn()} />
@@ -19,7 +17,7 @@ function renderPage(
 
 describe("AccountsPage", () => {
   it("focuses the healthy page on the searchable account pool", async () => {
-    const service = createMockGatewayService("healthy")
+    const service = createGatewayServiceFixture()
     const snapshot = await service.getSnapshot()
 
     renderPage(snapshot, service)
@@ -33,7 +31,7 @@ describe("AccountsPage", () => {
   })
 
   it("warns when no route account is selected", async () => {
-    const service = createMockGatewayService("no-active")
+    const service = createGatewayServiceFixture({ activeAccountId: null })
     const snapshot = await service.getSnapshot()
 
     renderPage(snapshot, service)
@@ -42,7 +40,7 @@ describe("AccountsPage", () => {
   })
 
   it("warns when the active route account is unavailable", async () => {
-    const service = createMockGatewayService("healthy")
+    const service = createGatewayServiceFixture()
     const snapshot = await service.getSnapshot()
     snapshot.accounts.accounts[0].authStatus = "relogin_required"
 

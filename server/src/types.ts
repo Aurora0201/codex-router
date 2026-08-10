@@ -68,4 +68,5 @@ export interface GatewayConfig {
   codexCliArgs: string[];
   requestBodyLimit: number;
   developerMode: boolean;
+  webV2DistDir: string;
 }

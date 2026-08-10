@@ -1,7 +1,6 @@
 import { CircleIcon, MoonIcon, SunIcon } from "lucide-react"
 
 import type { AppPage } from "@/components/app/app-sidebar"
-import { MockToolbar } from "@/components/app/mock-toolbar"
 import { useTheme } from "@/components/theme-provider"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
@@ -11,26 +10,24 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import type { MockScenario } from "@/services/contracts"
 import { cn } from "@/lib/utils"
 
 const pageTitle: Record<AppPage, string> = {
   accounts: "账号路由",
-  settings: "Gateway 设置",
+  gateway: "Gateway",
+  preferences: "偏好设置",
 }
 
 export function AppHeader({
   page,
   online,
   version,
-  scenario,
-  onScenarioChange,
+  onThemeChange,
 }: {
   page: AppPage
   online: boolean
   version?: string
-  scenario: MockScenario
-  onScenarioChange(value: MockScenario): void
+  onThemeChange?(theme: "light" | "dark"): Promise<void>
 }) {
   const { resolvedTheme, setTheme } = useTheme()
   return (
@@ -39,11 +36,6 @@ export function AppHeader({
       <Separator orientation="vertical" className="h-4 md:hidden" />
       <p className="min-w-0 truncate text-sm font-medium">{pageTitle[page]}</p>
       <div className="ml-auto flex items-center gap-2">
-        {import.meta.env.DEV ? (
-          <div className="hidden lg:block">
-            <MockToolbar value={scenario} onValueChange={onScenarioChange} />
-          </div>
-        ) : null}
         <div
           className={cn(
             "inline-flex items-center gap-1.5 text-xs font-medium [&_svg]:size-2",
@@ -60,9 +52,11 @@ export function AppHeader({
               <Button
                 variant="ghost"
                 size="icon-sm"
-                onClick={() =>
-                  setTheme(resolvedTheme === "dark" ? "light" : "dark")
-                }
+                onClick={() => {
+                  const nextTheme = resolvedTheme === "dark" ? "light" : "dark"
+                  if (onThemeChange) void onThemeChange(nextTheme)
+                  else setTheme(nextTheme)
+                }}
               />
             }
           >

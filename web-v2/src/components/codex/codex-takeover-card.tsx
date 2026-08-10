@@ -4,6 +4,7 @@ import {
   CircleDashedIcon,
   CircleXIcon,
   DatabaseBackupIcon,
+  NetworkIcon,
   PlayIcon,
   RotateCcwIcon,
   ShieldCheckIcon,
@@ -31,6 +32,14 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
+import {
+  Item,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemMedia,
+  ItemTitle,
+} from "@/components/ui/item"
 import { Spinner } from "@/components/ui/spinner"
 import { toast } from "@/components/ui/toast"
 import { cn } from "@/lib/utils"
@@ -91,33 +100,46 @@ export function CodexTakeoverCard({
     }
   }
 
-  const rows = [
-    ["配置文件", status.configPath],
-    ["Gateway 目标", status.gatewayBaseUrl],
-    ["当前地址", status.openaiBaseUrl ?? "未配置"],
-    ["模型目录", status.modelCatalogJson ?? "由 Gateway /models 提供"],
-  ]
+  const takeoverReady = status.applied && status.codexRunning
+  const title = takeoverReady
+    ? "Codex 已通过 Gateway 接管"
+    : status.applied
+      ? "Gateway 已配置，Codex 未运行"
+      : "Codex 尚未接入 Gateway"
+  const description = takeoverReady
+    ? "后续 Codex 请求将进入本地 Gateway，并由手动选定的账号处理。"
+    : status.applied
+      ? "重启 Codex 以加载已经写入的 Gateway 配置。"
+      : "应用配置后，Codex 请求才会经过本地 Gateway。"
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Codex 接管</CardTitle>
-        <CardDescription>
-          管理全局配置的 Gateway 注入、备份恢复和进程重启。
-        </CardDescription>
+        <CardTitle>{title}</CardTitle>
+        <CardDescription>{description}</CardDescription>
         <CardAction>
           <span
             className={cn(
               "inline-flex items-center gap-1.5 text-xs font-medium [&_svg]:size-3.5",
-              status.applied ? "text-primary" : "text-muted-foreground"
+              takeoverReady
+                ? "text-success"
+                : status.applied
+                  ? "text-destructive"
+                  : "text-muted-foreground"
             )}
           >
-            {status.applied ? (
+            {takeoverReady ? (
               <CircleCheckIcon aria-hidden="true" />
+            ) : status.applied ? (
+              <CircleXIcon aria-hidden="true" />
             ) : (
               <CircleDashedIcon aria-hidden="true" />
             )}
-            {status.applied ? "已应用" : "未应用"}
+            {takeoverReady
+              ? "接管正常"
+              : status.applied
+                ? "需要重启"
+                : "未接管"}
           </span>
         </CardAction>
       </CardHeader>
@@ -129,21 +151,67 @@ export function CodexTakeoverCard({
               请先启动一次 Codex，再尝试应用 Gateway 配置。
             </AlertDescription>
           </Alert>
+        ) : !status.applied ? (
+          <Alert>
+            <CircleDashedIcon />
+            <AlertTitle>Codex 尚未接管</AlertTitle>
+            <AlertDescription>
+              当前 Codex 地址为 {status.openaiBaseUrl ?? "未配置"}。
+            </AlertDescription>
+          </Alert>
+        ) : !status.codexRunning ? (
+          <Alert variant="destructive">
+            <CircleXIcon />
+            <AlertTitle>Codex 未运行</AlertTitle>
+            <AlertDescription>
+              Gateway 配置已经写入，重启 Codex 后才会开始接管请求。
+            </AlertDescription>
+          </Alert>
         ) : null}
-        <dl className="grid gap-3 text-sm sm:grid-cols-2">
-          {rows.map(([label, value]) => (
-            <div key={label} className="min-w-0 rounded-lg bg-muted/60 p-3">
-              <dt className="text-muted-foreground">{label}</dt>
-              <dd className="mt-1 font-mono text-xs break-all">{value}</dd>
-            </div>
-          ))}
-        </dl>
+        <ItemGroup className="grid gap-2 md:grid-cols-3">
+          <Item variant="muted">
+            <ItemMedia variant="icon">
+              <NetworkIcon />
+            </ItemMedia>
+            <ItemContent className="min-w-0">
+              <ItemTitle>Gateway 请求入口</ItemTitle>
+              <ItemDescription className="truncate font-mono text-xs">
+                {status.gatewayBaseUrl}
+              </ItemDescription>
+            </ItemContent>
+          </Item>
+          <Item variant="muted">
+            <ItemMedia variant="icon">
+              {status.codexRunning ? <CircleCheckIcon /> : <CircleXIcon />}
+            </ItemMedia>
+            <ItemContent>
+              <ItemTitle>Codex 进程</ItemTitle>
+              <ItemDescription>
+                {status.codexRunning ? "正在运行" : "当前未运行"}
+              </ItemDescription>
+            </ItemContent>
+          </Item>
+          <Item variant="muted">
+            <ItemMedia variant="icon">
+              <DatabaseBackupIcon />
+            </ItemMedia>
+            <ItemContent>
+              <ItemTitle>配置备份</ItemTitle>
+              <ItemDescription>
+                {status.hasBackup ? "可以恢复原始配置" : "尚未创建备份"}
+              </ItemDescription>
+            </ItemContent>
+          </Item>
+        </ItemGroup>
         <Separator />
-        <div className="grid gap-2 text-xs sm:grid-cols-2" role="status">
+        <div
+          className="flex items-center justify-between gap-6 text-xs"
+          role="status"
+        >
           <span
             className={cn(
               "inline-flex items-center gap-1.5 font-medium [&_svg]:size-3.5",
-              status.codexRunning ? "text-primary" : "text-destructive"
+              status.codexRunning ? "text-success" : "text-destructive"
             )}
           >
             {status.codexRunning ? (
@@ -153,9 +221,8 @@ export function CodexTakeoverCard({
             )}
             {status.codexRunning ? "Codex 正在运行" : "Codex 未运行"}
           </span>
-          <span className="inline-flex items-center gap-1.5 font-medium text-muted-foreground [&_svg]:size-3.5">
-            <DatabaseBackupIcon aria-hidden="true" />
-            {status.hasBackup ? "备份可用" : "尚无备份"}
+          <span className="ml-auto max-w-[65%] truncate text-right font-mono text-muted-foreground">
+            {status.configPath}
           </span>
         </div>
       </CardContent>

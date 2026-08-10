@@ -41,13 +41,7 @@ describe("application shell", () => {
   it("renders a one-line header and plain Gateway status", () => {
     const { container } = render(
       <ShellProviders>
-        <AppHeader
-          page="accounts"
-          online
-          version="0.2.0"
-          scenario="healthy"
-          onScenarioChange={vi.fn()}
-        />
+        <AppHeader page="accounts" online version="0.2.0" />
       </ShellProviders>
     )
 

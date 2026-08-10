@@ -79,9 +79,6 @@ export interface CodexStatusView {
   codexRunning: boolean
 }
 
-export type MockScenario =
-  "healthy" | "empty" | "no-active" | "degraded" | "offline"
-
 export interface GatewaySnapshot {
   health: HealthView
   stats: StatsView
@@ -90,7 +87,13 @@ export interface GatewaySnapshot {
   codex: CodexStatusView
 }
 
+export type GatewayResource = "accounts" | "stats" | "settings" | "codex"
+
 export interface GatewayService {
+  subscribe(
+    onInvalidate: (resources: GatewayResource[]) => void,
+    onConnectionChange: (connected: boolean) => void
+  ): () => void
   getSnapshot(): Promise<GatewaySnapshot>
   getAccounts(): Promise<AccountsResponse>
   setActiveAccount(id: string): Promise<AccountView>
@@ -103,14 +106,9 @@ export interface GatewayService {
   getLoginStatus(loginId: string): Promise<LoginSessionView>
   cancelLogin(loginId: string): Promise<void>
   saveSettings(
-    values: Pick<SettingsView, "requestMetadataLogging" | "theme">
+    values: Partial<Pick<SettingsView, "requestMetadataLogging" | "theme">>
   ): Promise<SettingsView>
   applyCodexConfig(): Promise<CodexStatusView>
   restoreCodexConfig(): Promise<CodexStatusView>
   restartCodex(): Promise<{ running: boolean; codexPath: string | null }>
-}
-
-export interface MockScenarioController {
-  getScenario(): MockScenario
-  setScenario(scenario: MockScenario): void
 }

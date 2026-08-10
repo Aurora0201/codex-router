@@ -2,7 +2,8 @@ import {
   CircleGaugeIcon,
   PanelLeftIcon,
   Settings2Icon,
-  ShieldCheckIcon,
+  SlidersHorizontalIcon,
+  RouteIcon,
   UsersRoundIcon,
 } from "lucide-react"
 
@@ -26,8 +27,9 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import type { AccountView } from "@/services/contracts"
 
-export type AppPage = "accounts" | "settings"
+export type AppPage = "accounts" | "gateway" | "preferences"
 
 const navigation = [
   {
@@ -36,18 +38,25 @@ const navigation = [
     icon: UsersRoundIcon,
   },
   {
-    value: "settings" as const,
-    label: "Gateway 设置",
+    value: "gateway" as const,
+    label: "Gateway",
     icon: Settings2Icon,
+  },
+  {
+    value: "preferences" as const,
+    label: "偏好设置",
+    icon: SlidersHorizontalIcon,
   },
 ]
 
 export function AppSidebar({
   page,
   onPageChange,
+  activeAccount,
 }: {
   page: AppPage
   onPageChange(page: AppPage): void
+  activeAccount?: AccountView
 }) {
   const { isMobile, setOpenMobile, state, toggleSidebar } = useSidebar()
 
@@ -120,18 +129,29 @@ export function AppSidebar({
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
-        <div className="flex items-center justify-between gap-2 rounded-lg border bg-background px-2.5 py-2 group-data-[collapsible=icon]:hidden">
-          <div className="min-w-0">
-            <p className="text-xs font-medium">本地数据面</p>
-            <p className="truncate font-mono text-[10px] text-muted-foreground">
-              127.0.0.1:8317
-            </p>
-          </div>
-          <span className="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground [&_svg]:size-3.5">
-            <ShieldCheckIcon aria-hidden="true" />
-            安全
-          </span>
-        </div>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant="ghost"
+                className="h-auto w-full justify-start gap-2 px-2 py-2 text-left group-data-[collapsible=icon]:justify-center"
+                onClick={() => navigate("accounts")}
+                aria-label={activeAccount ? `当前路由账号 ${activeAccount.email ?? activeAccount.chatgptAccountId ?? activeAccount.id}` : "尚未选择路由"}
+              />
+            }
+          >
+            <RouteIcon className="shrink-0" aria-hidden="true" />
+            <span className="min-w-0 group-data-[collapsible=icon]:hidden">
+              <span className="block text-xs font-medium">当前路由账号</span>
+              <span className="block truncate text-[10px] text-muted-foreground">
+                {activeAccount?.email ?? activeAccount?.chatgptAccountId ?? activeAccount?.id ?? "尚未选择路由"}
+              </span>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="right">
+            {activeAccount?.email ?? activeAccount?.chatgptAccountId ?? activeAccount?.id ?? "尚未选择路由"}
+          </TooltipContent>
+        </Tooltip>
       </SidebarFooter>
     </Sidebar>
   )

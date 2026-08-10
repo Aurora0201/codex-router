@@ -18,6 +18,8 @@ export interface RequestLogEntry {
 }
 
 export class RequestLogRepository {
+  onLogged?: () => void;
+
   constructor(
     private readonly db: SqliteDatabase,
     private readonly settings: SettingsRepository,
@@ -33,6 +35,7 @@ export class RequestLogRepository {
       input.statusCode ?? null, input.durationMs ?? null, input.bytesIn ?? null, input.bytesOut ?? null,
       input.errorCode ?? null, Date.now(),
     );
+    this.onLogged?.();
   }
 
   todayCounts(): { requests: number; errors: number } {

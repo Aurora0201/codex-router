@@ -26,7 +26,7 @@ export function AccountStatus({ account }: { account: AccountView }) {
 
   const status = {
     login_pending: { tone: "muted" as const, icon: Clock3Icon },
-    ready: { tone: "primary" as const, icon: CircleCheckIcon },
+    ready: { tone: "success" as const, icon: CircleCheckIcon },
     rate_limited: { tone: "muted" as const, icon: GaugeIcon },
     relogin_required: {
       tone: "destructive" as const,
@@ -45,7 +45,7 @@ export function AccountStatus({ account }: { account: AccountView }) {
     <span
       className={cn(
         "inline-flex items-center gap-1.5 text-xs font-medium [&_svg]:size-3.5",
-        status.tone === "primary" && "text-primary",
+        status.tone === "success" && "text-success",
         status.tone === "muted" && "text-muted-foreground",
         status.tone === "destructive" && "text-destructive"
       )}
