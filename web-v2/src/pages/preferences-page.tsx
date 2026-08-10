@@ -7,7 +7,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Field, FieldContent, FieldDescription, FieldGroup, FieldTitle } from "@/components/ui/field"
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card"
 import { Item, ItemActions, ItemContent, ItemGroup, ItemMedia, ItemTitle } from "@/components/ui/item"
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { toast } from "@/components/ui/toast"
@@ -31,24 +30,22 @@ function CopyPath({ value, label }: { value: string; label: string }) {
 
 function EnvironmentItem({ title, value, detail, icon: Icon, copyable = true }: { title: string; value: string; detail?: string; icon: typeof PackageIcon; copyable?: boolean }) {
   return (
-    <Item variant="muted" className="grid min-w-0 grid-cols-[auto_1fr_auto] items-start">
-      <ItemMedia variant="icon" className="self-start translate-y-0"><Icon /></ItemMedia>
-      <ItemContent className="min-w-0">
-        <ItemTitle className="h-7 items-center">{title}</ItemTitle>
-        <HoverCard>
-          <HoverCardTrigger render={<button type="button" className="block max-w-full text-left outline-none focus-visible:ring-2 focus-visible:ring-ring" />}>
-            <span className="block truncate font-mono text-xs text-muted-foreground underline decoration-border underline-offset-4">{value}</span>
-          </HoverCardTrigger>
-          <HoverCardContent align="start" className="w-96">
-            <div className="flex flex-col gap-2">
-              <p className="text-sm font-medium">{title}</p>
-              <p className="break-all font-mono text-xs text-muted-foreground">{value}</p>
-              {detail ? <p className="break-all text-xs text-muted-foreground">{detail}</p> : null}
-            </div>
-          </HoverCardContent>
-        </HoverCard>
-      </ItemContent>
-      {copyable ? <ItemActions className="self-start"><CopyPath value={value} label={title} /></ItemActions> : null}
+    <Item variant="muted" className="grid min-w-0 grid-cols-[1.75rem_minmax(0,1fr)_2rem] grid-rows-[1.75rem_1rem] items-center gap-x-2 gap-y-1">
+      <ItemMedia variant="icon" className="col-start-1 row-start-1"><Icon /></ItemMedia>
+      <ItemContent className="col-start-2 row-start-1 min-w-0"><ItemTitle className="truncate leading-none">{title}</ItemTitle></ItemContent>
+      {copyable ? <ItemActions className="col-start-3 row-start-1"><CopyPath value={value} label={title} /></ItemActions> : null}
+      <HoverCard>
+        <HoverCardTrigger render={<button type="button" className="col-span-3 col-start-1 row-start-2 block min-w-0 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring" />}>
+          <span className="block truncate font-mono text-xs leading-none text-muted-foreground underline decoration-border underline-offset-4">{value}</span>
+        </HoverCardTrigger>
+        <HoverCardContent align="start" className="w-96">
+          <div className="flex flex-col gap-2">
+            <p className="text-sm font-medium">{title}</p>
+            <p className="break-all font-mono text-xs text-muted-foreground">{value}</p>
+            {detail ? <p className="break-all text-xs text-muted-foreground">{detail}</p> : null}
+          </div>
+        </HoverCardContent>
+      </HoverCard>
     </Item>
   )
 }
@@ -77,7 +74,7 @@ export function PreferencesPage({ snapshot, service, reload, onThemeChange }: { 
         </Card>
         <Card className="h-full">
           <CardHeader><CardTitle>日志记录</CardTitle><CardDescription>控制安全诊断元数据和 Codex Router 运行日志的详细程度。</CardDescription></CardHeader>
-          <CardContent><FieldGroup><Field orientation="horizontal" data-disabled={saving || undefined}><FieldContent><FieldTitle>请求元数据</FieldTitle><FieldDescription>仅记录状态、耗时、字节数和路由，不记录正文。</FieldDescription></FieldContent><Switch checked={snapshot.settings.requestMetadataLogging} disabled={saving} onCheckedChange={(checked) => void save({ requestMetadataLogging: checked })} aria-label="请求元数据记录" /></Field><Field orientation="horizontal" data-disabled={saving || undefined}><FieldContent><FieldTitle>运行日志等级</FieldTitle><FieldDescription>调整后立即应用并在重启后保留。</FieldDescription></FieldContent><Select value={snapshot.settings.logLevel} onValueChange={(value) => value && void save({ logLevel: value as SettingsView["logLevel"] })} disabled={saving}><SelectTrigger className="w-36" aria-label="运行日志等级"><SelectValue /></SelectTrigger><SelectContent><SelectGroup>{["debug", "info", "warn", "error"].map((level) => <SelectItem key={level} value={level}>{level.toUpperCase()}</SelectItem>)}</SelectGroup></SelectContent></Select></Field></FieldGroup></CardContent>
+          <CardContent><FieldGroup><Field orientation="horizontal" data-disabled={saving || undefined}><FieldContent><FieldTitle>请求元数据</FieldTitle><FieldDescription>仅记录状态、耗时、字节数和路由，不记录正文。</FieldDescription></FieldContent><Switch checked={snapshot.settings.requestMetadataLogging} disabled={saving} onCheckedChange={(checked) => void save({ requestMetadataLogging: checked })} aria-label="请求元数据记录" /></Field><Field data-disabled={saving || undefined}><FieldContent><FieldTitle>运行日志等级</FieldTitle><FieldDescription>调整后立即应用并在重启后保留。</FieldDescription></FieldContent><Tabs className="w-full" value={snapshot.settings.logLevel} onValueChange={(value) => void save({ logLevel: value as SettingsView["logLevel"] })}><TabsList className="grid w-full grid-cols-4">{["debug", "info", "warn", "error"].map((level) => <TabsTrigger key={level} value={level} disabled={saving}>{level.toUpperCase()}</TabsTrigger>)}</TabsList></Tabs></Field></FieldGroup></CardContent>
         </Card>
       </div>
       <Card>

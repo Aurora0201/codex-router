@@ -17,9 +17,9 @@ describe("RequestLogsPage", () => {
     })
     render(<Toaster><RequestLogsPage service={service} accounts={service.snapshot.accounts.accounts} enabled initialErrorsOnly revision={0} onShowPreferences={vi.fn()} /></Toaster>)
     expect(await screen.findByText("8")).toBeInTheDocument()
-    expect(screen.getByRole("img", { name: "请求耗时散点图" })).toBeInTheDocument()
+    expect(screen.getByRole("img", { name: "API 请求可用性阵列" })).toBeInTheDocument()
     expect(screen.queryByText("upstream_error")).not.toBeInTheDocument()
-    expect(screen.getByRole("columnheader", { name: "时间与状态" })).toHaveStyle({ width: "180px" })
+    expect(screen.getByRole("columnheader", { name: "时间与状态" })).toHaveStyle({ width: "190px" })
     expect(screen.getByRole("button", { name: "查看请求 req-1" }).closest("[data-slot=scroll-area]")).toBeInTheDocument()
     await userEvent.click(screen.getByRole("button", { name: "查看请求 req-1" }))
     expect(await screen.findByText("请求详情")).toBeInTheDocument()
@@ -50,5 +50,18 @@ describe("RequestLogsPage", () => {
     const option = await screen.findByRole("option", { name: "a-very-long-account-name@example.enterprise.test" })
     await userEvent.click(option)
     await waitFor(() => expect(requestLogs).toHaveBeenLastCalledWith(expect.objectContaining({ accountId: "account-2" })))
+  })
+
+  it("uses cursor-backed previous and next pagination", async () => {
+    const service = createGatewayServiceFixture()
+    const first = { items: [], summary: { requests: 21, errors: 0, averageDurationMs: 10 }, timeline: [], nextCursor: "next-page" }
+    const second = { ...first, nextCursor: null }
+    service.getRequestLogs = vi.fn().mockResolvedValueOnce(first).mockResolvedValueOnce(second)
+    render(<RequestLogsPage service={service} accounts={[]} enabled initialErrorsOnly={false} revision={0} onShowPreferences={vi.fn()} />)
+    await userEvent.click(await screen.findByText("下一页"))
+    expect(await screen.findByText("第 2 页")).toBeInTheDocument()
+    expect(service.getRequestLogs).toHaveBeenLastCalledWith(expect.objectContaining({ cursor: "next-page", limit: 20 }))
+    await userEvent.click(screen.getByText("上一页"))
+    expect(screen.getByText("第 1 页")).toBeInTheDocument()
   })
 })

@@ -20,5 +20,6 @@ describe("PreferencesPage", () => {
     await userEvent.hover(trigger)
     await waitFor(() => expect(screen.getAllByText(path).length).toBeGreaterThan(1))
     expect(screen.queryByText("Prompt logging")).not.toBeInTheDocument()
+    expect(screen.getByRole("tab", { name: "INFO" })).toHaveAttribute("data-active")
   })
 })

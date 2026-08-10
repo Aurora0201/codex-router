@@ -75,7 +75,7 @@ export function AppSidebar({
     <Sidebar variant="inset" collapsible="icon">
       <SidebarHeader>
         {state === "collapsed" && !isMobile ? (
-          <div className="flex h-12 items-center justify-center">
+          <div className="flex h-14 items-center justify-center">
             <Tooltip>
               <TooltipTrigger
                 render={
@@ -95,11 +95,11 @@ export function AppSidebar({
             </Tooltip>
           </div>
         ) : (
-          <div className="flex h-12 items-center gap-3 px-2">
-            <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground">
+          <div className="flex h-14 items-center gap-2.5 px-2">
+            <span className="grid size-7 shrink-0 place-items-center rounded-md bg-primary text-primary-foreground [&_svg]:size-4">
               <CircleGaugeIcon aria-hidden="true" />
             </span>
-            <p className="min-w-0 truncate text-sm font-semibold">
+            <p className="min-w-0 truncate text-base font-semibold leading-none">
               Codex Router
             </p>
             <SidebarTrigger className="ml-auto size-8" />

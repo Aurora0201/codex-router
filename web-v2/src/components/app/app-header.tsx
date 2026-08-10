@@ -35,7 +35,7 @@ export function AppHeader({
     <header className="flex h-14 shrink-0 items-center gap-3 border-b px-4 lg:px-6">
       <SidebarTrigger className="md:hidden" />
       <Separator orientation="vertical" className="h-4 md:hidden" />
-      <p className="min-w-0 truncate text-sm font-medium">{pageTitle[page]}</p>
+      <p className="min-w-0 truncate text-base font-semibold leading-none">{pageTitle[page]}</p>
       <div className="ml-auto flex items-center gap-2">
         <div
           className={cn(
