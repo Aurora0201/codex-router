@@ -20,10 +20,20 @@ Follow-up work:
 Security constraints remain unchanged: diagnostics must not record credentials,
 prompts, tool arguments, tool output, or response bodies.
 
-## No `/responses/compact` rows without a remote compaction request
+## Remote compaction v2 is classified as a normal Responses request
 
-The router only proxies and records remote compaction initiated by Codex. It does not
-decide when to compact, count context tokens, or synthesize summaries. An empty
-`compact` transport therefore means the connected Codex process has not sent
-`POST /backend-api/codex/responses/compact`; it is not evidence that the request-log
-filter omitted the route.
+Codex supports two remote compaction transports. V1 sends
+`POST /backend-api/codex/responses/compact`, which the router classifies as `compact`.
+V2 sends a normal Responses stream (HTTP or WebSocket) with
+`x-codex-turn-metadata.request_kind = "compaction"`, so it is currently classified as
+`http` or `ws`. Consequently, an empty `compact` transport does not mean that no
+compaction occurred.
+
+Follow-up work:
+
+- Read only the bounded `x-codex-turn-metadata` compatibility header and classify
+  `request_kind = "compaction"` as `compact` for both HTTP and WebSocket requests.
+- Keep the data-plane body opaque; never inspect the compaction trigger or other
+  request content to perform this classification.
+- Preserve the physical transport separately if the UI needs to distinguish HTTP
+  from WebSocket.
