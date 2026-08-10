@@ -1,4 +1,4 @@
-# Codex Router Admin v2
+# Codex Router Admin
 
 Nova 管理界面默认连接正在运行的 Gateway Admin API，不提供 Mock 模式。
 
@@ -10,13 +10,13 @@ Nova 管理界面默认连接正在运行的 Gateway Admin API，不提供 Mock 
 npm run dev
 ```
 
-然后在本目录启动 v2 Vite 服务：
+也可以只在本目录启动 Vite 服务：
 
 ```bash
 npm run dev
 ```
 
-访问 `http://127.0.0.1:5174/admin-v2/`。开发服务器会将 `/api`
+访问 `http://127.0.0.1:5174/admin/`。开发服务器会将 `/api`
 代理到 `http://127.0.0.1:8317`。
 
 ## 生产构建
@@ -25,9 +25,8 @@ npm run dev
 npm run build
 ```
 
-Gateway 会从 `web-v2/dist` 提供 `/admin-v2/`，原有 v1 继续由
-`web/dist` 提供 `/admin/`。可通过 `GATEWAY_WEB_V2_DIST` 单独覆盖 v2
-构建目录。
+Gateway 会从 `web-v2/dist` 提供正式管理入口 `/admin/`。旧入口
+`/admin-v2/` 会重定向到 `/admin/`，可通过 `GATEWAY_WEB_DIST` 覆盖构建目录。
 
 ## shadcn/ui
 

@@ -42,10 +42,7 @@ export function loadConfig(overrides: Partial<GatewayConfig> = {}): GatewayConfi
     accountsDir,
     loginStagingDir,
     databasePath: path.resolve(overrides.databasePath ?? path.join(dataDir, "gateway.db")),
-    webDistDir: path.resolve(overrides.webDistDir ?? process.env.GATEWAY_WEB_DIST ?? path.join(root, "web", "dist")),
-    webV2DistDir: path.resolve(
-      overrides.webV2DistDir ?? process.env.GATEWAY_WEB_V2_DIST ?? path.join(root, "web-v2", "dist"),
-    ),
+    webDistDir: path.resolve(overrides.webDistDir ?? process.env.GATEWAY_WEB_DIST ?? path.join(root, "web-v2", "dist")),
     codexCliPath: cliOverride ?? process.execPath,
     codexCliArgs: overrides.codexCliArgs ?? (cliOverride ? ["app-server"] : [bundledCodex, "app-server"]),
     requestBodyLimit: overrides.requestBodyLimit ?? 32 * 1024 * 1024,

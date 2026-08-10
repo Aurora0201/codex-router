@@ -1,5 +1,5 @@
 import { access } from "node:fs/promises";
-import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
+import Fastify, { type FastifyInstance } from "fastify";
 import fastifyStatic from "@fastify/static";
 import type { GatewayConfig } from "./types.js";
 import { loadConfig } from "./config.js";
@@ -122,21 +122,8 @@ export async function buildGateway(overrides: Partial<GatewayConfig> = {}): Prom
     app.get("/admin", async (_request, reply) => reply.code(503).send({ error: "admin_ui_not_built", hint: "Run npm run build" }));
   }
 
-  try {
-    await access(config.webV2DistDir);
-    await app.register(fastifyStatic, {
-      root: config.webV2DistDir,
-      prefix: "/admin-v2/",
-      decorateReply: false,
-      index: "index.html",
-    });
-    app.get("/admin-v2", async (_request, reply) => reply.redirect("/admin-v2/"));
-  } catch {
-    const unavailable = async (_request: FastifyRequest, reply: FastifyReply) =>
-      reply.code(503).send({ error: "admin_v2_ui_not_built", hint: "Run npm run build in web-v2" });
-    app.get("/admin-v2", unavailable);
-    app.get("/admin-v2/", unavailable);
-  }
+  app.get("/admin-v2", async (_request, reply) => reply.redirect("/admin/"));
+  app.get("/admin-v2/", async (_request, reply) => reply.redirect("/admin/"));
 
   let closed = false;
   app.addHook("onClose", async () => {

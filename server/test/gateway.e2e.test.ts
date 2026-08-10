@@ -17,8 +17,7 @@ let upstreamUrl: string;
 let gateway: GatewayApp;
 let gatewayUrl: string;
 let wsServer: WebSocketServer;
-let v1WebDir: string;
-let v2WebDir: string;
+let webDir: string;
 const received: ReceivedRequest[] = [];
 const wsAccounts: string[] = [];
 const execFileAsync = promisify(execFile);
@@ -54,12 +53,9 @@ function streamRequest(url: string, body: Buffer, headers: Record<string, string
 beforeAll(async () => {
   process.env.GATEWAY_LOG_LEVEL = "silent";
   root = await mkdtemp(path.join(os.tmpdir(), "codex-router-e2e-"));
-  v1WebDir = path.join(root, "web-v1");
-  v2WebDir = path.join(root, "web-v2");
-  await mkdir(v1WebDir, { recursive: true });
-  await mkdir(v2WebDir, { recursive: true });
-  await writeFile(path.join(v1WebDir, "index.html"), "<h1>admin-v1</h1>");
-  await writeFile(path.join(v2WebDir, "index.html"), "<h1>admin-v2</h1>");
+  webDir = path.join(root, "web-v2");
+  await mkdir(webDir, { recursive: true });
+  await writeFile(path.join(webDir, "index.html"), "<h1>admin-web-v2</h1>");
   wsServer = new WebSocketServer({ noServer: true });
   wsServer.on("headers", (headers) => headers.push("x-models-etag: mock-etag", "x-reasoning-included: true", "openai-model: mock-codex"));
   wsServer.on("connection", (socket, request) => {
@@ -132,8 +128,7 @@ beforeAll(async () => {
     dataDir: path.join(root, "data"),
     accountsDir: path.join(root, "data", "accounts"),
     databasePath: path.join(root, "data", "gateway.db"),
-    webDistDir: v1WebDir,
-    webV2DistDir: v2WebDir,
+    webDistDir: webDir,
   });
   const accountHome = path.join(root, "data", "accounts", "local", "codex-home");
   await mkdir(accountHome, { recursive: true });
@@ -295,43 +290,31 @@ describe("WebSocket transport", () => {
 });
 
 describe("security and admin API", () => {
-  it("serves v1 and v2 from independent admin entrypoints", async () => {
-    const v1Redirect = await gateway.app.inject({ method: "GET", url: "/admin" });
-    expect(v1Redirect.statusCode).toBe(302);
-    expect(v1Redirect.headers.location).toBe("/admin/");
-    expect((await gateway.app.inject({ method: "GET", url: "/admin/" })).body).toContain("admin-v1");
+  it("serves web-v2 from the canonical admin entrypoint", async () => {
+    const redirect = await gateway.app.inject({ method: "GET", url: "/admin" });
+    expect(redirect.statusCode).toBe(302);
+    expect(redirect.headers.location).toBe("/admin/");
+    expect((await gateway.app.inject({ method: "GET", url: "/admin/" })).body).toContain("admin-web-v2");
 
-    const v2Redirect = await gateway.app.inject({ method: "GET", url: "/admin-v2" });
-    expect(v2Redirect.statusCode).toBe(302);
-    expect(v2Redirect.headers.location).toBe("/admin-v2/");
-    expect((await gateway.app.inject({ method: "GET", url: "/admin-v2/" })).body).toContain("admin-v2");
+    for (const legacyUrl of ["/admin-v2", "/admin-v2/"]) {
+      const legacy = await gateway.app.inject({ method: "GET", url: legacyUrl });
+      expect(legacy.statusCode).toBe(302);
+      expect(legacy.headers.location).toBe("/admin/");
+    }
   });
 
-  it("keeps either admin entrypoint available when the other build is missing", async () => {
+  it("returns a clear error when the canonical admin build is missing", async () => {
     const missing = path.join(root, "missing-dist");
-    const v2Only = await buildGateway({
+    const withoutUi = await buildGateway({
       developerMode: true,
       upstreamBaseUrl: upstreamUrl,
-      dataDir: path.join(root, "v2-only-data"),
-      databasePath: path.join(root, "v2-only-data", "gateway.db"),
+      dataDir: path.join(root, "missing-ui-data"),
+      databasePath: path.join(root, "missing-ui-data", "gateway.db"),
       webDistDir: missing,
-      webV2DistDir: v2WebDir,
     });
-    expect((await v2Only.app.inject({ method: "GET", url: "/admin" })).statusCode).toBe(503);
-    expect((await v2Only.app.inject({ method: "GET", url: "/admin-v2/" })).body).toContain("admin-v2");
-    await v2Only.app.close();
-
-    const v1Only = await buildGateway({
-      developerMode: true,
-      upstreamBaseUrl: upstreamUrl,
-      dataDir: path.join(root, "v1-only-data"),
-      databasePath: path.join(root, "v1-only-data", "gateway.db"),
-      webDistDir: v1WebDir,
-      webV2DistDir: missing,
-    });
-    expect((await v1Only.app.inject({ method: "GET", url: "/admin/" })).body).toContain("admin-v1");
-    expect((await v1Only.app.inject({ method: "GET", url: "/admin-v2" })).statusCode).toBe(503);
-    await v1Only.app.close();
+    expect((await withoutUi.app.inject({ method: "GET", url: "/admin" })).statusCode).toBe(503);
+    expect((await withoutUi.app.inject({ method: "GET", url: "/admin-v2" })).headers.location).toBe("/admin/");
+    await withoutUi.app.close();
   });
 
   it("fails closed for unknown data routes and browser origins", async () => {

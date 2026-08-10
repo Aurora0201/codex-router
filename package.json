@@ -5,16 +5,16 @@
   "type": "module",
   "workspaces": [
     "server",
-    "web"
+    "web-v2"
   ],
   "scripts": {
-    "build": "npm run build --workspace server && npm run build --workspace web",
+    "build": "npm run build --workspace server && npm run build --workspace @codex-router/web",
     "cli": "node server/dist/cli.js",
-    "dev": "concurrently -n gateway,admin -c cyan,magenta \"tsx watch server/src/index.ts\" \"npm run dev --workspace web\"",
-    "lint": "npm run lint --workspace server && npm run lint --workspace web",
+    "dev": "concurrently -n gateway,admin -c cyan,magenta \"tsx watch server/src/index.ts\" \"npm run dev --workspace @codex-router/web\"",
+    "lint": "npm run lint --workspace server && npm run lint --workspace @codex-router/web",
     "hash:main-auth": "node scripts/hash-main-auth.mjs",
     "start": "node server/dist/index.js",
-    "test": "npm run test --workspace server && npm run test --workspace web",
+    "test": "npm run test --workspace server && npm run test --workspace @codex-router/web",
     "test:e2e": "npm run test:e2e --workspace server"
   },
   "engines": {
@@ -24,7 +24,7 @@
     "@types/node": "^26.2.0",
     "concurrently": "^10.0.4",
     "tsx": "^4.23.11",
-    "typescript": "^7.0.2",
+    "typescript": "~6.0.3",
     "vitest": "^4.1.10"
   }
 }

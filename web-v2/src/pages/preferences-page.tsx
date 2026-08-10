@@ -51,7 +51,7 @@ export function PreferencesPage({ snapshot, service, reload, onThemeChange }: {
     <section className="flex max-w-4xl flex-col gap-5">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">偏好设置</h1>
-        <p className="mt-1 text-sm text-muted-foreground">管理管理界面的外观与允许记录的诊断元数据。</p>
+        <p className="mt-1 text-sm text-muted-foreground">管理界面的外观与允许记录的诊断元数据。</p>
       </div>
       <Card>
         <CardHeader>
