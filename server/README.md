@@ -1,4 +1,12 @@
-# @aurora0201/codex-router
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/Aurora0201/codex-router/main/assets/branding/codex-router-logo-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/Aurora0201/codex-router/main/assets/branding/codex-router-logo.png">
+    <img alt="Codex Router" src="https://raw.githubusercontent.com/Aurora0201/codex-router/main/assets/branding/codex-router-logo.png" width="680">
+  </picture>
+</p>
+
+<h1 align="center">@aurora0201/codex-router</h1>
 
 Codex Router is a loopback-only account router and transparent proxy for Codex CLI. The package includes the gateway CLI and its local administration UI.
 
