@@ -133,9 +133,6 @@ export async function buildGateway(overrides: Partial<GatewayConfig> = {}): Prom
     app.get("/admin", async (_request, reply) => reply.code(503).send({ error: "admin_ui_not_built", hint: "Run npm run build" }));
   }
 
-  app.get("/admin-v2", async (_request, reply) => reply.redirect("/admin/"));
-  app.get("/admin-v2/", async (_request, reply) => reply.redirect("/admin/"));
-
   let closed = false;
   app.addHook("onClose", async () => {
     if (closed) return;

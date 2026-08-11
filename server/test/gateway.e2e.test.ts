@@ -56,9 +56,9 @@ function streamRequest(url: string, body: Buffer, headers: Record<string, string
 beforeAll(async () => {
   process.env.GATEWAY_LOG_LEVEL = "silent";
   root = await mkdtemp(path.join(os.tmpdir(), "codex-router-e2e-"));
-  webDir = path.join(root, "web-v2");
+  webDir = path.join(root, "web");
   await mkdir(webDir, { recursive: true });
-  await writeFile(path.join(webDir, "index.html"), "<h1>admin-web-v2</h1>");
+  await writeFile(path.join(webDir, "index.html"), "<h1>admin-web</h1>");
   wsServer = new WebSocketServer({ noServer: true });
   wsServer.on("headers", (headers) => headers.push("x-models-etag: mock-etag", "x-reasoning-included: true", "openai-model: mock-codex"));
   wsServer.on("connection", (socket, request) => {
@@ -395,16 +395,16 @@ describe("security and admin API", () => {
     expect(item?.requestId).not.toBe("caller-controlled");
   });
 
-  it("serves web-v2 from the canonical admin entrypoint", async () => {
+  it("serves the admin UI only from the canonical entrypoint", async () => {
     const redirect = await gateway.app.inject({ method: "GET", url: "/admin" });
     expect(redirect.statusCode).toBe(302);
     expect(redirect.headers.location).toBe("/admin/");
-    expect((await gateway.app.inject({ method: "GET", url: "/admin/" })).body).toContain("admin-web-v2");
+    expect((await gateway.app.inject({ method: "GET", url: "/admin/" })).body).toContain("admin-web");
 
     for (const legacyUrl of ["/admin-v2", "/admin-v2/"]) {
       const legacy = await gateway.app.inject({ method: "GET", url: legacyUrl });
-      expect(legacy.statusCode).toBe(302);
-      expect(legacy.headers.location).toBe("/admin/");
+      expect(legacy.statusCode).toBe(404);
+      expect(legacy.headers.location).toBeUndefined();
     }
   });
 
@@ -418,7 +418,7 @@ describe("security and admin API", () => {
       webDistDir: missing,
     });
     expect((await withoutUi.app.inject({ method: "GET", url: "/admin" })).statusCode).toBe(503);
-    expect((await withoutUi.app.inject({ method: "GET", url: "/admin-v2" })).headers.location).toBe("/admin/");
+    expect((await withoutUi.app.inject({ method: "GET", url: "/admin-v2" })).statusCode).toBe(404);
     await withoutUi.app.close();
   });
 
