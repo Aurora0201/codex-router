@@ -6,6 +6,7 @@ import { createRequire } from "node:module";
 import net from "node:net";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import select from "@inquirer/select";
 import { Command } from "commander";
 import { startGateway } from "./index.js";
 import { BACKUP_NAME, CodexConfigService, type CodexConfigStatus } from "./codex/codex-config.js";
@@ -38,6 +39,10 @@ function parsePortOption(value: string | undefined): number | undefined {
 
 function resolveHostPort(host: string | undefined, port: string | undefined): { host: string; port: number } {
   return { host: host ?? DEFAULT_HOST, port: parsePortOption(port) ?? DEFAULT_PORT };
+}
+
+function gatewayBaseUrl(host: string, port: number): string {
+  return `http://${host.includes(":") ? `[${host}]` : host}:${port}`;
 }
 
 function out(text = ""): void {
@@ -201,15 +206,6 @@ function paint(enabled: boolean, color: keyof typeof ANSI, text: string): string
   return enabled ? `${ANSI[color]}${text}${ANSI.reset}` : text;
 }
 
-function formatUptime(totalSeconds: number): string {
-  const h = Math.floor(totalSeconds / 3600);
-  const m = Math.floor((totalSeconds % 3600) / 60);
-  const s = totalSeconds % 60;
-  if (h > 0) return `${h}h ${m}m ${s}s`;
-  if (m > 0) return `${m}m ${s}s`;
-  return `${s}s`;
-}
-
 function openDatabase(dataDir: string): GatewayDatabase | null {
   const databasePath = path.join(dataDir, "gateway.db");
   try {
@@ -218,24 +214,6 @@ function openDatabase(dataDir: string): GatewayDatabase | null {
   } catch {
     return null;
   }
-}
-
-function accountSymbol(status: string, color: boolean): string {
-  switch (status) {
-    case "ready": return paint(color, "green", "✔");
-    case "rate_limited": return paint(color, "yellow", "⚠");
-    case "relogin_required":
-    case "login_pending":
-    case "refreshing": return paint(color, "yellow", "◌");
-    default: return paint(color, "red", "✖");
-  }
-}
-
-function summarizeAccounts(accounts: { authStatus: string }[]): string {
-  const counts = new Map<string, number>();
-  for (const account of accounts) counts.set(account.authStatus, (counts.get(account.authStatus) ?? 0) + 1);
-  const parts = [...counts.entries()].map(([status, count]) => `${count} ${status}`);
-  return parts.length > 0 ? parts.join(" · ") : "0 accounts";
 }
 
 function shortAccountId(id: string): string {
@@ -254,12 +232,31 @@ function quotaBar(percent: number, width = 10): string {
   return `[${"█".repeat(filled)}${"░".repeat(width - filled)}]`;
 }
 
-function formatQuota(window?: UsageWindow | null): string {
-  if (!window || window.windowDurationMins == null) return "—";
+function formatQuota(window?: UsageWindow | null, cached = false): string {
+  if (!window || window.windowDurationMins == null) return `quota ${quotaBar(0)} —${cached ? " (cached)" : ""}`;
   const label = windowLabel(window.windowDurationMins);
-  if (window.usedPercent == null) return `${label} ${quotaBar(0)} —`;
+  if (window.usedPercent == null) return `${label} ${quotaBar(0)} —${cached ? " (cached)" : ""}`;
   const remaining = Math.max(0, Math.min(100, 100 - window.usedPercent));
-  return `${label} ${quotaBar(remaining)} ${remaining}% left`;
+  return `${label} ${quotaBar(remaining)} ${remaining}% remaining${cached ? " (cached)" : ""}`;
+}
+
+function formatQuotaDetail(window?: UsageWindow | null, cached = false): string {
+  const label = window?.windowDurationMins == null ? "Quota" : windowLabel(window.windowDurationMins);
+  const remaining = window?.usedPercent == null ? null : Math.max(0, Math.min(100, 100 - window.usedPercent));
+  return `${label.padEnd(8)} ${quotaBar(remaining ?? 0)} ${remaining == null ? "—" : `${remaining}% remaining`}${cached ? " (cached)" : ""}`;
+}
+
+function formatUptime(totalSeconds: number): string {
+  const days = Math.floor(totalSeconds / 86_400);
+  const hours = Math.floor((totalSeconds % 86_400) / 3_600);
+  const minutes = Math.floor((totalSeconds % 3_600) / 60);
+  const seconds = totalSeconds % 60;
+  return [
+    days > 0 ? `${days}d` : null,
+    hours > 0 ? `${hours}h` : null,
+    minutes > 0 ? `${minutes}m` : null,
+    days === 0 && hours === 0 && minutes === 0 ? `${seconds}s` : null,
+  ].filter(Boolean).join(" ");
 }
 
 interface StatusOptions {
@@ -269,8 +266,8 @@ interface StatusOptions {
 }
 
 interface HealthPayload {
+  csrfToken?: string;
   version?: string;
-  accounts?: number;
   uptime?: number;
   pid?: number;
   dataDir?: string;
@@ -291,6 +288,8 @@ interface AccountSummary {
   id: string;
   email?: string | null;
   planType?: string | null;
+  enabled?: boolean;
+  isActive?: boolean;
   authStatus: string;
   usage?: RemoteUsage | null;
 }
@@ -323,7 +322,7 @@ async function actionStatus(options: StatusOptions): Promise<void> {
 
   let health: HealthPayload | null = null;
   try {
-    const response = await fetch(`http://${host}:${port}/api/health`, { signal: AbortSignal.timeout(2000) });
+    const response = await fetch(`${gatewayBaseUrl(host, port)}/api/health`, { signal: AbortSignal.timeout(2000) });
     if (response.ok) health = (await response.json()) as HealthPayload;
   } catch {
     health = null;
@@ -333,7 +332,7 @@ async function actionStatus(options: StatusOptions): Promise<void> {
   let remoteActiveId: string | null = null;
   if (health) {
     try {
-      const response = await fetch(`http://${host}:${port}/api/accounts`, { signal: AbortSignal.timeout(2000) });
+      const response = await fetch(`${gatewayBaseUrl(host, port)}/api/accounts`, { signal: AbortSignal.timeout(2000) });
       if (response.ok) {
         const body = (await response.json()) as { activeAccountId: string | null; accounts: AccountSummary[] };
         remoteAccounts = body.accounts;
@@ -344,9 +343,6 @@ async function actionStatus(options: StatusOptions): Promise<void> {
     }
   }
 
-  const pid = health?.pid ?? (await readPidFile(dataDir));
-  const effectiveDataDir = health?.dataDir ?? dataDir;
-
   let config: CodexConfigStatus | null = null;
   try {
     config = await new CodexConfigService().status(host, port);
@@ -354,71 +350,178 @@ async function actionStatus(options: StatusOptions): Promise<void> {
     config = null;
   }
 
-  const database = remoteAccounts ? null : openDatabase(dataDir);
+  const database = remoteAccounts ? null : openDatabase(health?.dataDir ?? dataDir);
   const accounts: AccountSummary[] = remoteAccounts ?? (database?.accounts.list() ?? []).map(fromAccountRecord);
   const activeAccountId = remoteActiveId ?? database?.getActiveAccountId() ?? null;
   database?.close();
 
   if (health) {
-    out(`${paint(color, "green", "●")} codex-router — running (v${health.version ?? "?"})`);
+    out(`${paint(color, "green", "●")} codex-router — running${health.version ? ` · v${health.version}` : ""}`);
   } else {
     out(`${paint(color, "yellow", "○")} codex-router — not running`);
   }
   out("│");
-  out(`│  url      : http://${host}:${port}`);
-  out(`│  admin    : http://${host}:${port}/admin`);
-  if (health) {
-    out(`│  pid      : ${pid ?? "?"}`);
-    out(`│  uptime   : ${formatUptime(health.uptime ?? 0)}`);
-    out(`│  data     : ${effectiveDataDir}`);
-  }
-  out("│");
-
-  const activeAccount = accounts.find((account) => account.id === activeAccountId) ?? null;
-  if (health && activeAccount) {
-    out(`├─ quota · active ${shortAccountId(activeAccount.id)}`);
-    out(`│  ${formatQuota(activeAccount.usage?.primary)}`);
-    out(`│  ${formatQuota(activeAccount.usage?.secondary)}`);
-    out("│");
-  }
-
-  out("├─ config");
+  out("├─ Gateway");
+  out(`│  ├─ Admin    ${gatewayBaseUrl(host, port)}/admin`);
+  out(`│  ├─ PID      ${health?.pid ?? (await readPidFile(dataDir)) ?? "—"}`);
+  out(`│  ├─ Uptime   ${health ? formatUptime(health.uptime ?? 0) : "—"}`);
+  out(`│  ├─ Data     ${health?.dataDir ?? dataDir}`);
   if (config) {
     const injected = config.applied && config.openaiBaseUrl === config.gatewayBaseUrl;
-    out(`│  │  config path : ${config.configPath}`);
-    out(`│  │  gateway url : ${config.gatewayBaseUrl}`);
-    if (injected) {
-      out(`│  │  injected    : ${paint(color, "green", "✓")} (openai_base_url → gateway)`);
+    out(`│  └─ Config   ${injected ? `${paint(color, "green", "✓")} injected` : `${paint(color, "yellow", "○")} not injected`}`);
+  } else {
+    out("│  └─ Config   — unavailable");
+  }
+  out("│");
+  out("└─ Account");
+
+  const activeAccount = accounts.find((account) => account.id === activeAccountId) ?? null;
+  if (activeAccount) {
+    const cached = remoteAccounts === null;
+    const identity = activeAccount.email ?? shortAccountId(activeAccount.id);
+    const details = [activeAccount.planType, activeAccount.email ? shortAccountId(activeAccount.id) : null].filter(Boolean).join(" · ");
+    out(`   ├─ Current  ${identity}${details ? ` · ${details}` : ""}${cached ? " (cached)" : ""}`);
+    out(`   ├─ ${formatQuotaDetail(activeAccount.usage?.primary, cached)}`);
+    out(`   └─ ${formatQuotaDetail(activeAccount.usage?.secondary, cached)}`);
+  } else {
+    out("   └─ Current  none");
+  }
+
+  if (!health || remoteAccounts === null) process.exitCode = 1;
+}
+
+// --- account --------------------------------------------------------------
+
+interface AccountOptions {
+  host?: string;
+  port?: string;
+}
+
+interface GatewaySession {
+  baseUrl: string;
+  csrfToken: string;
+  cookie: string;
+}
+
+function accountUnavailableReason(account: AccountSummary): string | undefined {
+  switch (account.authStatus) {
+    case "ready": return account.enabled === false ? "disabled" : undefined;
+    case "relogin_required": return "login required";
+    case "unsupported_fedramp": return "FedRAMP accounts are not supported";
+    case "login_pending": return "login pending";
+    case "refreshing": return "credentials refreshing";
+    case "rate_limited": return "rate limited";
+    default: return `unavailable (${account.authStatus})`;
+  }
+}
+
+export function accountChoices(accounts: AccountSummary[]) {
+  return accounts.map((account) => {
+    const identity = account.email ?? shortAccountId(account.id);
+    const plan = account.planType ? ` · ${account.planType}` : "";
+    const id = account.email ? ` · ${shortAccountId(account.id)}` : "";
+    const active = account.isActive ? " · current" : "";
+    return {
+      value: account.id,
+      name: `${identity}${plan}${id}${active}`,
+      short: identity,
+      description: `${formatQuota(account.usage?.primary)} · ${formatQuota(account.usage?.secondary)}`,
+      disabled: accountUnavailableReason(account),
+    };
+  });
+}
+
+async function readError(response: Response): Promise<string> {
+  const payload = await response.json().catch(() => ({})) as { error?: unknown };
+  return typeof payload.error === "string" ? payload.error : `request_failed_${response.status}`;
+}
+
+async function openGatewaySession(host: string, port: number): Promise<GatewaySession> {
+  const baseUrl = gatewayBaseUrl(host, port);
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl}/api/health`, { signal: AbortSignal.timeout(2000) });
+  } catch {
+    throw new Error("gateway_not_running");
+  }
+  if (!response.ok) throw new Error(await readError(response));
+  const health = await response.json() as HealthPayload;
+  const cookie = response.headers.get("set-cookie")?.split(";", 1)[0];
+  if (!health.csrfToken || !cookie) throw new Error("gateway_csrf_unavailable");
+  return { baseUrl, csrfToken: health.csrfToken, cookie };
+}
+
+async function fetchAccounts(session: GatewaySession): Promise<{ activeAccountId: string | null; accounts: AccountSummary[] }> {
+  const response = await fetch(`${session.baseUrl}/api/accounts`, { signal: AbortSignal.timeout(2000) });
+  if (!response.ok) throw new Error(await readError(response));
+  return response.json() as Promise<{ activeAccountId: string | null; accounts: AccountSummary[] }>;
+}
+
+async function setActiveAccount(session: GatewaySession, accountId: string): Promise<AccountSummary> {
+  const response = await fetch(`${session.baseUrl}/api/active-account`, {
+    method: "PUT",
+    signal: AbortSignal.timeout(5000),
+    headers: {
+      "content-type": "application/json",
+      "cookie": session.cookie,
+      "origin": session.baseUrl,
+      "x-csrf-token": session.csrfToken,
+    },
+    body: JSON.stringify({ id: accountId }),
+  });
+  if (!response.ok) throw new Error(await readError(response));
+  return response.json() as Promise<AccountSummary>;
+}
+
+async function actionAccount(accountId: string | undefined, options: AccountOptions): Promise<void> {
+  const { host, port } = resolveHostPort(options.host, options.port);
+  try {
+    const session = await openGatewaySession(host, port);
+    const snapshot = await fetchAccounts(session);
+    if (snapshot.accounts.length === 0) throw new Error("no_accounts");
+
+    let selectedId = accountId;
+    if (!selectedId) {
+      if (!process.stdin.isTTY || !process.stdout.isTTY) throw new Error("interactive_terminal_required");
+      const defaultAccount = snapshot.accounts.find(
+        (account) => account.id === snapshot.activeAccountId && accountUnavailableReason(account) === undefined,
+      );
+      selectedId = await select({
+        message: "Select current account",
+        choices: accountChoices(snapshot.accounts),
+        default: defaultAccount?.id,
+        pageSize: Math.min(Math.max(snapshot.accounts.length, 7), 15),
+        loop: false,
+      });
+    }
+
+    const selected = snapshot.accounts.find((account) => account.id === selectedId);
+    if (!selected) throw new Error("account_not_found");
+    const unavailable = accountUnavailableReason(selected);
+    if (unavailable) throw new Error(`account_unavailable: ${unavailable}`);
+    if (selectedId === snapshot.activeAccountId) {
+      out(`[codex-router] ${selected.email ?? shortAccountId(selected.id)} is already the current account`);
+      return;
+    }
+
+    const updated = await setActiveAccount(session, selectedId);
+    const identity = updated.email ?? shortAccountId(updated.id);
+    const details = [updated.planType ?? "unknown plan", updated.email ? shortAccountId(updated.id) : null].filter(Boolean).join(" · ");
+    out(`[codex-router] current account: ${identity} · ${details}`);
+  } catch (error) {
+    if ((error as Error).name === "ExitPromptError") {
+      err("[codex-router] account selection cancelled");
+      process.exitCode = 130;
+      return;
+    }
+    const message = (error as Error).message;
+    if (message === "interactive_terminal_required") {
+      err("[codex-router] an interactive terminal is required; use `codex-router account <account-id>` in scripts");
+    } else if (message === "gateway_not_running") {
+      err(`[codex-router] gateway is not running at ${gatewayBaseUrl(host, port)}`);
     } else {
-      out(`│  │  injected    : ${paint(color, "red", "✗")} (openai_base_url → ${config.openaiBaseUrl ?? "(not set)"})`);
+      err(`[codex-router] account switch failed: ${message}`);
     }
-    out(`│  │  backup      : ${config.hasBackup ? paint(color, "green", "✓") : paint(color, "yellow", "—")}`);
-    out(`│  └─ manage: codex-router config apply | restore`);
-  } else {
-    out(`│  └─ (unavailable)`);
-  }
-  out("│");
-
-  out(`├─ accounts (${accounts.length})`);
-  if (accounts.length === 0) {
-    out(`│  └─ (no accounts)`);
-  } else {
-    for (const account of accounts) {
-      const active = account.id === activeAccountId;
-      const marker = active ? paint(color, "green", "●") : paint(color, "cyan", "○");
-      const symbol = accountSymbol(account.authStatus, color);
-      const tag = active ? "  [active]" : "";
-      const plan = (account.planType ?? "").padEnd(6);
-      out(`│  ├─ ${marker} ${shortAccountId(account.id).padEnd(10)} ${(account.email ?? "-").padEnd(24)} ${plan}${symbol}${tag}`);
-    }
-    out(`│  └─ ${summarizeAccounts(accounts)}`);
-  }
-  out("│");
-
-  if (health) {
-    out(`└─ healthy`);
-  } else {
-    out(`└─ start it with ${paint(color, "cyan", "`codex-router start`")}`);
     process.exitCode = 1;
   }
 }
@@ -643,11 +746,18 @@ export function createProgram(): Command {
 
   program
     .command("status")
-    .description("Show gateway, config and account status")
+    .description("Show the gateway state, current account and remaining quota")
     .option("--host <host>", "gateway host", DEFAULT_HOST)
     .option("--port <number>", "gateway port", String(DEFAULT_PORT))
     .option("--data-dir <path>", "data directory")
     .action(actionStatus);
+
+  program
+    .command("account [account-id]")
+    .description("Select the current account (interactive when no account ID is provided)")
+    .option("--host <host>", "gateway host", DEFAULT_HOST)
+    .option("--port <number>", "gateway port", String(DEFAULT_PORT))
+    .action(actionAccount);
 
   program
     .command("stop")
