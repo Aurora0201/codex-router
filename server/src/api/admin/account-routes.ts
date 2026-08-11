@@ -19,16 +19,24 @@ export function registerAccountRoutes(app: FastifyInstance, ctx: AdminContext): 
       await reply.code(400).send({ error: "invalid_account_patch" });
       return;
     }
-    await apiAction(reply, () => toAccountView(ctx.accounts.setEnabled(request.params.id, enabled), ctx.database.getActiveAccountId()));
+    await apiAction(reply, () => {
+      const result = toAccountView(ctx.accounts.setEnabled(request.params.id, enabled), ctx.database.getActiveAccountId());
+      ctx.events.invalidate("accounts", "stats");
+      return result;
+    });
   });
 
   app.delete<{ Params: { id: string } }>("/api/accounts/:id", { preHandler: protect }, async (request, reply) => {
-    await apiAction(reply, () => ctx.accounts.remove(request.params.id));
+    await apiAction(reply, async () => {
+      await ctx.accounts.remove(request.params.id);
+      ctx.events.invalidate("accounts", "stats");
+    });
   });
 
   app.post<{ Params: { id: string } }>("/api/accounts/:id/refresh-auth", { preHandler: protect }, async (request, reply) => {
     await apiAction(reply, async () => {
       await ctx.auth.refresh(request.params.id);
+      ctx.events.invalidate("accounts", "stats");
       return toAccountView(ctx.accounts.get(request.params.id), ctx.database.getActiveAccountId());
     });
   });
@@ -36,6 +44,7 @@ export function registerAccountRoutes(app: FastifyInstance, ctx: AdminContext): 
   app.post<{ Params: { id: string } }>("/api/accounts/:id/refresh-limits", { preHandler: protect }, async (request, reply) => {
     await apiAction(reply, async () => {
       await ctx.usage.refresh(request.params.id);
+      ctx.events.invalidate("accounts");
       return toAccountView(ctx.accounts.get(request.params.id), ctx.database.getActiveAccountId());
     });
   });

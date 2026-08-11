@@ -2,7 +2,8 @@ import type Database from "better-sqlite3";
 
 type SqliteDatabase = Database.Database;
 
-const ALLOWED_KEYS = new Set(["requestMetadataLogging", "theme"]);
+export const LOG_LEVELS = ["debug", "info", "warn", "error"] as const;
+const ALLOWED_KEYS = new Set(["requestMetadataLogging", "theme", "logLevel"]);
 
 export class SettingsRepository {
   constructor(private readonly db: SqliteDatabase) {}
@@ -19,6 +20,7 @@ export class SettingsRepository {
         if (!ALLOWED_KEYS.has(key)) throw new Error("unsupported_setting");
         if (key === "requestMetadataLogging" && typeof value !== "boolean") throw new Error("invalid_setting");
         if (key === "theme" && !["system", "light", "dark"].includes(String(value))) throw new Error("invalid_setting");
+        if (key === "logLevel" && !LOG_LEVELS.includes(value as (typeof LOG_LEVELS)[number])) throw new Error("invalid_setting");
         statement.run(key, JSON.stringify(value));
       }
     })();

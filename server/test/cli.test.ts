@@ -4,8 +4,9 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createProgram, isEntryScript, isPortFree, startOverrides } from "../src/cli.js";
+import { createProgram, isEntryScript, isPortFree, restartOptions, startOverrides, stopManagedGateway } from "../src/cli.js";
 import { GatewayDatabase } from "../src/db/database.js";
+import { launchMetadataPath, parseLaunchMetadata, readLaunchMetadata, writeLaunchMetadata } from "../src/launch-metadata.js";
 
 const temporary: string[] = [];
 
@@ -42,6 +43,101 @@ describe("startOverrides", () => {
       dataDir: path.resolve("x"),
       upstreamBaseUrl: "https://u",
     });
+  });
+});
+
+describe("restart launch metadata", () => {
+  it("round-trips versioned background start options", async () => {
+    const dataDir = await tempDir();
+    const logFile = path.join(dataDir, "logs", "custom.log");
+    const metadata = {
+      version: 1 as const,
+      host: "::1" as const,
+      port: 9444,
+      dataDir,
+      upstream: "https://example.test/backend-api/codex",
+      dev: true,
+      logLevel: "debug",
+      logFile,
+    };
+    await writeLaunchMetadata(dataDir, metadata);
+    expect(await readLaunchMetadata(dataDir)).toEqual(metadata);
+    expect(launchMetadataPath(dataDir)).toBe(path.join(dataDir, "gateway-start.json"));
+  });
+
+  it("ignores malformed, unknown-version and unexpected metadata", () => {
+    const valid = { version: 1, host: "127.0.0.1", port: 8317, dataDir: path.resolve("data"), upstream: "https://chatgpt.com/backend-api/codex", dev: false, logFile: path.resolve("gateway.log") };
+    expect(parseLaunchMetadata({ ...valid, version: 2 })).toBeNull();
+    expect(parseLaunchMetadata({ ...valid, port: 0 })).toBeNull();
+    expect(parseLaunchMetadata({ ...valid, unexpected: true })).toBeNull();
+    expect(parseLaunchMetadata({ ...valid, upstream: "https://token@example.test" })).toBeNull();
+  });
+
+  it("falls back when the saved metadata file is malformed", async () => {
+    const dataDir = await tempDir();
+    await writeFile(launchMetadataPath(dataDir), "{not-json");
+    expect(await readLaunchMetadata(dataDir)).toBeNull();
+  });
+
+  it("lets explicit restart flags override saved options", () => {
+    const dataDir = path.resolve("restart-data");
+    const saved = {
+      version: 1 as const,
+      host: "127.0.0.1" as const,
+      port: 8317,
+      dataDir,
+      upstream: "https://saved.test/codex",
+      dev: true,
+      logLevel: "info",
+      logFile: path.join(dataDir, "saved.log"),
+    };
+    expect(restartOptions({ port: "9444", logLevel: "warn" }, saved, dataDir)).toEqual({
+      host: "127.0.0.1",
+      port: "9444",
+      dataDir,
+      upstream: "https://saved.test/codex",
+      dev: true,
+      logLevel: "warn",
+      logFile: path.join(dataDir, "saved.log"),
+    });
+  });
+
+  it("registers restart with the background start override flags", () => {
+    const restart = createProgram().commands.find((command) => command.name() === "restart");
+    expect(restart).toBeDefined();
+    expect(restart?.options.map((option) => option.long)).toEqual(expect.arrayContaining(["--host", "--port", "--data-dir", "--upstream", "--dev", "--log-level", "--log-file"]));
+    expect(restart?.description()).toContain("preserving");
+  });
+});
+
+describe("restart stop preparation", () => {
+  it("allows restart to start when there is no pid and the port is free", async () => {
+    const dataDir = await tempDir();
+    expect(await stopManagedGateway({ host: "127.0.0.1", port: "1", dataDir }, true)).toBe(true);
+    expect(process.exitCode).toBe(0);
+  });
+
+  it("cleans a stale pid before restart", async () => {
+    const dataDir = await tempDir();
+    await writeFile(path.join(dataDir, "gateway.pid"), "999999999\n");
+    expect(await stopManagedGateway({ host: "127.0.0.1", port: "1", dataDir }, true)).toBe(true);
+    await expect(access(path.join(dataDir, "gateway.pid"))).rejects.toThrow();
+  });
+
+  it("refuses to restart an unmanaged listener", async () => {
+    const dataDir = await tempDir();
+    const server = http.createServer((_request, response) => {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end('{"status":"ok"}');
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const port = (server.address() as { port: number }).port;
+    try {
+      expect(await stopManagedGateway({ host: "127.0.0.1", port: String(port), dataDir }, true)).toBe(false);
+      expect(process.exitCode).toBe(1);
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
   });
 });
 

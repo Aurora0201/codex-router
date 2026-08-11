@@ -7,7 +7,8 @@ import { AccountAuthService } from "../accounts/account-auth-service.js";
 import { GatewayDatabase } from "../db/database.js";
 import { ActiveAccountService } from "../routing/active-account-service.js";
 import { hasBrowserOrigin } from "../security/origin-guard.js";
-import { IMPORTANT_WS_RESPONSE_HEADERS, websocketUpgradeHeaders } from "./headers.js";
+import { IMPORTANT_WS_RESPONSE_HEADERS, isCompactionRequest, websocketUpgradeHeaders } from "./headers.js";
+import { inspectClientFrame, inspectServerFrame, rawDataBuffer, websocketTerminalOutcome } from "./ws-metadata.js";
 
 const MAX_PENDING_FRAMES = 32;
 const MAX_PENDING_BYTES = 2 * 1024 * 1024;
@@ -33,6 +34,15 @@ interface PreparedConnection {
   upstream: WebSocket;
   account: AccountRecord;
   startedAt: number;
+  transport: "ws" | "compact";
+}
+
+interface PendingRequest {
+  requestId: string;
+  startedAt: number;
+  transport: "ws" | "compact";
+  bytesIn: number;
+  bytesOut: number;
 }
 
 class WebSocketHandshakeError extends Error {
@@ -112,15 +122,18 @@ export async function registerWebSocketProxy(app: FastifyInstance, options: WsPr
         return;
       }
       const startedAt = Date.now();
+      const transport = isCompactionRequest(request.headers) ? "compact" : "ws";
       const account = options.activeAccounts.get();
       if (!account) {
         options.database.requestLog.log({
           requestId: request.id,
           route: "/responses",
-          transport: "ws",
+          transport,
           statusCode: 503,
           durationMs: Date.now() - startedAt,
           errorCode: "no_active_account_selected",
+          outcome: "gateway_error",
+          scope: "connection",
         });
         await reply.code(503).send({ error: "no_active_account_selected" });
         return;
@@ -129,10 +142,12 @@ export async function registerWebSocketProxy(app: FastifyInstance, options: WsPr
         options.database.requestLog.log({
           requestId: request.id,
           route: "/responses",
-          transport: "ws",
+          transport,
           statusCode: 409,
           durationMs: Date.now() - startedAt,
           errorCode: "fedramp_accounts_not_supported",
+          outcome: "gateway_error",
+          scope: "connection",
         });
         await reply.code(409).send({ error: "fedramp_accounts_not_supported" });
         return;
@@ -141,19 +156,22 @@ export async function registerWebSocketProxy(app: FastifyInstance, options: WsPr
         const connection = await connectWithAuthRetry(options, request, account);
         upgradeHeaders.set(request.raw, connection.responseHeaders);
         for (const [name, value] of Object.entries(connection.responseHeaders)) reply.header(name, value);
-        prepared.set(request, { upstream: connection.socket, account, startedAt });
+        prepared.set(request, { upstream: connection.socket, account, startedAt, transport });
       } catch (error) {
         const status = error instanceof WebSocketHandshakeError ? error.statusCode : 502;
+        const errorCode = error instanceof WebSocketHandshakeError ? error.message : "upstream_websocket_handshake_failed";
         options.database.requestLog.log({
           requestId: request.id,
           route: "/responses",
-          transport: "ws",
+          transport,
           accountId: account.id,
           statusCode: status,
           durationMs: Date.now() - startedAt,
-          errorCode: (error as Error).message,
+          errorCode,
+          outcome: "upstream_error",
+          scope: "connection",
         });
-        await reply.code(status).send({ error: (error as Error).message });
+        await reply.code(status).send({ error: errorCode });
       }
     },
   }, (client, request) => {
@@ -168,6 +186,28 @@ export async function registerWebSocketProxy(app: FastifyInstance, options: WsPr
     const pending: { data: RawData; isBinary: boolean; size: number }[] = [];
     let pendingBytes = 0;
     let closed = false;
+    let requestSequence = 0;
+    const pendingRequests: PendingRequest[] = [];
+
+    const finishRequest = (pendingRequest: PendingRequest, outcome: "success" | "rejected" | "upstream_error" | "client_cancelled", errorCode?: string) => {
+      options.database.requestLog.log({
+        requestId: pendingRequest.requestId,
+        route: "/responses",
+        transport: pendingRequest.transport,
+        accountId: context.account.id,
+        statusCode: outcome === "success" ? 200 : undefined,
+        durationMs: Date.now() - pendingRequest.startedAt,
+        bytesIn: pendingRequest.bytesIn,
+        bytesOut: pendingRequest.bytesOut,
+        errorCode,
+        outcome,
+        scope: "request",
+      });
+    };
+
+    const finishPending = (outcome: "upstream_error" | "client_cancelled", errorCode: string) => {
+      for (const pendingRequest of pendingRequests.splice(0)) finishRequest(pendingRequest, outcome, errorCode);
+    };
 
     const closeOnce = (statusCode: number, errorCode?: string) => {
       if (closed) return;
@@ -175,11 +215,13 @@ export async function registerWebSocketProxy(app: FastifyInstance, options: WsPr
       options.database.requestLog.log({
         requestId: request.id,
         route: "/responses",
-        transport: "ws",
+        transport: context.transport,
         accountId: context.account.id,
         statusCode,
         durationMs: Date.now() - context.startedAt,
         errorCode,
+        outcome: errorCode?.startsWith("upstream_") ? "upstream_error" : errorCode === "client_websocket_error" ? "client_cancelled" : "success",
+        scope: "connection",
       });
     };
 
@@ -199,16 +241,28 @@ export async function registerWebSocketProxy(app: FastifyInstance, options: WsPr
 
     // These handlers are deliberately installed synchronously before any await.
     client.on("message", (data, isBinary) => {
+      const metadata = inspectClientFrame(data, isBinary);
+      if (metadata?.type === "response.create" && metadata.generate !== false && pendingRequests.length < MAX_PENDING_FRAMES) {
+        pendingRequests.push({
+          requestId: `${request.id}:${++requestSequence}`,
+          startedAt: Date.now(),
+          transport: metadata.requestKind === "compaction" ? "compact" : "ws",
+          bytesIn: rawDataBuffer(data).byteLength,
+          bytesOut: 0,
+        });
+      }
       forwardOrQueue(data, isBinary);
     });
     client.on("close", (code, reason) => {
       if (context.upstream.readyState === WebSocket.OPEN || context.upstream.readyState === WebSocket.CONNECTING) {
         closePeer(context.upstream, code, reason);
       }
+      finishPending("client_cancelled", "client_cancelled");
       closeOnce(101, `client_close_${code}`);
     });
     client.on("error", () => {
       context.upstream.terminate();
+      finishPending("client_cancelled", "client_websocket_error");
       closeOnce(502, "client_websocket_error");
     });
     client.on("ping", (data) => {
@@ -223,14 +277,26 @@ export async function registerWebSocketProxy(app: FastifyInstance, options: WsPr
       pendingBytes = 0;
     });
     context.upstream.on("message", (data, isBinary) => {
+      const pendingRequest = pendingRequests[0];
+      if (pendingRequest) {
+        pendingRequest.bytesOut += rawDataBuffer(data).byteLength;
+        const metadata = inspectServerFrame(data, isBinary);
+        const terminal = metadata && websocketTerminalOutcome(metadata);
+        if (terminal) {
+          pendingRequests.shift();
+          finishRequest(pendingRequest, terminal.outcome, terminal.errorCode);
+        }
+      }
       if (client.readyState === WebSocket.OPEN) client.send(data, { binary: isBinary });
     });
     context.upstream.on("close", (code, reason) => {
       if (client.readyState === WebSocket.OPEN || client.readyState === WebSocket.CONNECTING) closePeer(client, code, reason);
+      finishPending("upstream_error", "upstream_connection_closed");
       closeOnce(101, `upstream_close_${code}`);
     });
     context.upstream.on("error", () => {
       if (client.readyState === WebSocket.OPEN) client.close(1011, "upstream_error");
+      finishPending("upstream_error", "upstream_websocket_error");
       closeOnce(502, "upstream_websocket_error");
     });
     context.upstream.on("ping", (data) => {

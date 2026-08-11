@@ -53,7 +53,7 @@ async function readDirSafe(dir: string): Promise<string[]> {
 export async function codexRunning(): Promise<boolean> {
   try {
     if (process.platform === "win32") {
-      const { stdout } = await execFileAsync("tasklist", ["/FI", "IMAGENAME eq codex.exe", "/NH"]);
+      const { stdout } = await execFileAsync("tasklist", ["/FI", "IMAGENAME eq codex.exe", "/NH"], { windowsHide: true });
       return stdout.includes("codex.exe");
     }
     const { stdout } = await execFileAsync("pgrep", ["-x", "codex"]);
@@ -75,12 +75,44 @@ export async function restartCodex(): Promise<CodexProcessStatus> {
 async function killCodex(): Promise<void> {
   try {
     if (process.platform === "win32") {
-      await execFileAsync("taskkill", ["/IM", "codex.exe", "/F"]).catch(() => undefined);
+      await execFileAsync("taskkill", ["/IM", "codex.exe", "/F"], { windowsHide: true }).catch(() => undefined);
     } else {
       await execFileAsync("pkill", ["-x", "codex"]).catch(() => undefined);
     }
   } catch {
     // No matching process is fine.
+  }
+}
+
+export class CodexProcessMonitor {
+  private running = false;
+  private initialized = false;
+  private timer: NodeJS.Timeout | null = null;
+
+  constructor(private readonly onChange: () => void) {}
+
+  async start(): Promise<void> {
+    await this.refresh();
+    this.timer = setInterval(() => void this.refresh(), 5_000);
+    this.timer.unref();
+  }
+
+  isRunning(): boolean {
+    return this.running;
+  }
+
+  close(): void {
+    if (this.timer) clearInterval(this.timer);
+    this.timer = null;
+  }
+
+  async refresh(): Promise<boolean> {
+    const next = await codexRunning();
+    const changed = this.initialized && next !== this.running;
+    this.running = next;
+    this.initialized = true;
+    if (changed) this.onChange();
+    return next;
   }
 }
 

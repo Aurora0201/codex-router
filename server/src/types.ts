@@ -9,6 +9,8 @@ export type AuthStatus =
   | "error";
 
 export type Transport = "http" | "ws" | "compact" | "models" | "search";
+export type RequestOutcome = "success" | "rejected" | "upstream_error" | "gateway_error" | "client_cancelled";
+export type RequestScope = "request" | "connection";
 
 export interface AccountRecord {
   id: string;
@@ -63,6 +65,7 @@ export interface GatewayConfig {
   accountsDir: string;
   loginStagingDir: string;
   databasePath: string;
+  logFilePath: string | null;
   webDistDir: string;
   codexCliPath: string;
   codexCliArgs: string[];

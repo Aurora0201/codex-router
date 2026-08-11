@@ -2,13 +2,14 @@ import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { request as undiciRequest, type Dispatcher } from "undici";
+import type { AccountRecord } from "../types.js";
 import type { Transport } from "../types.js";
 import { AccountAuthService } from "../accounts/account-auth-service.js";
 import { AccountUsageService } from "../accounts/account-usage-service.js";
 import { GatewayDatabase } from "../db/database.js";
 import { ActiveAccountService } from "../routing/active-account-service.js";
 import { hasBrowserOrigin } from "../security/origin-guard.js";
-import { buildUpstreamHeaders, copyResponseHeaders } from "./headers.js";
+import { buildUpstreamHeaders, copyResponseHeaders, isCompactionRequest } from "./headers.js";
 
 export type ProxyPath = "/responses" | "/responses/compact" | "/models" | "/alpha/search";
 
@@ -44,17 +45,24 @@ export class HttpProxy {
     }
 
     const startedAt = Date.now();
-    const rawBody = request.method === "GET" ? Buffer.alloc(0) : this.rawBody(request.body);
-    const transport: Transport = path === "/models" ? "models" : path === "/responses/compact" ? "compact" : path === "/alpha/search" ? "search" : "http";
+    let rawBody: Buffer<ArrayBufferLike> = Buffer.alloc(0);
+    const transport: Transport = path === "/models" ? "models" : path === "/responses/compact" || (path === "/responses" && isCompactionRequest(request.headers)) ? "compact" : path === "/alpha/search" ? "search" : "http";
 
+    let selectedAccount: AccountRecord | null = null;
+    let clientCancelled = false;
     try {
+      rawBody = request.method === "GET" ? Buffer.alloc(0) : this.rawBody(request.body);
       const account = this.options.activeAccounts.get();
       if (!account) throw new Error("no_active_account_selected");
+      selectedAccount = account;
       if (account.fedRamp) throw new Error("fedramp_accounts_not_supported");
       let credential = await this.options.auth.getCredential(account.id);
       const controller = new AbortController();
       const abort = () => {
-        if (!reply.raw.writableEnded) controller.abort();
+        if (!reply.raw.writableEnded) {
+          clientCancelled = true;
+          controller.abort();
+        }
       };
       request.raw.once("aborted", abort);
       reply.raw.once("close", abort);
@@ -99,19 +107,33 @@ export class HttpProxy {
         durationMs: Date.now() - startedAt,
         bytesIn: rawBody.byteLength,
         bytesOut,
+        scope: "request",
       });
     } catch (error) {
       const status = errorStatus(error);
+      const rawErrorCode = (error as Error).message;
+      const errorName = (error as Error).name;
+      const errorCauseCode = ((error as Error & { code?: string }).code);
+      const wasClientCancellation = clientCancelled && (rawErrorCode === "This operation was aborted" || errorName === "AbortError" || errorCauseCode === "UND_ERR_ABORTED");
+      const gatewayError = [
+        "no_active_account_selected", "account_disabled", "account_not_ready",
+        "fedramp_accounts_not_supported", "raw_request_body_unavailable",
+      ].includes(rawErrorCode);
+      const errorCode = wasClientCancellation ? "client_cancelled" : gatewayError ? rawErrorCode : "upstream_request_failed";
       this.options.database.requestLog.log({
         requestId: request.id,
         route: path,
         transport,
-        statusCode: status,
+        accountId: selectedAccount?.id,
+        statusCode: wasClientCancellation ? undefined : status,
         durationMs: Date.now() - startedAt,
         bytesIn: rawBody.byteLength,
-        errorCode: (error as Error).message,
+        errorCode,
+        outcome: wasClientCancellation ? "client_cancelled" : gatewayError ? "gateway_error" : "upstream_error",
+        scope: "request",
       });
-      if (!reply.raw.headersSent) await reply.code(status).send({ error: (error as Error).message });
+      if (wasClientCancellation) return;
+      if (!reply.raw.headersSent) await reply.code(status).send({ error: errorCode });
       else reply.raw.destroy(error as Error);
     }
   }

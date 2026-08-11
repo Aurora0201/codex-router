@@ -10,7 +10,11 @@ export function registerAccountLoginRoutes(app: FastifyInstance, ctx: AdminConte
   });
 
   app.get<{ Params: { loginId: string } }>("/api/account-logins/:loginId", async (request, reply) => {
-    await apiAction(reply, () => ctx.logins.getStatus(request.params.loginId));
+    await apiAction(reply, async () => {
+      const result = await ctx.logins.getStatus(request.params.loginId);
+      if (result.status === "complete") ctx.events.invalidate("accounts", "stats");
+      return result;
+    });
   });
 
   app.delete<{ Params: { loginId: string } }>("/api/account-logins/:loginId", { preHandler: protect }, async (request, reply) => {

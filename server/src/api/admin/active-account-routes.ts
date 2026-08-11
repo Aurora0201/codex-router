@@ -18,10 +18,17 @@ export function registerActiveAccountRoutes(app: FastifyInstance, ctx: AdminCont
       await reply.code(400).send({ error: "invalid_active_account" });
       return;
     }
-    await apiAction(reply, () => toAccountView(ctx.activeAccounts.select(id), id));
+    await apiAction(reply, () => {
+      const result = toAccountView(ctx.activeAccounts.select(id), id);
+      ctx.events.invalidate("accounts");
+      return result;
+    });
   });
 
   app.delete("/api/active-account", { preHandler: protect }, async (_request, reply) => {
-    await apiAction(reply, () => ctx.activeAccounts.clear());
+    await apiAction(reply, () => {
+      ctx.activeAccounts.clear();
+      ctx.events.invalidate("accounts");
+    });
   });
 }

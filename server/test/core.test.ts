@@ -11,7 +11,7 @@ import { AccountUsageService } from "../src/accounts/account-usage-service.js";
 import { CredentialReader } from "../src/accounts/credential-reader.js";
 import { loadConfig } from "../src/config.js";
 import { GatewayDatabase } from "../src/db/database.js";
-import { buildUpstreamHeaders } from "../src/proxy/headers.js";
+import { buildUpstreamHeaders, isCompactionRequest } from "../src/proxy/headers.js";
 import { ActiveAccountService } from "../src/routing/active-account-service.js";
 import { parseRateLimitResponse } from "../src/accounts/rate-limit-parser.js";
 import Database from "better-sqlite3";
@@ -107,11 +107,11 @@ describe("security and routing core", () => {
 
   it("parses rate limit responses in both case conventions", () => {
     const camel = parseRateLimitResponse({ rateLimits: { primary: { usedPercent: 63, resetsAt: 1, windowDurationMins: 300 }, secondary: null }, rateLimitReachedType: "unlimited" });
-    expect(camel.primary).toMatchObject({ usedPercent: 63, resetsAt: 1, windowDurationMins: 300 });
+    expect(camel.primary).toMatchObject({ usedPercent: 63, resetsAt: 1000, windowDurationMins: 300 });
     expect(camel.secondary).toBeNull();
     expect(camel.rateLimitReachedType).toBe("unlimited");
     const snake = parseRateLimitResponse({ rate_limits: { primary: { used_percent: 10, resets_at: 2, window_duration_mins: 60 }, secondary: { used_percent: 5 } } });
-    expect(snake.primary).toMatchObject({ usedPercent: 10, resetsAt: 2, windowDurationMins: 60 });
+    expect(snake.primary).toMatchObject({ usedPercent: 10, resetsAt: 2000, windowDurationMins: 60 });
     expect(snake.secondary).toMatchObject({ usedPercent: 5 });
   });
 });
@@ -156,6 +156,142 @@ describe("database migration v2", () => {
     expect(database.accounts.get("legacy-1")!.chatgptAccountId).toBe("acct-upgraded");
     database.setActiveAccountId("legacy-1");
     expect(database.getActiveAccountId()).toBe("legacy-1");
+    database.close();
+  });
+});
+
+describe("schema diagnostics", () => {
+  it("migrates historical reset seconds while preserving millisecond timestamps", async () => {
+    const root = await tempDir();
+    const dbPath = path.join(root, "timestamps.db");
+    const database = new GatewayDatabase(dbPath);
+    database.accounts.insert({ id: "seconds", codexHome: path.join(root, "seconds") });
+    database.accounts.insert({ id: "milliseconds", codexHome: path.join(root, "milliseconds") });
+    database.raw.prepare("UPDATE accounts SET primary_resets_at = ?, secondary_resets_at = ? WHERE id = ?").run(1_786_000_000, null, "seconds");
+    database.raw.prepare("UPDATE accounts SET primary_resets_at = ? WHERE id = ?").run(1_786_000_000_000, "milliseconds");
+    database.raw.prepare("DELETE FROM schema_migrations WHERE version >= 4").run();
+    database.close();
+
+    const migrated = new GatewayDatabase(dbPath);
+    expect(migrated.accounts.get("seconds")?.primaryResetsAt).toBe(1_786_000_000_000);
+    expect(migrated.accounts.get("seconds")?.secondaryResetsAt).toBeNull();
+    expect(migrated.accounts.get("milliseconds")?.primaryResetsAt).toBe(1_786_000_000_000);
+    migrated.close();
+  });
+
+  it("recognizes only bounded Codex compaction metadata", () => {
+    expect(isCompactionRequest({ "x-codex-turn-metadata": JSON.stringify({ request_kind: "compaction" }) })).toBe(true);
+    expect(isCompactionRequest({ "x-codex-turn-metadata": JSON.stringify({ request_kind: "turn" }) })).toBe(false);
+    expect(isCompactionRequest({ "x-codex-turn-metadata": "not-json" })).toBe(false);
+    expect(isCompactionRequest({ "x-codex-turn-metadata": "x".repeat(8 * 1024 + 1) })).toBe(false);
+  });
+
+  it("backfills historical aborts as status-less client cancellations", async () => {
+    const root = await tempDir();
+    const dbPath = path.join(root, "cancelled.db");
+    const database = new GatewayDatabase(dbPath);
+    database.raw.prepare(`
+      INSERT INTO request_log(id, route, transport, status_code, error_code, outcome, scope, created_at)
+      VALUES ('cancelled-old', '/models', 'models', 502, 'This operation was aborted', 'upstream_error', 'request', 1)
+    `).run();
+    database.raw.prepare("DELETE FROM schema_migrations WHERE version >= 6").run();
+    database.close();
+
+    const migrated = new GatewayDatabase(dbPath);
+    const item = migrated.requestLog.query({ since: 0, status: "cancelled", limit: 10 }).items[0];
+    expect(item).toMatchObject({ outcome: "client_cancelled", errorCode: "client_cancelled" });
+    expect(item?.statusCode).toBeUndefined();
+    migrated.close();
+  });
+
+  it("reconciles historical request outcomes from their recorded status", async () => {
+    const root = await tempDir();
+    const dbPath = path.join(root, "outcomes.db");
+    const database = new GatewayDatabase(dbPath);
+    database.raw.prepare(`
+      INSERT INTO request_log(id, route, transport, status_code, outcome, scope, created_at)
+      VALUES ('successful-old', '/responses', 'http', 200, 'upstream_error', 'request', 1)
+    `).run();
+    database.raw.prepare("DELETE FROM schema_migrations WHERE version = 7").run();
+    database.close();
+
+    const migrated = new GatewayDatabase(dbPath);
+    const item = migrated.requestLog.query({ since: 0, status: "success", limit: 10 }).items[0];
+    expect(item).toMatchObject({ statusCode: 200, outcome: "success", scope: "request" });
+    migrated.close();
+  });
+
+  it("filters and summarizes structured request logs without request bodies", async () => {
+    const root = await tempDir();
+    const database = new GatewayDatabase(path.join(root, "logs.db"));
+    database.requestLog.log({ requestId: "req-ok", route: "/responses", transport: "http", statusCode: 200, durationMs: 20, bytesIn: 10, bytesOut: 30 });
+    database.requestLog.log({ requestId: "req-failed", route: "/responses", transport: "http", statusCode: 500, durationMs: 80, errorCode: "upstream_error" });
+    const result = database.requestLog.query({ since: 0, status: "error", limit: 50 });
+    expect(result.summary).toEqual({
+      requests: 1,
+      errors: 1,
+      rejected: 0,
+      cancelled: 0,
+      availabilityRequests: 1,
+      availabilityErrors: 1,
+      averageDurationMs: 80,
+    });
+    expect(result.items).toHaveLength(1);
+    expect(result.timeline).toHaveLength(1);
+    expect(result.pagination).toEqual({ page: 1, pageSize: 50, totalItems: 1, totalPages: 1 });
+    expect(result.items[0]).toMatchObject({ requestId: "req-failed", errorCode: "upstream_error" });
+    expect(JSON.stringify(result)).not.toContain("body");
+    database.close();
+  });
+
+  it("supports direct request-log page access and clamps pages after the end", async () => {
+    const root = await tempDir();
+    const database = new GatewayDatabase(path.join(root, "paged-logs.db"));
+    const insert = database.raw.prepare(`
+      INSERT INTO request_log(id, route, transport, status_code, duration_ms, outcome, created_at)
+      VALUES (?, '/responses', 'http', 200, 10, 'success', ?)
+    `);
+    database.raw.transaction(() => {
+      for (let index = 0; index < 45; index++) insert.run(`log-${index}`, 1_000 + index);
+    })();
+    const middle = database.requestLog.query({ since: 0, page: 2, limit: 20 });
+    expect(middle.pagination).toEqual({ page: 2, pageSize: 20, totalItems: 45, totalPages: 3 });
+    expect(middle.items).toHaveLength(20);
+    expect(middle.items[0]?.id).toBe("log-24");
+    const clamped = database.requestLog.query({ since: 0, page: 99, limit: 20 });
+    expect(clamped.pagination.page).toBe(3);
+    expect(clamped.items).toHaveLength(5);
+    database.close();
+  });
+
+  it("persists supported logger levels and rejects invalid values", async () => {
+    const root = await tempDir();
+    const database = new GatewayDatabase(path.join(root, "settings.db"));
+    expect(database.settings.update({ logLevel: "warn" }).logLevel).toBe("warn");
+    expect(() => database.settings.update({ logLevel: "trace" })).toThrow("invalid_setting");
+    expect(database.settings.get().logLevel).toBe("warn");
+    database.close();
+  });
+
+  it("caps the filtered request timeline at 500 rows and excludes missing durations", async () => {
+    const root = await tempDir();
+    const database = new GatewayDatabase(path.join(root, "timeline.db"));
+    const insert = database.raw.prepare(`
+      INSERT INTO request_log(id, route, transport, status_code, duration_ms, outcome, created_at)
+      VALUES (?, '/responses', 'http', ?, ?, ?, ?)
+    `);
+    database.raw.transaction(() => {
+      for (let index = 0; index < 502; index++) {
+        const statusCode = index % 2 ? 200 : 500;
+        insert.run(`log-${index}`, statusCode, index === 501 ? null : index + 1, statusCode >= 500 ? "upstream_error" : "success", Date.now() + index);
+      }
+    })();
+    const result = database.requestLog.query({ since: 0, status: "error", limit: 10 });
+    expect(result.timeline).toHaveLength(251);
+    expect(result.timeline.every((point) => (point.statusCode ?? 0) >= 400)).toBe(true);
+    const all = database.requestLog.query({ since: 0, limit: 10 });
+    expect(all.timeline).toHaveLength(500);
+    expect(all.timeline.every((point) => point.durationMs !== null)).toBe(true);
     database.close();
   });
 });

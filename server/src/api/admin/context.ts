@@ -6,6 +6,8 @@ import { AccountUsageService } from "../../accounts/account-usage-service.js";
 import { AccountLoginService } from "../../accounts/account-login-service.js";
 import { ActiveAccountService } from "../../routing/active-account-service.js";
 import type { CsrfGuard } from "../../security/csrf.js";
+import type { AdminEventHub } from "./admin-events.js";
+import type { CodexProcessMonitor } from "../../codex/codex-process.js";
 
 export interface AdminContext {
   config: import("../../types.js").GatewayConfig;
@@ -17,6 +19,8 @@ export interface AdminContext {
   activeAccounts: ActiveAccountService;
   csrf: CsrfGuard;
   startedAt: number;
+  events: AdminEventHub;
+  codexProcess: CodexProcessMonitor;
 }
 
 export interface UsageWindowView {

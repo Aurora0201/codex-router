@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { access } from "node:fs/promises";
 import Fastify, { type FastifyInstance } from "fastify";
 import fastifyStatic from "@fastify/static";
@@ -15,6 +16,9 @@ import { ActiveAccountService } from "./routing/active-account-service.js";
 import { registerAdminApi } from "./api/admin/index.js";
 import { CsrfGuard } from "./security/csrf.js";
 import { CodexConfigService } from "./codex/codex-config.js";
+import { CodexProcessMonitor } from "./codex/codex-process.js";
+import { AdminEventHub } from "./api/admin/admin-events.js";
+import { LOG_LEVELS } from "./db/repositories/settings-repository.js";
 
 export interface GatewayApp {
   app: FastifyInstance;
@@ -27,10 +31,10 @@ export interface GatewayApp {
   usage: AccountUsageService;
 }
 
-function startUsageRefreshScheduler(accounts: AccountService, usage: AccountUsageService): NodeJS.Timeout {
+function startUsageRefreshScheduler(accounts: AccountService, usage: AccountUsageService, onRefresh: () => void): NodeJS.Timeout {
   const timer = setInterval(() => {
     for (const account of accounts.list().filter((item) => item.enabled && item.authStatus === "ready")) {
-      void usage.refresh(account.id).catch(() => undefined);
+      void usage.refresh(account.id).then(onRefresh).catch(() => undefined);
     }
   }, 5 * 60_000);
   timer.unref();
@@ -60,6 +64,8 @@ export async function buildGateway(overrides: Partial<GatewayConfig> = {}): Prom
   const startedAt = Date.now();
   const app = Fastify({
     bodyLimit: config.requestBodyLimit,
+    requestIdHeader: false,
+    genReqId: () => randomUUID(),
     logger: {
       level: process.env.GATEWAY_LOG_LEVEL ?? "info",
       redact: {
@@ -81,6 +87,13 @@ export async function buildGateway(overrides: Partial<GatewayConfig> = {}): Prom
   app.addContentTypeParser("*", { parseAs: "buffer" }, (_request, body, done) => done(null, body));
 
   const database = new GatewayDatabase(config.databasePath);
+  const environmentLogLevel = process.env.GATEWAY_LOG_LEVEL;
+  if (environmentLogLevel && LOG_LEVELS.includes(environmentLogLevel as (typeof LOG_LEVELS)[number])) {
+    database.settings.update({ logLevel: environmentLogLevel });
+  } else if (!environmentLogLevel) {
+    const persistedLogLevel = database.settings.get().logLevel;
+    if (typeof persistedLogLevel === "string") app.log.level = persistedLogLevel;
+  }
   await backfillChatgptAccountIds(database);
   const accounts = new AccountService(config, database);
   const logins = new AccountLoginService(config, database);
@@ -89,10 +102,14 @@ export async function buildGateway(overrides: Partial<GatewayConfig> = {}): Prom
   const activeAccounts = new ActiveAccountService(database);
   const csrf = new CsrfGuard();
   const proxy = new HttpProxy({ upstreamBaseUrl: config.upstreamBaseUrl, activeAccounts, auth, usage, database });
-  const rateLimitTimer = startUsageRefreshScheduler(accounts, usage);
   const codexConfig = new CodexConfigService();
+  const events = new AdminEventHub();
+  const rateLimitTimer = startUsageRefreshScheduler(accounts, usage, () => events.invalidate("accounts"));
+  const codexProcess = new CodexProcessMonitor(() => events.invalidate("codex"));
+  await codexProcess.start();
+  database.requestLog.onLogged = () => events.invalidate("stats", "logs");
 
-  await registerAdminApi(app, { config, database, accounts, auth, usage, logins, activeAccounts, csrf, startedAt }, codexConfig);
+  await registerAdminApi(app, { config, database, accounts, auth, usage, logins, activeAccounts, csrf, startedAt, events, codexProcess }, codexConfig);
   await registerWebSocketProxy(app, { upstreamBaseUrl: config.upstreamBaseUrl, activeAccounts, auth, database });
 
   app.post("/backend-api/codex/responses", (request, reply) => proxy.handle(request, reply, "/responses"));
@@ -116,11 +133,16 @@ export async function buildGateway(overrides: Partial<GatewayConfig> = {}): Prom
     app.get("/admin", async (_request, reply) => reply.code(503).send({ error: "admin_ui_not_built", hint: "Run npm run build" }));
   }
 
+  app.get("/admin-v2", async (_request, reply) => reply.redirect("/admin/"));
+  app.get("/admin-v2/", async (_request, reply) => reply.redirect("/admin/"));
+
   let closed = false;
   app.addHook("onClose", async () => {
     if (closed) return;
     closed = true;
     clearInterval(rateLimitTimer);
+    codexProcess.close();
+    events.close();
     await logins.close();
     database.close();
   });
