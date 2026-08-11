@@ -1,10 +1,14 @@
 import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
+import envPaths from "env-paths";
 import type { GatewayConfig } from "./types.js";
 
 const OFFICIAL_UPSTREAM = "https://chatgpt.com/backend-api/codex";
 const require = createRequire(import.meta.url);
+const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+export const DEFAULT_DATA_DIR = path.resolve(envPaths("codex-router").data);
 
 function parsePort(value: string | undefined): number {
   const port = Number(value ?? "8317");
@@ -27,8 +31,7 @@ export function loadConfig(overrides: Partial<GatewayConfig> = {}): GatewayConfi
     throw new Error("A custom upstream requires GATEWAY_DEVELOPER_MODE=true");
   }
 
-  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-  const dataDir = path.resolve(overrides.dataDir ?? process.env.GATEWAY_DATA_DIR ?? path.join(root, "data"));
+  const dataDir = path.resolve(overrides.dataDir ?? process.env.GATEWAY_DATA_DIR ?? DEFAULT_DATA_DIR);
   const accountsDir = path.resolve(overrides.accountsDir ?? path.join(dataDir, "accounts"));
   const loginStagingDir = path.resolve(overrides.loginStagingDir ?? path.join(dataDir, "login-staging"));
   const cliOverride = overrides.codexCliPath ?? process.env.CODEX_ROUTER_CLI;
@@ -43,7 +46,7 @@ export function loadConfig(overrides: Partial<GatewayConfig> = {}): GatewayConfi
     loginStagingDir,
     databasePath: path.resolve(overrides.databasePath ?? path.join(dataDir, "gateway.db")),
     logFilePath: overrides.logFilePath ?? (process.env.GATEWAY_LOG_FILE ? path.resolve(process.env.GATEWAY_LOG_FILE) : null),
-    webDistDir: path.resolve(overrides.webDistDir ?? process.env.GATEWAY_WEB_DIST ?? path.join(root, "web-v2", "dist")),
+    webDistDir: path.resolve(overrides.webDistDir ?? process.env.GATEWAY_WEB_DIST ?? path.join(PACKAGE_ROOT, "web-dist")),
     codexCliPath: cliOverride ?? process.execPath,
     codexCliArgs: overrides.codexCliArgs ?? (cliOverride ? ["app-server"] : [bundledCodex, "app-server"]),
     requestBodyLimit: overrides.requestBodyLimit ?? 32 * 1024 * 1024,

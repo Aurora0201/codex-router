@@ -9,7 +9,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { Command } from "commander";
 import { startGateway } from "./index.js";
 import { BACKUP_NAME, CodexConfigService, type CodexConfigStatus } from "./codex/codex-config.js";
-import { loadConfig } from "./config.js";
+import { DEFAULT_DATA_DIR, loadConfig } from "./config.js";
 import { GatewayDatabase } from "./db/database.js";
 import { printBanner } from "./banner.js";
 import { isProcessAlive, readPidFile, removePidFile } from "./pid.js";
@@ -20,13 +20,11 @@ const require = createRequire(import.meta.url);
 const VERSION = (require("../package.json").version as string) ?? "0.0.0";
 
 const ENTRY_PATH = fileURLToPath(import.meta.url);
-const ROOT = path.resolve(path.dirname(ENTRY_PATH), "..", "..");
-
 const DEFAULT_HOST = "127.0.0.1";
 const DEFAULT_PORT = 8317;
 
 function resolveDataDir(option: string | undefined): string {
-  return path.resolve(option ?? process.env.GATEWAY_DATA_DIR ?? path.join(ROOT, "data"));
+  return path.resolve(option ?? process.env.GATEWAY_DATA_DIR ?? DEFAULT_DATA_DIR);
 }
 
 function parsePortOption(value: string | undefined): number | undefined {

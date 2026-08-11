@@ -1,10 +1,27 @@
 {
-  "name": "@codex-router/server",
+  "name": "@aurora0201/codex-router",
   "version": "0.1.0",
-  "private": true,
+  "description": "A loopback-only account router and transparent proxy for Codex CLI.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Aurora0201/codex-router.git"
+  },
+  "homepage": "https://github.com/Aurora0201/codex-router#readme",
+  "bugs": "https://github.com/Aurora0201/codex-router/issues",
+  "keywords": ["codex", "openai", "gateway", "proxy"],
   "type": "module",
   "bin": {
     "codex-router": "dist/cli.js"
+  },
+  "files": ["dist", "web-dist", "README.md", "LICENSE"],
+  "engines": {
+    "node": ">=24"
+  },
+  "os": ["win32"],
+  "cpu": ["x64"],
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -21,6 +38,7 @@
     "@streamparser/json": "0.0.22",
     "better-sqlite3": "^13.0.3",
     "commander": "^15.0.0",
+    "env-paths": "^2.2.1",
     "fastify": "^5.11.2",
     "open": "11.0.0",
     "undici": "^8.10.0",

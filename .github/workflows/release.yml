@@ -1,0 +1,112 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Create short-lived GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+
+      - name: Run Release Please
+        id: release
+        uses: googleapis/release-please-action@v4
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  assets:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - name: Check out released tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify released source
+        run: |
+          npm test
+          npm run lint
+          npm run build
+          npm run release:check
+          npm run test:e2e
+
+      - name: Build release artifacts
+        shell: pwsh
+        run: ./scripts/pack-release.ps1
+
+      - name: Smoke test installed package
+        shell: pwsh
+        run: |
+          $tarball = Get-ChildItem -LiteralPath release -Filter *.tgz | Select-Object -First 1
+          if (-not $tarball) { throw "release tarball was not created" }
+          node scripts/smoke-packed-package.mjs $tarball.FullName
+
+      - name: Upload GitHub Release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: gh release upload "${{ needs.release-please.outputs.tag_name }}" release/* --clobber
+
+  npm-publish:
+    needs: [release-please, assets]
+    if: needs.release-please.outputs.release_created == 'true' && vars.NPM_TRUSTED_PUBLISHING_READY == 'true'
+    runs-on: windows-latest
+    environment: npm
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Set up Node.js 24 for npm
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Use an OIDC-capable npm CLI
+        run: npm install --global npm@11.5.1
+
+      - name: Download package from GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download "${{ needs.release-please.outputs.tag_name }}" --pattern "*.tgz" --dir release
+
+      - name: Publish public npm package with trusted publishing
+        shell: pwsh
+        run: |
+          $tarball = Get-ChildItem -LiteralPath release -Filter *.tgz | Select-Object -First 1
+          if (-not $tarball) { throw "release tarball was not downloaded" }
+          npm publish $tarball.FullName --access public

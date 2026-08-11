@@ -2,9 +2,16 @@
 
 Codex Router 是一个只监听本机的透明代理。它为每个已授权 ChatGPT/Codex 账号维护独立 `CODEX_HOME`，按 thread/session 固定账号，并原样转发 Codex HTTP/SSE、WebSocket、remote compact 与 model catalog 请求。Router 不执行工具、不重写 Responses JSON，也不实现 OAuth refresh。
 
-## 快速开始
+## 安装与快速开始
 
-要求 Node.js 24+。
+正式发布包目前支持 Windows x64，并要求 Node.js 24+：
+
+```powershell
+npm install --global @aurora0201/codex-router
+codex-router start
+```
+
+也可以从源码运行：
 
 ```powershell
 npm install
@@ -54,7 +61,7 @@ codex-router status
 | `codex-router logs [--tail]` | 查看日志文件；`--tail` 跟随追加 |
 | `codex-router config status/apply/restore` | 查看 / 注入 / 还原 `~/.codex/config.toml` 的 `openai_base_url` |
 
-常用参数：`--host`、`--port`、`--data-dir`（默认 `<repo>/data`）、`--upstream`（需 `--dev`）、`--log-level`、`--log-file`。后台进程使用 `<data-dir>/gateway.pid` 记录 pid。
+常用参数：`--host`、`--port`、`--data-dir`、`--upstream`（需 `--dev`）、`--log-level`、`--log-file`。默认数据目录由 `env-paths` 选择；运行 `codex-router status` 可查看实际路径。后台进程使用 `<data-dir>/gateway.pid` 记录 pid。
 
 ## 管理功能
 
@@ -63,7 +70,7 @@ codex-router status
 - Settings：metadata 日志开关与主题；Prompt/工具内容日志永久关闭。当前账号不在 Settings 中，属于运行状态，位于 Accounts 页面顶部与全局 Header。
 - Dashboard：运行时间、活跃 session/WS、请求与错误统计。
 
-账号认证只写入 `data/accounts/<id>/codex-home/`。登录过程中的临时工作区位于 `data/login-staging/`，成功后移入 accounts，失败则清理且不写数据库。SQLite 只保存 Account ID、状态、额度和路由 metadata，不包含 access/refresh/id token。FedRAMP 账号在本版本会被识别、禁用并显示“不支持”，不会静默忽略路由要求。
+账号认证只写入 `<data-dir>/accounts/<id>/codex-home/`。登录过程中的临时工作区位于 `<data-dir>/login-staging/`，成功后移入 accounts，失败则清理且不写数据库。SQLite 只保存 Account ID、状态、额度和路由 metadata，不包含 access/refresh/id token。FedRAMP 账号在本版本会被识别、禁用并显示“不支持”，不会静默忽略路由要求。
 
 ## 主账号隔离核验
 
@@ -81,11 +88,25 @@ npm run hash:main-auth
 |---|---|---|
 | `GATEWAY_HOST` | `127.0.0.1` | 只接受 `127.0.0.1` 或 `::1` |
 | `GATEWAY_PORT` | `8317` | 本地 Gateway/Admin 端口 |
-| `GATEWAY_DATA_DIR` | `<repo>/data` | DB、隔离账号与登录暂存目录 |
+| `GATEWAY_DATA_DIR` | `env-paths("codex-router").data` | DB、隔离账号与登录暂存目录 |
 | `CODEX_ROUTER_CLI` | 锁定的官方 npm CLI | 可显式指定 Codex 可执行文件 |
 | `GATEWAY_LOG_LEVEL` | `info` | Fastify/Pino 日志级别 |
 
 自定义 upstream 默认被拒绝；只可在明确设置 `GATEWAY_DEVELOPER_MODE=true` 时使用，避免把认证发送到不可信服务。
+
+### 从源码版迁移数据
+
+旧版源码运行默认把数据保存在仓库的 `data/`。发布包不会自动移动它，以免误操作账号凭据。升级后可继续显式使用旧目录：
+
+```powershell
+codex-router start --data-dir D:\path\to\codex-router\data
+```
+
+也可以在网关停止后，将整个旧 `data/` 目录复制到 `codex-router status` 显示的系统数据目录，再启动网关。迁移前请保留备份，不要只复制数据库而遗漏账号目录。
+
+## 发布
+
+版本由 Release Please 根据 Conventional Commits 维护，并同时发布 GitHub Release、npm 包与 Windows x64 ZIP。维护者设置和首版发布步骤见 [docs/releasing.md](docs/releasing.md)。
 
 ## 验证
 

@@ -9,7 +9,7 @@ import { AccountLoginService } from "../src/accounts/account-login-service.js";
 import { AccountAuthService } from "../src/accounts/account-auth-service.js";
 import { AccountUsageService } from "../src/accounts/account-usage-service.js";
 import { CredentialReader } from "../src/accounts/credential-reader.js";
-import { loadConfig } from "../src/config.js";
+import { DEFAULT_DATA_DIR, loadConfig } from "../src/config.js";
 import { GatewayDatabase } from "../src/db/database.js";
 import { buildUpstreamHeaders, isCompactionRequest } from "../src/proxy/headers.js";
 import { ActiveAccountService } from "../src/routing/active-account-service.js";
@@ -24,6 +24,23 @@ async function pathExists(filePath: string): Promise<boolean> {
 afterEach(async () => Promise.all(temporary.splice(0).map((dir) => rm(dir, { recursive: true, force: true }))));
 
 describe("security and routing core", () => {
+  it("uses OS application data and packaged admin UI defaults", () => {
+    const previousDataDir = process.env.GATEWAY_DATA_DIR;
+    const previousWebDist = process.env.GATEWAY_WEB_DIST;
+    delete process.env.GATEWAY_DATA_DIR;
+    delete process.env.GATEWAY_WEB_DIST;
+    try {
+      const config = loadConfig({ developerMode: true });
+      expect(config.dataDir).toBe(DEFAULT_DATA_DIR);
+      expect(config.webDistDir).toBe(path.resolve("web-dist"));
+    } finally {
+      if (previousDataDir === undefined) delete process.env.GATEWAY_DATA_DIR;
+      else process.env.GATEWAY_DATA_DIR = previousDataDir;
+      if (previousWebDist === undefined) delete process.env.GATEWAY_WEB_DIST;
+      else process.env.GATEWAY_WEB_DIST = previousWebDist;
+    }
+  });
+
   it("rejects non-loopback binding and untrusted upstreams", () => {
     expect(() => loadConfig({ host: "0.0.0.0" as "127.0.0.1" })).toThrow(/loopback/);
     expect(() => loadConfig({ upstreamBaseUrl: "https://evil.test", developerMode: false })).toThrow(/custom upstream/i);

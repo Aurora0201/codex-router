@@ -4,6 +4,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import readline from "node:readline";
+import { GATEWAY_VERSION } from "../version.js";
 
 interface JsonRpcResponse {
   id?: number | string;
@@ -61,7 +62,7 @@ export class AppServerClient extends EventEmitter {
 
     await Promise.race([
       this.call("initialize", {
-        clientInfo: { name: "codex-router", title: "Codex Router", version: "0.1.0" },
+        clientInfo: { name: "codex-router", title: "Codex Router", version: GATEWAY_VERSION },
         capabilities: { experimentalApi: true },
       }, 15_000),
       exited,
