@@ -5,6 +5,7 @@ import {
   RotateCcwKeyIcon,
   Trash2Icon,
 } from "lucide-react"
+import { useTranslation } from "react-i18next"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -31,6 +32,7 @@ export function AccountActions({
   disabled?: boolean
   onAction(action: "copy" | "limits" | "auth" | "toggle" | "remove"): void
 }) {
+  const { t } = useTranslation()
   return (
     <Tooltip>
       <DropdownMenu>
@@ -42,7 +44,7 @@ export function AccountActions({
           }
         >
           <EllipsisIcon aria-hidden="true" />
-          <span className="sr-only">账号操作</span>
+          <span className="sr-only">{t("账号操作")}</span>
         </TooltipTrigger>
         <DropdownMenuContent
           side="bottom"
@@ -52,27 +54,27 @@ export function AccountActions({
           <DropdownMenuGroup>
             <DropdownMenuItem onClick={() => onAction("copy")}>
               <CopyIcon />
-              复制 Account ID
+              {t("复制 Account ID")}
             </DropdownMenuItem>
             <DropdownMenuItem
               disabled={disabled}
               onClick={() => onAction("limits")}
             >
               <RefreshCwIcon />
-              刷新用量额度
+              {t("刷新用量额度")}
             </DropdownMenuItem>
             <DropdownMenuItem
               disabled={disabled}
               onClick={() => onAction("auth")}
             >
               <RotateCcwKeyIcon />
-              刷新认证
+              {t("刷新认证")}
             </DropdownMenuItem>
             <DropdownMenuItem
               disabled={disabled}
               onClick={() => onAction("toggle")}
             >
-              {account.enabled ? "停用账号" : "启用账号"}
+              {account.enabled ? t("停用账号") : t("启用账号")}
             </DropdownMenuItem>
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
@@ -83,12 +85,12 @@ export function AccountActions({
               onClick={() => onAction("remove")}
             >
               <Trash2Icon />
-              移除账号
+              {t("移除账号")}
             </DropdownMenuItem>
           </DropdownMenuGroup>
         </DropdownMenuContent>
       </DropdownMenu>
-      <TooltipContent>更多账号操作</TooltipContent>
+      <TooltipContent>{t("更多账号操作")}</TooltipContent>
     </Tooltip>
   )
 }

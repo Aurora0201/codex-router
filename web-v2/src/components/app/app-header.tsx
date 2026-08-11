@@ -1,4 +1,5 @@
 import { CircleIcon, MoonIcon, SunIcon } from "lucide-react"
+import { useTranslation } from "react-i18next"
 
 import type { AppPage } from "@/components/app/app-sidebar"
 import { useTheme } from "@/components/theme-provider"
@@ -31,11 +32,12 @@ export function AppHeader({
   onThemeChange?(theme: "light" | "dark"): Promise<void>
 }) {
   const { resolvedTheme, setTheme } = useTheme()
+  const { t } = useTranslation()
   return (
     <header className="flex h-14 shrink-0 items-center gap-3 border-b px-4 lg:px-6">
       <SidebarTrigger className="md:hidden" />
       <Separator orientation="vertical" className="h-4 md:hidden" />
-      <p className="min-w-0 truncate text-base font-semibold leading-none">{pageTitle[page]}</p>
+      <p className="min-w-0 truncate text-base font-semibold leading-none">{t(pageTitle[page])}</p>
       <div className="ml-auto flex items-center gap-2">
         <div
           className={cn(
@@ -45,7 +47,7 @@ export function AppHeader({
           role="status"
         >
           <CircleIcon className="fill-current" aria-hidden="true" />
-          <span>{online ? `Codex Router 在线 · v${version ?? "—"}` : "Codex Router 离线"}</span>
+          <span>{online ? t("Codex Router 在线 · v{{version}}", { version: version ?? "—" }) : t("Codex Router 离线")}</span>
         </div>
         <Tooltip>
           <TooltipTrigger
@@ -62,9 +64,9 @@ export function AppHeader({
             }
           >
             {resolvedTheme === "dark" ? <SunIcon /> : <MoonIcon />}
-            <span className="sr-only">切换主题</span>
+            <span className="sr-only">{t("切换主题")}</span>
           </TooltipTrigger>
-          <TooltipContent>切换浅色或深色主题</TooltipContent>
+          <TooltipContent>{t("切换浅色或深色主题")}</TooltipContent>
         </Tooltip>
       </div>
     </header>

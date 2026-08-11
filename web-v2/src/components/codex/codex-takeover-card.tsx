@@ -9,6 +9,7 @@ import {
   RotateCcwIcon,
   ShieldCheckIcon,
 } from "lucide-react"
+import { useTranslation } from "react-i18next"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
@@ -58,6 +59,7 @@ export function CodexTakeoverCard({
 }) {
   const [confirming, setConfirming] = useState<CodexAction | null>(null)
   const [busy, setBusy] = useState<CodexAction | null>(null)
+  const { t } = useTranslation()
   const actionCopy = {
     apply: [
       "应用 Codex Router 配置？",
@@ -81,17 +83,17 @@ export function CodexTakeoverCard({
       else await service.restartCodex()
       await reload()
       toast.add({
-        title:
+        title: t(
           action === "apply"
             ? "Codex Router 配置已应用"
             : action === "restore"
               ? "Codex 配置已恢复"
-              : "Codex 已重启",
+              : "Codex 已重启"),
         type: "success",
       })
     } catch (error) {
       toast.add({
-        title: "操作失败",
+        title: t("操作失败"),
         description: (error as Error).message,
         type: "error",
       })
@@ -115,8 +117,8 @@ export function CodexTakeoverCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{title}</CardTitle>
-        <CardDescription>{description}</CardDescription>
+        <CardTitle>{t(title)}</CardTitle>
+        <CardDescription>{t(description)}</CardDescription>
         <CardAction>
           <span
             className={cn(
@@ -135,36 +137,36 @@ export function CodexTakeoverCard({
             ) : (
               <CircleDashedIcon aria-hidden="true" />
             )}
-            {takeoverReady
+            {t(takeoverReady
               ? "接管正常"
               : status.applied
                 ? "需要重启"
-                : "未接管"}
+                : "未接管")}
           </span>
         </CardAction>
       </CardHeader>
       <CardContent className="flex flex-col gap-5">
         {!status.configExists ? (
           <Alert variant="destructive">
-            <AlertTitle>找不到配置文件</AlertTitle>
+            <AlertTitle>{t("找不到配置文件")}</AlertTitle>
             <AlertDescription>
-              请先启动一次 Codex，再尝试应用 Codex Router 配置。
+              {t("请先启动一次 Codex，再尝试应用 Codex Router 配置。")}
             </AlertDescription>
           </Alert>
         ) : !status.applied ? (
           <Alert>
             <CircleDashedIcon />
-            <AlertTitle>Codex 尚未接管</AlertTitle>
+            <AlertTitle>{t("Codex 尚未接管")}</AlertTitle>
             <AlertDescription>
-              当前 Codex 地址为 {status.openaiBaseUrl ?? "未配置"}。
+              {t("当前 Codex 地址为 {{url}}。", { url: status.openaiBaseUrl ?? t("未配置") })}
             </AlertDescription>
           </Alert>
         ) : !status.codexRunning ? (
           <Alert variant="destructive">
             <CircleXIcon />
-            <AlertTitle>Codex 未运行</AlertTitle>
+            <AlertTitle>{t("Codex 未运行")}</AlertTitle>
             <AlertDescription>
-              Codex Router 配置已经写入，重启 Codex 后才会开始接管请求。
+              {t("Codex Router 配置已经写入，重启 Codex 后才会开始接管请求。")}
             </AlertDescription>
           </Alert>
         ) : null}
@@ -174,7 +176,7 @@ export function CodexTakeoverCard({
               <NetworkIcon />
             </ItemMedia>
             <ItemContent className="min-w-0">
-              <ItemTitle>Codex Router 请求入口</ItemTitle>
+              <ItemTitle>{t("Codex Router 请求入口")}</ItemTitle>
               <ItemDescription className="truncate font-mono text-xs">
                 {status.gatewayBaseUrl}
               </ItemDescription>
@@ -185,9 +187,9 @@ export function CodexTakeoverCard({
               {status.codexRunning ? <CircleCheckIcon /> : <CircleXIcon />}
             </ItemMedia>
             <ItemContent>
-              <ItemTitle>Codex 进程</ItemTitle>
+              <ItemTitle>{t("Codex 进程")}</ItemTitle>
               <ItemDescription>
-                {status.codexRunning ? "正在运行" : "当前未运行"}
+                {status.codexRunning ? t("正在运行") : t("当前未运行")}
               </ItemDescription>
             </ItemContent>
           </Item>
@@ -196,9 +198,9 @@ export function CodexTakeoverCard({
               <DatabaseBackupIcon />
             </ItemMedia>
             <ItemContent>
-              <ItemTitle>配置备份</ItemTitle>
+              <ItemTitle>{t("配置备份")}</ItemTitle>
               <ItemDescription>
-                {status.hasBackup ? "可以恢复原始配置" : "尚未创建备份"}
+                {status.hasBackup ? t("可以恢复原始配置") : t("尚未创建备份")}
               </ItemDescription>
             </ItemContent>
           </Item>
@@ -219,7 +221,7 @@ export function CodexTakeoverCard({
             ) : (
               <CircleXIcon aria-hidden="true" />
             )}
-            {status.codexRunning ? "Codex 正在运行" : "Codex 未运行"}
+            {status.codexRunning ? t("Codex 正在运行") : t("Codex 未运行")}
           </span>
           <span className="ml-auto max-w-[65%] truncate text-right font-mono text-muted-foreground">
             {status.configPath}
@@ -237,7 +239,7 @@ export function CodexTakeoverCard({
           ) : (
             <RotateCcwIcon data-icon="inline-start" />
           )}
-          恢复配置
+          {t("恢复配置")}
         </Button>
         <Button
           variant="outline"
@@ -249,7 +251,7 @@ export function CodexTakeoverCard({
           ) : (
             <PlayIcon data-icon="inline-start" />
           )}
-          重启 Codex
+          {t("重启 Codex")}
         </Button>
         <Button
           disabled={busy !== null || !status.configExists || status.applied}
@@ -260,7 +262,7 @@ export function CodexTakeoverCard({
           ) : (
             <ShieldCheckIcon data-icon="inline-start" />
           )}
-          应用 Codex Router
+          {t("应用 Codex Router")}
         </Button>
       </CardFooter>
       <AlertDialog
@@ -272,16 +274,16 @@ export function CodexTakeoverCard({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {confirming ? actionCopy[confirming][0] : "确认操作"}
+              {t(confirming ? actionCopy[confirming][0] : "确认操作")}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {confirming ? actionCopy[confirming][1] : ""}
+              {confirming ? t(actionCopy[confirming][1]) : ""}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogCancel>{t("取消")}</AlertDialogCancel>
             <AlertDialogAction onClick={() => void run()}>
-              确认
+              {t("确认")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
