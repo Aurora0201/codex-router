@@ -5,7 +5,7 @@
   "type": "module",
   "workspaces": [
     "server",
-    "web-v2"
+    "web"
   ],
   "scripts": {
     "build": "npm run build --workspace @aurora0201/codex-router && npm run build --workspace @codex-router/web",

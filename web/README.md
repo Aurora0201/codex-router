@@ -25,8 +25,9 @@ npm run dev
 npm run build
 ```
 
-Gateway 会从 `web-v2/dist` 提供正式管理入口 `/admin/`。旧入口
-`/admin-v2/` 会重定向到 `/admin/`，可通过 `GATEWAY_WEB_DIST` 覆盖构建目录。
+正式前端源码位于仓库的 `web/` 目录，生产构建输出到
+`server/web-dist`，Gateway 从该目录提供唯一的管理入口 `/admin/`。
+可通过 `GATEWAY_WEB_DIST` 覆盖构建目录。
 
 ## shadcn/ui
 
