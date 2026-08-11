@@ -20,16 +20,20 @@ jobs:
     steps:
       - name: Create short-lived GitHub App token
         id: app-token
+        if: env.RELEASE_APP_ID != '' && env.RELEASE_APP_PRIVATE_KEY != ''
         uses: actions/create-github-app-token@v2
+        env:
+          RELEASE_APP_ID: ${{ secrets.RELEASE_APP_ID }}
+          RELEASE_APP_PRIVATE_KEY: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
         with:
-          app-id: ${{ secrets.RELEASE_APP_ID }}
-          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          app-id: ${{ env.RELEASE_APP_ID }}
+          private-key: ${{ env.RELEASE_APP_PRIVATE_KEY }}
 
       - name: Run Release Please
         id: release
         uses: googleapis/release-please-action@v4
         with:
-          token: ${{ steps.app-token.outputs.token }}
+          token: ${{ steps.app-token.outputs.token || github.token }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 

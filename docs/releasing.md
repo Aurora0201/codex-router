@@ -4,8 +4,8 @@ Codex Router 使用 Release Please 维护版本与 changelog。合并 release PR
 
 ## GitHub 一次性设置
 
-1. 创建一个仅安装到本仓库的 GitHub App。授予 repository contents 读写、pull requests 读写权限。
-2. 将 App ID 保存为 Actions secret `RELEASE_APP_ID`，将私钥保存为 `RELEASE_APP_PRIVATE_KEY`。Release Please 使用该 App 的短期 token 创建 release PR，这样 PR 上的 CI 会正常触发。
+1. 推荐创建一个仅安装到本仓库的 GitHub App。授予 repository contents 读写、pull requests 读写权限。
+2. 将 App ID 保存为 Actions secret `RELEASE_APP_ID`，将私钥保存为 `RELEASE_APP_PRIVATE_KEY`。Release Please 优先使用该 App 的短期 token 创建 release PR，这样 PR 上的 CI 会正常触发。未配置时工作流会安全降级为仓库 `GITHUB_TOKEN`；GitHub 不会为该 token 创建的 PR 自动触发其他工作流，需要维护者重新打开 PR 或手动运行 CI。
 3. 创建 GitHub environment `npm`，建议配置 required reviewer，并限制部署分支为 `main`。
 4. 创建 repository variable `NPM_TRUSTED_PUBLISHING_READY`，首发前保持为 `false`。
 5. 为 `main` 启用 branch protection：要求 pull request、禁止 force push，并要求 `CI / verify` 与 `CodeQL / analyze` 通过。
