@@ -50,6 +50,7 @@ codex-router status
 | `codex-router start --foreground` (`-f`) | 前台启动，持续打印日志到终端（等价 `npm start`） |
 | `codex-router status` | 显示运行状态、uptime、config 注入（劫持）状态与账号明细 |
 | `codex-router stop` | 读取 pid 文件并优雅停止后台进程 |
+| `codex-router restart` | 优雅重启网关；默认复用上一次成功后台启动的参数，显式参数可覆盖 |
 | `codex-router logs [--tail]` | 查看日志文件；`--tail` 跟随追加 |
 | `codex-router config status/apply/restore` | 查看 / 注入 / 还原 `~/.codex/config.toml` 的 `openai_base_url` |
 

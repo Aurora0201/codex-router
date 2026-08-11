@@ -13,6 +13,7 @@ import { loadConfig } from "./config.js";
 import { GatewayDatabase } from "./db/database.js";
 import { printBanner } from "./banner.js";
 import { isProcessAlive, readPidFile, removePidFile } from "./pid.js";
+import { readLaunchMetadata, writeLaunchMetadata, type LaunchMetadata } from "./launch-metadata.js";
 import type { AccountRecord, GatewayConfig } from "./types.js";
 
 const require = createRequire(import.meta.url);
@@ -98,7 +99,7 @@ export function isPortFree(host: string, port: number): Promise<boolean> {
   });
 }
 
-async function startInBackground(overrides: Partial<GatewayConfig>, logFileOption?: string): Promise<void> {
+async function startInBackground(overrides: Partial<GatewayConfig>, logFileOption?: string, logLevelOption?: string): Promise<void> {
   const config = loadConfig(overrides);
 
   if (!(await isPortFree(config.host, config.port))) {
@@ -123,6 +124,7 @@ async function startInBackground(overrides: Partial<GatewayConfig>, logFileOptio
   ];
   if (overrides.upstreamBaseUrl) args.push("--upstream", overrides.upstreamBaseUrl);
   if (overrides.developerMode) args.push("--dev");
+  if (logLevelOption) args.push("--log-level", logLevelOption);
 
   const child = spawn(process.execPath, args, {
     detached: true,
@@ -152,6 +154,16 @@ async function startInBackground(overrides: Partial<GatewayConfig>, logFileOptio
     return;
   }
 
+  await writeLaunchMetadata(config.dataDir, {
+    version: 1,
+    host: config.host,
+    port: config.port,
+    dataDir: config.dataDir,
+    upstream: config.upstreamBaseUrl,
+    dev: config.developerMode,
+    ...(logLevelOption ? { logLevel: logLevelOption } : {}),
+    logFile,
+  });
   out(`[codex-router] started in background`);
   out(`  pid:   ${child.pid ?? "?"}`);
   out(`  url:   http://${config.host}:${config.port}`);
@@ -162,14 +174,15 @@ async function startInBackground(overrides: Partial<GatewayConfig>, logFileOptio
 }
 
 async function actionStart(options: StartOptions): Promise<void> {
-  if (options.logLevel !== undefined) process.env.GATEWAY_LOG_LEVEL = options.logLevel;
+  const logLevel = options.logLevel ?? process.env.GATEWAY_LOG_LEVEL;
+  if (logLevel !== undefined) process.env.GATEWAY_LOG_LEVEL = logLevel;
   const overrides = startOverrides(options);
   printBanner();
   if (options.foreground) {
     await startGateway(overrides);
     return;
   }
-  await startInBackground(overrides, options.logFile);
+  await startInBackground(overrides, options.logFile, logLevel);
 }
 
 // --- status ---------------------------------------------------------------
@@ -429,7 +442,7 @@ async function waitForProcessExit(pid: number, timeoutMs: number): Promise<boole
   return false;
 }
 
-async function actionStop(options: StatusOptions): Promise<void> {
+export async function stopManagedGateway(options: StatusOptions, startWhenStopped: boolean): Promise<boolean> {
   const { host, port } = resolveHostPort(options.host, options.port);
   const dataDir = resolveDataDir(options.dataDir);
 
@@ -437,17 +450,26 @@ async function actionStop(options: StatusOptions): Promise<void> {
   if (pid === null) {
     if (await isPortOpen(host, port)) {
       err("[codex-router] gateway is listening but has no pid file; it was started outside the CLI — stop it with Ctrl+C");
-    } else {
-      err("[codex-router] status: not running (no pid file)");
+      process.exitCode = 1;
+      return false;
     }
-    process.exitCode = 1;
-    return;
+    if (!startWhenStopped) {
+      err("[codex-router] status: not running (no pid file)");
+      process.exitCode = 1;
+      return false;
+    }
+    return true;
   }
   if (!isProcessAlive(pid)) {
     await removePidFile(dataDir);
-    err(`[codex-router] cleaning up stale pid file (pid ${pid} not running)`);
-    process.exitCode = 1;
-    return;
+    const message = `[codex-router] cleaning up stale pid file (pid ${pid} not running)`;
+    if (startWhenStopped) out(message);
+    else {
+      err(message);
+      process.exitCode = 1;
+      return false;
+    }
+    return true;
   }
 
   out(`[codex-router] stopping (pid ${pid})`);
@@ -456,10 +478,40 @@ async function actionStop(options: StatusOptions): Promise<void> {
   if (!stopped) {
     err(`[codex-router] failed to stop within 10s (pid ${pid})`);
     process.exitCode = 1;
-    return;
+    return false;
   }
   await removePidFile(dataDir);
   out("[codex-router] stopped");
+  return true;
+}
+
+async function actionStop(options: StatusOptions): Promise<void> {
+  await stopManagedGateway(options, false);
+}
+
+type RestartOptions = Omit<StartOptions, "foreground">;
+
+export function restartOptions(options: RestartOptions, saved: LaunchMetadata | null, dataDir: string): StartOptions {
+  return {
+    host: options.host ?? saved?.host,
+    port: options.port ?? (saved ? String(saved.port) : undefined),
+    dataDir,
+    upstream: options.upstream ?? saved?.upstream,
+    dev: options.dev ?? saved?.dev,
+    logLevel: options.logLevel ?? saved?.logLevel,
+    logFile: options.logFile ?? saved?.logFile,
+  };
+}
+
+async function actionRestart(options: RestartOptions): Promise<void> {
+  const dataDir = resolveDataDir(options.dataDir);
+  const effective = restartOptions(options, await readLaunchMetadata(dataDir), dataDir);
+  const { host, port } = resolveHostPort(effective.host, effective.port);
+  if (!(await stopManagedGateway({ host, port: String(port), dataDir }, true))) return;
+  process.exitCode = 0;
+  out("[codex-router] restarting");
+  if (effective.logLevel !== undefined) process.env.GATEWAY_LOG_LEVEL = effective.logLevel;
+  await startInBackground(startOverrides(effective), effective.logFile, effective.logLevel);
 }
 
 // --- logs -----------------------------------------------------------------
@@ -606,6 +658,18 @@ export function createProgram(): Command {
     .option("--port <number>", "gateway port", String(DEFAULT_PORT))
     .option("--data-dir <path>", "data directory")
     .action(actionStop);
+
+  program
+    .command("restart")
+    .description("Restart the gateway in the background, preserving the last successful start options")
+    .option("--host <host>", "listen host (127.0.0.1 or ::1)")
+    .option("--port <number>", "listen port")
+    .option("--data-dir <path>", "data directory containing the pid and saved start options")
+    .option("--upstream <url>", "upstream base URL (requires --dev)")
+    .option("--dev", "enable developer mode so a custom upstream is allowed")
+    .option("--log-level <level>", "pino log level")
+    .option("--log-file <path>", "log file path for background mode")
+    .action(actionRestart);
 
   program
     .command("logs")
