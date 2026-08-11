@@ -68,9 +68,9 @@ beforeAll(async () => {
       else {
         socket.send(data, { binary: isBinary });
         try {
-          const metadata = JSON.parse(data.toString()) as { type?: string; generate?: boolean };
-          if (metadata.type === "response.create" && metadata.generate !== false) {
-            setTimeout(() => socket.send('{"type":"response.completed","response":{"status":"completed"}}'), 10);
+          const metadata = JSON.parse(data.toString()) as { type?: string; generate?: boolean; delayComplete?: boolean };
+          if (metadata.type === "response.create") {
+            setTimeout(() => socket.send('{"type":"response.completed","response":{"status":"completed"}}'), metadata.delayComplete ? 80 : 10);
           }
         } catch {
           // Opaque non-JSON frames are echoed unchanged.
@@ -323,6 +323,63 @@ describe("WebSocket transport", () => {
     reconnect.close(1000, "done");
     await once(reconnect, "close");
     expect(wsAccounts.slice(-2)).toEqual(["upstream-account", "upstream-account"]);
+  });
+
+  it("retires an idle connection when the active account changes", async () => {
+    gateway.activeAccounts.select("local");
+    const socket = new WebSocket(gatewayUrl.replace("http:", "ws:") + "/backend-api/codex/responses");
+    await once(socket, "open");
+
+    gateway.activeAccounts.select("second");
+    const [code, reason] = await once(socket, "close");
+    expect(code).toBe(1000);
+    expect(reason.toString()).toBe("account_changed");
+
+    const reconnect = new WebSocket(gatewayUrl.replace("http:", "ws:") + "/backend-api/codex/responses");
+    await once(reconnect, "open");
+    expect(wsAccounts.at(-1)).toBe("upstream-account-2");
+    reconnect.close(1000, "done");
+    await once(reconnect, "close");
+    gateway.activeAccounts.select("local");
+  });
+
+  it("lets an in-flight response finish before retiring the old account connection", async () => {
+    gateway.activeAccounts.select("local");
+    const socket = new WebSocket(gatewayUrl.replace("http:", "ws:") + "/backend-api/codex/responses");
+    await once(socket, "open");
+    socket.send('{"type":"response.create","delayComplete":true}');
+    await once(socket, "message");
+
+    gateway.activeAccounts.select("second");
+    const [terminal] = await once(socket, "message");
+    expect(terminal.toString()).toContain('"response.completed"');
+    const [code, reason] = await once(socket, "close");
+    expect(code).toBe(1000);
+    expect(reason.toString()).toBe("account_changed");
+
+    const reconnect = new WebSocket(gatewayUrl.replace("http:", "ws:") + "/backend-api/codex/responses");
+    await once(reconnect, "open");
+    expect(wsAccounts.at(-1)).toBe("upstream-account-2");
+    reconnect.close(1000, "done");
+    await once(reconnect, "close");
+    gateway.activeAccounts.select("local");
+
+    const retired = gateway.database.requestLog.query({ since: 0, transport: "ws", limit: 100 });
+    expect(retired.items.some((entry) => entry.scope === "connection" && entry.errorCode === "account_switch_connection_retired" && entry.outcome === "success")).toBe(true);
+  });
+
+  it("retires the active account connection when that account is disabled", async () => {
+    gateway.activeAccounts.select("local");
+    const socket = new WebSocket(gatewayUrl.replace("http:", "ws:") + "/backend-api/codex/responses");
+    await once(socket, "open");
+
+    gateway.accounts.setEnabled("local", false);
+    const [code, reason] = await once(socket, "close");
+    expect(code).toBe(1000);
+    expect(reason.toString()).toBe("account_changed");
+
+    gateway.accounts.setEnabled("local", true);
+    gateway.activeAccounts.select("local");
   });
 });
 
