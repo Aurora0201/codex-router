@@ -112,9 +112,7 @@ export class HttpProxy {
     } catch (error) {
       const status = errorStatus(error);
       const rawErrorCode = (error as Error).message;
-      const errorName = (error as Error).name;
-      const errorCauseCode = ((error as Error & { code?: string }).code);
-      const wasClientCancellation = clientCancelled && (rawErrorCode === "This operation was aborted" || errorName === "AbortError" || errorCauseCode === "UND_ERR_ABORTED");
+      const wasClientCancellation = clientCancelled;
       const gatewayError = [
         "no_active_account_selected", "account_disabled", "account_not_ready",
         "fedramp_accounts_not_supported", "raw_request_body_unavailable",
