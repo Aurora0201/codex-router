@@ -8,7 +8,7 @@
 
 <h1 align="center">Codex Router</h1>
 
-Codex Router 是一个只监听本机的透明代理。它为每个已授权 ChatGPT/Codex 账号维护独立 `CODEX_HOME`，按 thread/session 固定账号，并原样转发 Codex HTTP/SSE、WebSocket、remote compact 与 model catalog 请求。Router 不执行工具、不重写 Responses JSON，也不实现 OAuth refresh。
+Codex Router 是一个只监听本机的透明代理。它为每个已授权 ChatGPT/Codex 账号维护独立 `CODEX_HOME`，按用户手动选择的当前账号转发 Codex HTTP/SSE、WebSocket、remote compact 与 model catalog 请求。Router 不执行工具、不重写 Responses JSON，也不实现 OAuth refresh。
 
 ## 安装与快速开始
 
@@ -35,7 +35,7 @@ npm start
 chatgpt_base_url = "http://127.0.0.1:8317/backend-api/codex"
 ```
 
-然后正常运行 Codex。**添加账号后不会自动选中当前账号**：授权完成后在 Admin UI 手动选择 Current Account，新 thread 才会使用它。已有 thread、WebSocket 与 compact 请求继续使用最初绑定的账号；切换当前账号不会迁移已有会话。
+然后正常运行 Codex。**添加账号后不会自动选中当前账号**：授权完成后可在 Admin UI 选择 Current Account，或运行 `codex-router account` 使用上下键选择。切换后，新的 HTTP 请求立即使用新账号；旧账号的空闲 WebSocket 会立即退役，存在进行中响应的连接会在协议终态转发完成后退役，Codex 随后的连接将使用新账号重新握手。
 
 开发模式同时启动 Gateway 与 Vite：
 
@@ -63,7 +63,8 @@ codex-router status
 |---|---|
 | `codex-router start` | 默认后台启动：打印摘要后转后台，日志写入 `<data-dir>/logs/gateway.log` |
 | `codex-router start --foreground` (`-f`) | 前台启动，持续打印日志到终端（等价 `npm start`） |
-| `codex-router status` | 显示运行状态、uptime、config 注入（劫持）状态与账号明细 |
+| `codex-router status` | 分组显示管理页、PID、运行时间、数据目录、配置注入状态、当前账号与剩余额度 |
+| `codex-router account [account-id]` | 无参数时使用上下键选择当前账号；传入完整账号 ID 时直接切换 |
 | `codex-router stop` | 读取 pid 文件并优雅停止后台进程 |
 | `codex-router restart` | 优雅重启网关；默认复用上一次成功后台启动的参数，显式参数可覆盖 |
 | `codex-router logs [--tail]` | 查看日志文件；`--tail` 跟随追加 |

@@ -4,11 +4,14 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createProgram, isEntryScript, isPortFree, restartOptions, startOverrides, stopManagedGateway } from "../src/cli.js";
+import { accountChoices, createProgram, isEntryScript, isPortFree, restartOptions, startOverrides, stopManagedGateway } from "../src/cli.js";
 import { GatewayDatabase } from "../src/db/database.js";
 import { launchMetadataPath, parseLaunchMetadata, readLaunchMetadata, writeLaunchMetadata } from "../src/launch-metadata.js";
 
 const temporary: string[] = [];
+const selectMock = vi.hoisted(() => vi.fn());
+
+vi.mock("@inquirer/select", () => ({ default: selectMock }));
 
 async function tempDir(): Promise<string> {
   const dir = await mkdtemp(path.join(os.tmpdir(), "cli-test-"));
@@ -18,6 +21,7 @@ async function tempDir(): Promise<string> {
 
 afterEach(() => {
   vi.unstubAllEnvs();
+  selectMock.mockReset();
   process.exitCode = 0;
   return Promise.all(temporary.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
@@ -32,6 +36,21 @@ async function runCli(args: string[]): Promise<{ stdout: string; stderr: string;
   stdout.mockRestore();
   stderr.mockRestore();
   return { stdout: out, stderr: err, exitCode: process.exitCode };
+}
+
+async function withTty<T>(isTty: boolean, operation: () => Promise<T>): Promise<T> {
+  const stdinTty = Object.getOwnPropertyDescriptor(process.stdin, "isTTY");
+  const stdoutTty = Object.getOwnPropertyDescriptor(process.stdout, "isTTY");
+  Object.defineProperty(process.stdin, "isTTY", { configurable: true, value: isTty });
+  Object.defineProperty(process.stdout, "isTTY", { configurable: true, value: isTty });
+  try {
+    return await operation();
+  } finally {
+    if (stdinTty) Object.defineProperty(process.stdin, "isTTY", stdinTty);
+    else delete (process.stdin as NodeJS.ReadStream & { isTTY?: boolean }).isTTY;
+    if (stdoutTty) Object.defineProperty(process.stdout, "isTTY", stdoutTty);
+    else delete (process.stdout as NodeJS.WriteStream & { isTTY?: boolean }).isTTY;
+  }
 }
 
 describe("startOverrides", () => {
@@ -219,6 +238,7 @@ describe("status command", () => {
   it("reports a running gateway from its health and accounts API", async () => {
     const dataDir = await tempDir();
     const home = await tempDir();
+    await writeFile(path.join(home, "config.toml"), 'openai_base_url = "http://127.0.0.1:8317/backend-api/codex"\n');
     vi.stubEnv("CODEX_HOME", home);
 
     const server = http.createServer((request, response) => {
@@ -255,28 +275,19 @@ describe("status command", () => {
 
     expect(exitCode).toBe(0);
     expect(stdout).toContain("running");
-    expect(stdout).toContain("uptime");
-    expect(stdout).toContain("1h 1m 1s");
-    expect(stdout).toContain("pid");
-    expect(stdout).toContain("4242");
-    expect(stdout).toContain("data");
-    expect(stdout).toContain(dataDir);
-    expect(stdout).toContain("quota · active cb33fd13…");
-    expect(stdout).toContain("7d [");
-    expect(stdout).toContain("5h [");
-    expect(stdout).toContain("50% left");
-    expect(stdout).toContain("90% left");
-    expect(stdout).toContain("accounts (2)");
-    expect(stdout).toContain("a3edf18c…");
-    expect(stdout).toContain("test@example.test");
+    expect(stdout).toContain(`Admin    http://127.0.0.1:${port}/admin`);
+    expect(stdout).toContain("PID      4242");
+    expect(stdout).toContain("Uptime   1h 1m");
+    expect(stdout).toContain(`Data     ${dataDir}`);
+    expect(stdout).toContain("Config   ○ not injected");
+    expect(stdout).toContain("Current  active@example.test · pro · cb33fd13…");
+    expect(stdout).toContain("7d       [█████░░░░░] 50% remaining");
+    expect(stdout).toContain("5h       [█████████░] 90% remaining");
+    expect(stdout).not.toContain("test@example.test");
     expect(stdout).toContain("active@example.test");
-    expect(stdout).toContain("plus");
-    expect(stdout).toContain("pro");
-    expect(stdout).toContain("[active]");
-    expect(stdout).toContain("injected");
   });
 
-  it("falls back to the local database when the gateway is down and omits quota", async () => {
+  it("falls back to the local database and labels cached quota when the gateway is down", async () => {
     const dataDir = await tempDir();
     const home = await tempDir();
     await writeFile(path.join(home, "config.toml"), 'model = "gpt-5.6-luna"\n');
@@ -298,13 +309,13 @@ describe("status command", () => {
     const { stdout, exitCode } = await runCli(["status", "--host", "127.0.0.1", "--port", "1", "--data-dir", dataDir]);
     expect(exitCode).toBe(1);
     expect(stdout).toContain("not running");
-    expect(stdout).toContain("accounts (1)");
-    expect(stdout).toContain("cb33fd13…");
-    expect(stdout).toContain("test@example.test");
-    expect(stdout).toContain("plus");
-    expect(stdout).toContain("[active]");
-    expect(stdout).not.toContain("quota · active");
-    expect(stdout).toContain("codex-router start");
+    expect(stdout).toContain("PID      —");
+    expect(stdout).toContain("Uptime   —");
+    expect(stdout).toContain(`Data     ${dataDir}`);
+    expect(stdout).toContain("Config   ○ not injected");
+    expect(stdout).toContain("Current  test@example.test · plus · cb33fd13… (cached)");
+    expect(stdout).toContain("7d       [█████░░░░░] 50% remaining (cached)");
+    expect(stdout).toContain("5h       [█████████░] 90% remaining (cached)");
   });
 
   it("exits 1 when not running and shows no local state", async () => {
@@ -315,8 +326,146 @@ describe("status command", () => {
     const { stdout, exitCode } = await runCli(["status", "--host", "127.0.0.1", "--port", "1", "--data-dir", dataDir]);
     expect(exitCode).toBe(1);
     expect(stdout).toContain("not running");
-    expect(stdout).toContain("accounts (0)");
-    expect(stdout).toContain("codex-router start");
+    expect(stdout).toContain("Current  none");
+  });
+});
+
+describe("account command", () => {
+  const activeId = "cb33fd13-60cd-478d-b77c-f6e7ece226ef";
+  const nextId = "a3edf18c-53d7-45a5-941e-c41972c41b9a";
+  const accounts = [
+    {
+      id: activeId, email: "active@example.test", planType: "pro", authStatus: "ready", enabled: true, isActive: true,
+      usage: { primary: { usedPercent: 50, windowDurationMins: 10080 }, secondary: { usedPercent: 10, windowDurationMins: 300 } },
+    },
+    {
+      id: nextId, email: "next@example.test", planType: "plus", authStatus: "ready", enabled: true, isActive: false,
+      usage: { primary: { usedPercent: 20, windowDurationMins: 10080 }, secondary: { usedPercent: null, windowDurationMins: 300 } },
+    },
+  ];
+
+  async function startAccountServer(onPut?: (request: http.IncomingMessage, body: string) => void) {
+    const server = http.createServer((request, response) => {
+      if (request.url === "/api/health") {
+        response.writeHead(200, { "content-type": "application/json", "set-cookie": "cg_csrf=token-1; Path=/; SameSite=Strict" });
+        response.end(JSON.stringify({ status: "ok", csrfToken: "token-1" }));
+        return;
+      }
+      if (request.url === "/api/accounts") {
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify({ activeAccountId: activeId, accounts }));
+        return;
+      }
+      if (request.url === "/api/active-account" && request.method === "PUT") {
+        let body = "";
+        request.setEncoding("utf8");
+        request.on("data", (chunk) => { body += chunk; });
+        request.on("end", () => {
+          onPut?.(request, body);
+          response.writeHead(200, { "content-type": "application/json" });
+          response.end(JSON.stringify(accounts[1]));
+        });
+        return;
+      }
+      response.writeHead(404);
+      response.end();
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    return { server, port: (server.address() as { port: number }).port };
+  }
+
+  it("builds selectable choices and disables unavailable accounts with a reason", () => {
+    const choices = accountChoices([
+      ...accounts,
+      { ...accounts[1], id: "disabled", enabled: false, isActive: false },
+      { ...accounts[1], id: "relogin", enabled: true, authStatus: "relogin_required", isActive: false },
+    ]);
+    expect(choices[0]).toMatchObject({ value: activeId, disabled: undefined });
+    expect(choices[0].name).toContain("current");
+    expect(choices[2]).toMatchObject({ value: "disabled", disabled: "disabled" });
+    expect(choices[3]).toMatchObject({ value: "relogin", disabled: "login required" });
+  });
+
+  it("switches by ID through the CSRF-protected gateway API", async () => {
+    let received: { origin?: string; cookie?: string; csrf?: string; body?: string } = {};
+    const { server, port } = await startAccountServer((request, body) => {
+      received = {
+        origin: request.headers.origin,
+        cookie: request.headers.cookie,
+        csrf: request.headers["x-csrf-token"] as string,
+        body,
+      };
+    });
+    try {
+      const result = await runCli(["account", nextId, "--port", String(port)]);
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("current account: next@example.test · plus · a3edf18c…");
+      expect(received).toEqual({
+        origin: `http://127.0.0.1:${port}`,
+        cookie: "cg_csrf=token-1",
+        csrf: "token-1",
+        body: JSON.stringify({ id: nextId }),
+      });
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
+  it("uses the active account as the interactive default and does not loop", async () => {
+    selectMock.mockResolvedValue(nextId);
+    const { server, port } = await startAccountServer();
+    try {
+      const result = await withTty(true, () => runCli(["account", "--port", String(port)]));
+      expect(result.exitCode).toBe(0);
+      expect(selectMock).toHaveBeenCalledWith(expect.objectContaining({ default: activeId, loop: false }));
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
+  it("requires an account ID outside an interactive terminal", async () => {
+    const { server, port } = await startAccountServer();
+    try {
+      const result = await withTty(false, () => runCli(["account", "--port", String(port)]));
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("account <account-id>");
+      expect(selectMock).not.toHaveBeenCalled();
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
+  it("handles Ctrl+C without printing a stack trace", async () => {
+    const cancelled = new Error("User force closed the prompt");
+    cancelled.name = "ExitPromptError";
+    selectMock.mockRejectedValue(cancelled);
+    const { server, port } = await startAccountServer();
+    try {
+      const result = await withTty(true, () => runCli(["account", "--port", String(port)]));
+      expect(result.exitCode).toBe(130);
+      expect(result.stderr).toBe("[codex-router] account selection cancelled\n");
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
+  it("does not send a switch request when the selected account is already current", async () => {
+    const onPut = vi.fn();
+    const { server, port } = await startAccountServer(onPut);
+    try {
+      const result = await runCli(["account", activeId, "--port", String(port)]);
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("already the current account");
+      expect(onPut).not.toHaveBeenCalled();
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
+  it("requires a running gateway", async () => {
+    const result = await runCli(["account", nextId, "--port", "1"]);
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("gateway is not running");
   });
 });
 
