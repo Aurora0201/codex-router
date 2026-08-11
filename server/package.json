@@ -9,17 +9,31 @@
   },
   "homepage": "https://github.com/Aurora0201/codex-router#readme",
   "bugs": "https://github.com/Aurora0201/codex-router/issues",
-  "keywords": ["codex", "openai", "gateway", "proxy"],
+  "keywords": [
+    "codex",
+    "openai",
+    "gateway",
+    "proxy"
+  ],
   "type": "module",
   "bin": {
     "codex-router": "dist/cli.js"
   },
-  "files": ["dist", "web-dist", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "web-dist",
+    "README.md",
+    "LICENSE"
+  ],
   "engines": {
     "node": ">=24"
   },
-  "os": ["win32"],
-  "cpu": ["x64"],
+  "os": [
+    "win32"
+  ],
+  "cpu": [
+    "x64"
+  ],
   "publishConfig": {
     "access": "public"
   },
