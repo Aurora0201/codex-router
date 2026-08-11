@@ -9,6 +9,7 @@ import {
   TriangleAlertIcon,
   UsersRoundIcon,
 } from "lucide-react"
+import { useTranslation } from "react-i18next"
 
 import { CodexTakeoverCard } from "@/components/codex/codex-takeover-card"
 import {
@@ -46,6 +47,8 @@ export function SettingsPage({
   onShowAccounts(): void
   onShowLogs(): void
 }) {
+  const { t, i18n } = useTranslation()
+  const locale = i18n.resolvedLanguage ?? "zh-CN"
   const errorRate = snapshot.stats.requestsToday
     ? (snapshot.stats.errorsToday / snapshot.stats.requestsToday) * 100
     : 0
@@ -55,9 +58,9 @@ export function SettingsPage({
   return (
     <section className="flex flex-col gap-5">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">运行状态</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">{t("运行状态")}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          查看 Codex Router 接管、本地网络边界和运行诊断信息。
+          {t("查看 Codex Router 接管、本地网络边界和运行诊断信息。")}
         </p>
       </div>
 
@@ -67,44 +70,44 @@ export function SettingsPage({
         reload={reload}
       />
 
-      <Card size="sm" aria-label="运行摘要">
+      <Card size="sm" aria-label={t("运行摘要")}>
         <CardHeader className="sr-only">
-          <CardTitle>运行摘要</CardTitle>
-          <CardDescription>Codex Router 今日请求与账号可用情况。</CardDescription>
+          <CardTitle>{t("运行摘要")}</CardTitle>
+          <CardDescription>{t("Codex Router 今日请求与账号可用情况。")}</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           <ItemGroup className="grid grid-cols-2 gap-3">
-            <Item variant="muted" className="min-w-0" aria-label="今日请求指标">
+            <Item variant="muted" className="min-w-0" aria-label={t("今日请求指标")}>
               <ItemMedia variant="icon">
                 <ActivityIcon />
               </ItemMedia>
               <ItemContent className="min-w-0">
-                <ItemDescription>今日请求</ItemDescription>
+                <ItemDescription>{t("今日请求")}</ItemDescription>
                 <ItemTitle className="text-2xl font-semibold tabular-nums">
-                  {snapshot.stats.requestsToday.toLocaleString()}
+                  {snapshot.stats.requestsToday.toLocaleString(locale)}
                 </ItemTitle>
               </ItemContent>
             </Item>
-            <Item render={<button type="button" onClick={onShowLogs} />} variant="muted" className="min-w-0 text-left hover:bg-muted/80" aria-label="请求错误指标">
+            <Item render={<button type="button" onClick={onShowLogs} />} variant="muted" className="min-w-0 text-left hover:bg-muted/80" aria-label={t("请求错误指标")}>
               <ItemMedia variant="icon">
                 <TriangleAlertIcon
                   className={cn(errorRate >= 1 && "text-destructive")}
                 />
               </ItemMedia>
               <ItemContent className="min-w-0">
-                <ItemDescription>请求错误</ItemDescription>
+                <ItemDescription>{t("请求错误")}</ItemDescription>
                 <ItemTitle
                   className={cn(
                     "text-2xl font-semibold tabular-nums",
                     errorRate >= 1 && "text-destructive"
                   )}
                 >
-                  {snapshot.stats.errorsToday.toLocaleString()}
+                  {snapshot.stats.errorsToday.toLocaleString(locale)}
                 </ItemTitle>
               </ItemContent>
               <ItemActions>
                 <span className={cn(errorRate >= 1 && "text-destructive")}>
-                  错误率{" "}
+                  {t("错误率")}{" "}
                   <span className="tabular-nums">{errorRate.toFixed(2)}%</span>
                 </span>
               </ItemActions>
@@ -116,14 +119,14 @@ export function SettingsPage({
               render={<button type="button" onClick={onShowAccounts} />}
               size="xs"
               className="min-w-0 text-left hover:bg-muted"
-              aria-label={`查看 ${snapshot.stats.accountsReady} 个可路由账号`}
+              aria-label={t("查看 {{count}} 个可路由账号", { count: snapshot.stats.accountsReady })}
             >
               <ItemMedia variant="icon">
                 <UsersRoundIcon />
               </ItemMedia>
               <ItemContent className="min-w-0">
-                <ItemTitle>可路由账号</ItemTitle>
-                <ItemDescription>认证就绪并已启用</ItemDescription>
+                <ItemTitle>{t("可路由账号")}</ItemTitle>
+                <ItemDescription>{t("认证就绪并已启用")}</ItemDescription>
               </ItemContent>
               <ItemActions>
                 <span className="text-sm font-medium tabular-nums">
@@ -136,16 +139,16 @@ export function SettingsPage({
                 <Clock3Icon />
               </ItemMedia>
               <ItemContent className="min-w-0">
-                <ItemTitle>运行时长</ItemTitle>
-                <ItemDescription>当前 Gateway 进程</ItemDescription>
+                <ItemTitle>{t("运行时长")}</ItemTitle>
+                <ItemDescription>{t("当前 Gateway 进程")}</ItemDescription>
               </ItemContent>
               <ItemActions className="gap-1 text-sm">
                 <span className="font-medium tabular-nums">{uptimeHours}</span>
-                <span className="text-muted-foreground">小时</span>
+                <span className="text-muted-foreground">{t("小时")}</span>
                 <span className="font-medium tabular-nums">
                   {uptimeMinutes}
                 </span>
-                <span className="text-muted-foreground">分</span>
+                <span className="text-muted-foreground">{t("分")}</span>
               </ItemActions>
             </Item>
           </ItemGroup>
@@ -155,14 +158,14 @@ export function SettingsPage({
       <div className="grid items-start gap-4">
         <Card>
           <CardHeader>
-            <CardTitle>网络与安全边界</CardTitle>
+            <CardTitle>{t("网络与安全边界")}</CardTitle>
             <CardDescription>
-              Codex Router 只读取路由元数据，敏感请求内容始终保持不透明。
+              {t("Codex Router 只读取路由元数据，敏感请求内容始终保持不透明。")}
             </CardDescription>
             <CardAction>
               <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground [&_svg]:size-3.5">
                 <LockKeyholeIcon aria-hidden="true" />
-                只读
+                {t("只读")}
               </span>
             </CardAction>
           </CardHeader>
@@ -173,7 +176,7 @@ export function SettingsPage({
                   <NetworkIcon />
                 </ItemMedia>
                 <ItemContent className="min-w-0">
-                  <ItemTitle>监听地址</ItemTitle>
+                  <ItemTitle>{t("监听地址")}</ItemTitle>
                   <ItemDescription className="truncate font-mono text-xs">
                     {snapshot.settings.gatewayAddress}:
                     {snapshot.settings.gatewayPort}
@@ -186,7 +189,7 @@ export function SettingsPage({
                   <RouteIcon />
                 </ItemMedia>
                 <ItemContent className="min-w-0">
-                  <ItemTitle>Codex 上游</ItemTitle>
+                  <ItemTitle>{t("Codex 上游")}</ItemTitle>
                   <ItemDescription className="truncate font-mono text-xs">
                     {snapshot.settings.upstream}
                   </ItemDescription>
@@ -198,9 +201,9 @@ export function SettingsPage({
                   <ShieldCheckIcon />
                 </ItemMedia>
                 <ItemContent>
-                  <ItemTitle>数据范围</ItemTitle>
+                  <ItemTitle>{t("数据范围")}</ItemTitle>
                   <ItemDescription>
-                    仅检查账号选择所需的只读路由元数据。
+                    {t("仅检查账号选择所需的只读路由元数据。")}
                   </ItemDescription>
                 </ItemContent>
               </Item>
@@ -210,9 +213,9 @@ export function SettingsPage({
                   <FileLock2Icon />
                 </ItemMedia>
                 <ItemContent>
-                  <ItemTitle>敏感内容</ItemTitle>
+                  <ItemTitle>{t("敏感内容")}</ItemTitle>
                   <ItemDescription>
-                    Prompt、工具参数、工具输出和响应体永不记录。
+                    {t("Prompt、工具参数、工具输出和响应体永不记录。")}
                   </ItemDescription>
                 </ItemContent>
               </Item>

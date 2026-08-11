@@ -6,6 +6,7 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "@/components/ui/toast"
 import { createGatewayServiceFixture } from "@/test/gateway-service-fixture"
 import { PreferencesPage } from "./preferences-page"
+import { languageStorageKey } from "@/i18n"
 
 describe("PreferencesPage", () => {
   it("renders local environment actions with Item and opens fixed targets", async () => {
@@ -26,5 +27,19 @@ describe("PreferencesPage", () => {
     expect(dataItem?.querySelector('[data-slot="item-media"]')).toHaveClass("size-10", "self-center!", "translate-y-0!")
     expect(screen.queryByText("Prompt logging")).not.toBeInTheDocument()
     expect(screen.getByRole("tab", { name: "INFO" })).toHaveAttribute("data-active")
+  })
+
+  it("switches the console language and persists the choice", async () => {
+    const service = createGatewayServiceFixture()
+    render(
+      <ThemeProvider><Toaster><PreferencesPage snapshot={service.snapshot} service={service} reload={vi.fn()} onThemeChange={vi.fn()} /></Toaster></ThemeProvider>
+    )
+
+    await userEvent.click(screen.getByRole("button", { name: "English" }))
+
+    expect(await screen.findByRole("heading", { name: "Preferences" })).toBeInTheDocument()
+    expect(document.documentElement).toHaveAttribute("lang", "en")
+    expect(localStorage.getItem(languageStorageKey)).toBe("en")
+    expect(screen.getByText("Local environment")).toBeInTheDocument()
   })
 })

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react"
 import { Clock3Icon, SearchXIcon } from "lucide-react"
+import { useTranslation } from "react-i18next"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -73,6 +74,7 @@ export function AccountList({
   onSelect(account: AccountView): void
   onAction(account: AccountView, action: AccountAction): void
 }) {
+  const { t } = useTranslation()
   const [query, setQuery] = useState("")
   const [filter, setFilter] = useState<AccountFilter>("all")
   const activeAccountId = accounts.find((account) => account.isActive)?.id ?? ""
@@ -88,12 +90,12 @@ export function AccountList({
   )
   const filterItems = useMemo(
     () => [
-      { value: "all" as const, label: `全部（${accounts.length}）` },
-      { value: "routable" as const, label: `可路由（${counts.routable}）` },
-      { value: "attention" as const, label: `需处理（${counts.attention}）` },
-      { value: "disabled" as const, label: `已停用（${counts.disabled}）` },
+      { value: "all" as const, label: t("全部（{{count}}）", { count: accounts.length }) },
+      { value: "routable" as const, label: t("可路由（{{count}}）", { count: counts.routable }) },
+      { value: "attention" as const, label: t("需处理（{{count}}）", { count: counts.attention }) },
+      { value: "disabled" as const, label: t("已停用（{{count}}）", { count: counts.disabled }) },
     ],
-    [accounts.length, counts]
+    [accounts.length, counts, t]
   )
   const normalizedQuery = query.trim().toLowerCase()
   const filteredAccounts = useMemo(
@@ -123,16 +125,16 @@ export function AccountList({
   return (
     <Card className="h-[30rem] min-h-0 lg:h-[clamp(30rem,calc(100dvh-13rem),48rem)]">
       <CardHeader className="shrink-0">
-        <CardTitle>授权账号</CardTitle>
+        <CardTitle>{t("授权账号")}</CardTitle>
         <CardDescription>
-          搜索授权身份，并手动选择后续请求使用的路由账号。
+          {t("搜索授权身份，并手动选择后续请求使用的路由账号。")}
         </CardDescription>
         <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            aria-label="搜索授权账号"
-            placeholder="搜索 Account ID 或邮箱"
+            aria-label={t("搜索授权账号")}
+            placeholder={t("搜索 Account ID 或邮箱")}
             className="sm:max-w-sm"
           />
           <Select
@@ -142,7 +144,7 @@ export function AccountList({
               if (value) setFilter(value)
             }}
           >
-            <SelectTrigger aria-label="筛选账号状态" className="w-full sm:w-40">
+            <SelectTrigger aria-label={t("筛选账号状态")} className="w-full sm:w-40">
               <SelectValue />
             </SelectTrigger>
             <SelectContent align="start" alignItemWithTrigger={false}>
@@ -156,7 +158,7 @@ export function AccountList({
             </SelectContent>
           </Select>
           <span className="shrink-0 text-xs text-muted-foreground sm:ml-auto">
-            显示 {filteredAccounts.length} / 共 {accounts.length}
+            {t("显示 {{shown}} / 共 {{total}}", { shown: filteredAccounts.length, total: accounts.length })}
           </span>
         </div>
       </CardHeader>
@@ -182,7 +184,7 @@ export function AccountList({
                 if (account && !account.isActive) onSelect(account)
               }}
               className="gap-0"
-              aria-label="当前路由账号"
+              aria-label={t("当前路由账号")}
             >
               <ItemGroup className="gap-0 p-2">
                 {filteredAccounts.map((account, index) => {
@@ -198,12 +200,12 @@ export function AccountList({
                       >
                         <ItemMedia className="col-start-1 row-start-1 group-has-data-[slot=item-description]/item:translate-y-0 group-has-data-[slot=item-description]/item:self-center">
                           {busyId === account.id ? (
-                            <Spinner aria-label="正在切换路由账号" />
+                            <Spinner aria-label={t("正在切换路由账号")} />
                           ) : (
                             <RadioGroupItem
                               value={account.id}
                               disabled={busyId !== null || !canSelect}
-                              aria-label={`将 ${shortAccountId(account.chatgptAccountId)} 设为当前路由`}
+                              aria-label={t("将 {{account}} 设为当前路由", { account: shortAccountId(account.chatgptAccountId) })}
                             />
                           )}
                         </ItemMedia>
@@ -235,15 +237,15 @@ export function AccountList({
                               <TooltipTrigger
                                 render={<span className="min-w-0 truncate" />}
                               >
-                                {account.email ?? "无邮箱"}
+                                {account.email ?? t("无邮箱")}
                               </TooltipTrigger>
                               <TooltipContent>
-                                {account.email ?? "无邮箱"}
+                                {account.email ?? t("无邮箱")}
                               </TooltipContent>
                             </Tooltip>
                             <span aria-hidden="true">·</span>
                             <span className="shrink-0">
-                              {account.planType ?? "未知套餐"}
+                              {account.planType ?? t("未知套餐")}
                             </span>
                             <span aria-hidden="true">·</span>
                             <span className="inline-flex shrink-0 items-center gap-1 [&_svg]:size-3">
@@ -278,14 +280,14 @@ export function AccountList({
                   <EmptyMedia variant="icon">
                     <SearchXIcon />
                   </EmptyMedia>
-                  <EmptyTitle>没有匹配的账号</EmptyTitle>
+                  <EmptyTitle>{t("没有匹配的账号")}</EmptyTitle>
                   <EmptyDescription>
-                    调整搜索内容或状态筛选后再试。
+                    {t("调整搜索内容或状态筛选后再试。")}
                   </EmptyDescription>
                 </EmptyHeader>
                 <EmptyContent>
                   <Button variant="outline" size="sm" onClick={clearFilters}>
-                    清除筛选
+                    {t("清除筛选")}
                   </Button>
                 </EmptyContent>
               </Empty>
