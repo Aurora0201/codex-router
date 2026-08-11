@@ -7,6 +7,10 @@ import { defineConfig } from "vite"
 export default defineConfig({
   base: "/admin/",
   publicDir: path.resolve(import.meta.dirname, "../assets/branding"),
+  build: {
+    outDir: path.resolve(import.meta.dirname, "../server/web-dist"),
+    emptyOutDir: true,
+  },
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {

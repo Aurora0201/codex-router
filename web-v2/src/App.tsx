@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react"
 import { TriangleAlertIcon } from "lucide-react"
+import { useTranslation } from "react-i18next"
 
 import { AppSidebar, type AppPage } from "@/components/app/app-sidebar"
 import { AppHeader } from "@/components/app/app-header"
@@ -20,8 +21,9 @@ import { toast } from "@/components/ui/toast"
 const defaultGatewayService = createHttpGatewayService()
 
 function LoadingPage() {
+  const { t } = useTranslation()
   return (
-    <div className="flex flex-col gap-5" aria-label="正在载入 Codex Router 数据">
+    <div className="flex flex-col gap-5" aria-label={t("正在载入 Codex Router 数据")}>
       <div className="flex flex-col gap-2">
         <Skeleton className="h-8 w-48" />
         <Skeleton className="h-4 w-96 max-w-full" />
@@ -41,6 +43,7 @@ export function App({
   const [error, setError] = useState<string | null>(null)
   const [logsRevision, setLogsRevision] = useState(0)
   const [logsErrorsOnly, setLogsErrorsOnly] = useState(false)
+  const { t } = useTranslation()
   const { setTheme } = useTheme()
   const snapshotTheme = snapshot?.settings.theme
 
@@ -67,13 +70,13 @@ export function App({
       } catch (reason) {
         setTheme(previous)
         toast.add({
-          title: "主题保存失败",
+          title: t("主题保存失败"),
           description: (reason as Error).message,
           type: "error",
         })
       }
     },
-    [reload, service, setTheme, snapshot?.settings.theme]
+    [reload, service, setTheme, snapshot?.settings.theme, t]
   )
 
   useEffect(() => {
@@ -139,7 +142,7 @@ export function App({
             {error ? (
               <Alert variant="destructive" className="mb-6">
                 <TriangleAlertIcon />
-                <AlertTitle>无法连接 Codex Router</AlertTitle>
+                <AlertTitle>{t("无法连接 Codex Router")}</AlertTitle>
                 <AlertDescription className="flex flex-wrap items-center gap-3">
                   <span>{error}</span>
                   <Button
@@ -147,7 +150,7 @@ export function App({
                     size="sm"
                     onClick={() => void reload()}
                   >
-                    重试
+                    {t("重试")}
                   </Button>
                 </AlertDescription>
               </Alert>

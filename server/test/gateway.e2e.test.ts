@@ -281,10 +281,11 @@ describe("HTTP, SSE, compact and models", () => {
       request.on("error", (error) => { if ((error as NodeJS.ErrnoException).code !== "ECONNRESET") reject(error); });
       request.end(body);
     });
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    expect(abortedSlowRequest).toBe(true);
-    const cancelled = gateway.database.requestLog.query({ since: 0, status: "cancelled", transport: "http", limit: 100 });
-    expect(cancelled.items.some((entry) => entry.errorCode === "client_cancelled" && entry.statusCode === undefined)).toBe(true);
+    await vi.waitFor(() => {
+      expect(abortedSlowRequest).toBe(true);
+      const cancelled = gateway.database.requestLog.query({ since: 0, status: "cancelled", transport: "http", limit: 100 });
+      expect(cancelled.items.some((entry) => entry.errorCode === "client_cancelled" && entry.statusCode === undefined)).toBe(true);
+    }, { timeout: 2_000, interval: 20 });
   });
 });
 

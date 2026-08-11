@@ -6,6 +6,7 @@ import {
   ScrollTextIcon,
   UsersRoundIcon,
 } from "lucide-react"
+import { useTranslation } from "react-i18next"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -81,6 +82,7 @@ export function AppSidebar({
   activeAccount?: AccountView
 }) {
   const { isMobile, setOpenMobile, state, toggleSidebar } = useSidebar()
+  const { t } = useTranslation()
 
   const navigate = (nextPage: AppPage) => {
     onPageChange(nextPage)
@@ -99,7 +101,7 @@ export function AppSidebar({
                     variant="ghost"
                     size="icon"
                     className="group/logo-toggle relative"
-                    aria-label="展开导航栏"
+                    aria-label={t("展开导航栏")}
                     onClick={toggleSidebar}
                   />
                 }
@@ -107,13 +109,13 @@ export function AppSidebar({
                 <BrandMark className="size-5 transition-opacity group-hover/logo-toggle:opacity-0 group-focus-visible/logo-toggle:opacity-0" />
                 <PanelLeftIcon className="absolute opacity-0 transition-opacity group-hover/logo-toggle:opacity-100 group-focus-visible/logo-toggle:opacity-100" />
               </TooltipTrigger>
-              <TooltipContent side="right">展开导航栏</TooltipContent>
+              <TooltipContent side="right">{t("展开导航栏")}</TooltipContent>
             </Tooltip>
           </div>
         ) : (
           <div className="flex h-14 items-center gap-3 px-3">
             <BrandMark className="size-6" />
-            <p className="min-w-0 truncate text-lg font-semibold leading-none">
+            <p className="min-w-0 truncate font-brand text-lg font-semibold leading-none">
               Codex Router
             </p>
             <SidebarTrigger className="ml-auto size-8" />
@@ -122,7 +124,7 @@ export function AppSidebar({
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>控制台</SidebarGroupLabel>
+          <SidebarGroupLabel>{t("控制台")}</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu className="gap-1">
               {navigation.map((item) => {
@@ -131,14 +133,14 @@ export function AppSidebar({
                   <SidebarMenuItem key={item.value}>
                     <SidebarMenuButton
                       isActive={page === item.value}
-                      tooltip={item.label}
-                      aria-label={item.label}
+                      tooltip={t(item.label)}
+                      aria-label={t(item.label)}
                       onClick={() => navigate(item.value)}
                       aria-current={page === item.value ? "page" : undefined}
                     >
                       <Icon aria-hidden="true" />
                       <span className="truncate group-data-[collapsible=icon]:hidden">
-                        {item.label}
+                        {t(item.label)}
                       </span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -156,20 +158,20 @@ export function AppSidebar({
                 variant="ghost"
                 className="h-auto w-full justify-start gap-2 px-2 py-2 text-left group-data-[collapsible=icon]:justify-center"
                 onClick={() => navigate("accounts")}
-                aria-label={activeAccount ? `当前路由账号 ${activeAccount.email ?? activeAccount.chatgptAccountId ?? activeAccount.id}` : "尚未选择路由"}
+                aria-label={activeAccount ? `${t("当前路由账号")} ${activeAccount.email ?? activeAccount.chatgptAccountId ?? activeAccount.id}` : t("尚未选择路由")}
               />
             }
           >
             <RouteIcon className="shrink-0" aria-hidden="true" />
             <span className="min-w-0 group-data-[collapsible=icon]:hidden">
-              <span className="block text-xs font-medium">当前路由账号</span>
+              <span className="block text-xs font-medium">{t("当前路由账号")}</span>
               <span className="block truncate text-[10px] text-muted-foreground">
-                {activeAccount?.email ?? activeAccount?.chatgptAccountId ?? activeAccount?.id ?? "尚未选择路由"}
+                {activeAccount?.email ?? activeAccount?.chatgptAccountId ?? activeAccount?.id ?? t("尚未选择路由")}
               </span>
             </span>
           </TooltipTrigger>
           <TooltipContent side="right">
-            {activeAccount?.email ?? activeAccount?.chatgptAccountId ?? activeAccount?.id ?? "尚未选择路由"}
+            {activeAccount?.email ?? activeAccount?.chatgptAccountId ?? activeAccount?.id ?? t("尚未选择路由")}
           </TooltipContent>
         </Tooltip>
       </SidebarFooter>

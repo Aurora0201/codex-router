@@ -7,6 +7,7 @@ import {
   PlusIcon,
   TriangleAlertIcon,
 } from "lucide-react"
+import { useTranslation } from "react-i18next"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -23,6 +24,7 @@ import { cn } from "@/lib/utils"
 import type { GatewayService, LoginSessionView } from "@/services/contracts"
 
 function LoginStatus({ status }: { status: LoginSessionView["status"] }) {
+  const { t } = useTranslation()
   const copy = {
     waiting: "等待授权",
     complete: "授权完成",
@@ -49,7 +51,7 @@ function LoginStatus({ status }: { status: LoginSessionView["status"] }) {
       role="status"
     >
       {status === "waiting" ? <Spinner /> : <Icon aria-hidden="true" />}
-      {copy}
+      {t(copy)}
     </span>
   )
 }
@@ -64,6 +66,7 @@ export function OAuthDialog({
   const [open, setOpen] = useState(false)
   const [session, setSession] = useState<LoginSessionView | null>(null)
   const [busy, setBusy] = useState(false)
+  const { t } = useTranslation()
 
   useEffect(() => {
     if (!open || session?.status !== "waiting") return
@@ -75,8 +78,8 @@ export function OAuthDialog({
           if (next.status === "complete") {
             await onComplete()
             toast.add({
-              title: "账号已添加",
-              description: "请手动选择当前路由账号。",
+              title: t("账号已添加"),
+              description: t("请手动选择当前路由账号。"),
               type: "success",
             })
           }
@@ -86,7 +89,7 @@ export function OAuthDialog({
         })
     }, 900)
     return () => window.clearInterval(timer)
-  }, [onComplete, open, service, session])
+  }, [onComplete, open, service, session, t])
 
   const start = async () => {
     setBusy(true)
@@ -94,7 +97,7 @@ export function OAuthDialog({
       setSession(await service.startLogin())
     } catch (error) {
       toast.add({
-        title: "无法启动登录",
+        title: t("无法启动登录"),
         description: (error as Error).message,
         type: "error",
       })
@@ -123,25 +126,24 @@ export function OAuthDialog({
         }}
       >
         <PlusIcon data-icon="inline-start" />
-        添加账号
+        {t("添加账号")}
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>添加 ChatGPT/Codex 账号</DialogTitle>
+            <DialogTitle>{t("添加 ChatGPT/Codex 账号")}</DialogTitle>
             <DialogDescription>
-              使用 Codex 官方 Browser OAuth。Codex Router 不会读取浏览器
-              Cookie，账号凭据保存在独立目录中。
+              {t("使用 Codex 官方 Browser OAuth。Codex Router 不会读取浏览器 Cookie，账号凭据保存在独立目录中。")}
             </DialogDescription>
           </DialogHeader>
           {!session ? (
             <div className="flex flex-col gap-4">
               <p className="text-sm text-muted-foreground">
-                启动登录会话后，请在官方授权页面完成账号登录。
+                {t("启动登录会话后，请在官方授权页面完成账号登录。")}
               </p>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setOpen(false)}>
-                  取消
+                  {t("取消")}
                 </Button>
                 <Button disabled={busy} onClick={() => void start()}>
                   {busy ? (
@@ -149,7 +151,7 @@ export function OAuthDialog({
                   ) : (
                     <ExternalLinkIcon data-icon="inline-start" />
                   )}
-                  {busy ? "启动中" : "启动登录"}
+                  {busy ? t("启动中") : t("启动登录")}
                 </Button>
               </DialogFooter>
             </div>
@@ -158,10 +160,10 @@ export function OAuthDialog({
               <LoginStatus status={session.status} />
               <p className="text-sm text-muted-foreground">
                 {session.status === "waiting"
-                  ? "授权会话已准备好，请打开下面的链接完成登录。"
+                  ? t("授权会话已准备好，请打开下面的链接完成登录。")
                   : session.status === "complete"
-                    ? "新账号已安全写入 Codex Router 账号池。"
-                    : (session.error ?? "登录流程未完成。")}
+                    ? t("新账号已安全写入 Codex Router 账号池。")
+                    : (session.error ?? t("登录流程未完成。"))}
               </p>
               <div className="rounded-xl bg-muted p-3 font-mono text-xs break-all">
                 {session.authUrl}
@@ -179,32 +181,32 @@ export function OAuthDialog({
                       }
                     >
                       <ExternalLinkIcon data-icon="inline-start" />
-                      打开授权页面
+                      {t("打开授权页面")}
                     </Button>
                     <Button
                       variant="outline"
                       onClick={() => {
                         void navigator.clipboard.writeText(session.authUrl)
-                        toast.add({ title: "链接已复制", type: "success" })
+                        toast.add({ title: t("链接已复制"), type: "success" })
                       }}
                     >
                       <CopyIcon data-icon="inline-start" />
-                      复制链接
+                      {t("复制链接")}
                     </Button>
                     <Button
                       variant="destructive"
                       disabled={busy}
                       onClick={() => void cancel()}
                     >
-                      取消登录
+                      {t("取消登录")}
                     </Button>
                   </>
                 ) : session.status === "failed" ||
                   session.status === "cancelled" ? (
-                  <Button onClick={() => void start()}>重试</Button>
+                  <Button onClick={() => void start()}>{t("重试")}</Button>
                 ) : null}
                 <Button variant="secondary" onClick={() => setOpen(false)}>
-                  完成
+                  {t("完成")}
                 </Button>
               </DialogFooter>
             </div>
