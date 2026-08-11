@@ -79,7 +79,7 @@ codex-router status
 - Settings：metadata 日志开关与主题；Prompt/工具内容日志永久关闭。当前账号不在 Settings 中，属于运行状态，位于 Accounts 页面顶部与全局 Header。
 - Dashboard：运行时间、活跃 session/WS、请求与错误统计。
 
-账号认证只写入 `<data-dir>/accounts/<id>/codex-home/`。登录过程中的临时工作区位于 `<data-dir>/login-staging/`，成功后移入 accounts，失败则清理且不写数据库。SQLite 只保存 Account ID、状态、额度和路由 metadata，不包含 access/refresh/id token。FedRAMP 账号在本版本会被识别、禁用并显示“不支持”，不会静默忽略路由要求。
+账号认证只写入 `<data-dir>/accounts/<id>/codex-home/`。登录过程中的临时工作区位于 `<data-dir>/login-staging/`，凭证经验证后原子提交到 accounts，staging 随后异步清理；临时目录被 Windows 占用不会回滚已完成账号。SQLite 只保存 Account ID、状态、额度和路由 metadata，不包含 access/refresh/id token。FedRAMP 账号在本版本会被识别、禁用并显示“不支持”，不会静默忽略路由要求。
 
 ## 主账号隔离核验
 

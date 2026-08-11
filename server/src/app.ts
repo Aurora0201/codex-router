@@ -98,6 +98,7 @@ export async function buildGateway(overrides: Partial<GatewayConfig> = {}): Prom
   const activeAccounts = new ActiveAccountService(database);
   const accounts = new AccountService(config, database, activeAccounts);
   const logins = new AccountLoginService(config, database);
+  await logins.cleanupStaleStaging();
   const auth = new AccountAuthService(config, database);
   const usage = new AccountUsageService(config, database);
   const csrf = new CsrfGuard();

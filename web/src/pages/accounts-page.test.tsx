@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
 import { describe, expect, it, vi } from "vitest"
 
 import { TooltipProvider } from "@/components/ui/tooltip"
@@ -50,5 +51,16 @@ describe("AccountsPage", () => {
     expect(alert).toHaveTextContent("当前路由账号不可用")
     expect(alert).toHaveTextContent("需要重新登录")
     expect(alert).toHaveClass("text-destructive")
+  })
+
+  it("centers the add-account action against the two-line page heading", async () => {
+    const service = createGatewayServiceFixture()
+    const snapshot = await service.getSnapshot()
+    renderPage(snapshot, service)
+
+    const add = screen.getByRole("button", { name: "添加账号" })
+    expect(add.parentElement).toHaveClass("sm:items-center")
+    await userEvent.click(add)
+    expect(screen.getByRole("dialog")).toBeInTheDocument()
   })
 })

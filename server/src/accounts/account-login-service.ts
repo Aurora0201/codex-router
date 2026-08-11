@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { cp, mkdir, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, readdir, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { GatewayConfig, RateLimitSnapshot } from "../types.js";
 import { GatewayDatabase } from "../db/database.js";
@@ -31,6 +31,7 @@ interface LoginSession {
 export class AccountLoginService {
   private readonly reader = new CredentialReader();
   private readonly logins = new Map<string, LoginSession>();
+  private readonly cleanupTasks = new Map<string, Promise<void>>();
 
   constructor(
     private readonly config: GatewayConfig,
@@ -42,7 +43,11 @@ export class AccountLoginService {
     const stagingRoot = path.join(this.config.loginStagingDir, stagingUuid);
     const stagingHome = path.join(stagingRoot, "codex-home");
     await mkdir(stagingHome, { recursive: true });
-    await writeFile(path.join(stagingHome, "config.toml"), 'cli_auth_credentials_store = "file"\n', { flag: "wx" });
+    await writeFile(
+      path.join(stagingHome, "config.toml"),
+      'cli_auth_credentials_store = "file"\n\n[features]\nplugins = false\n',
+      { flag: "wx" },
+    );
 
     const client = new AppServerClient(this.config.codexCliPath, stagingHome, this.config.codexCliArgs);
     try {
@@ -67,7 +72,7 @@ export class AccountLoginService {
             if (object(params).success === false) {
               session.status = "failed";
               session.error = "oauth_login_failed";
-              void client.close().then(() => this.cleanupStaging(session)).catch(() => undefined);
+              void client.close().then(() => this.scheduleStagingCleanup(session)).catch(() => undefined);
             } else {
               void this.completeLogin(session);
             }
@@ -78,8 +83,8 @@ export class AccountLoginService {
       return { loginId, authUrl, status: session.status };
     } catch (error) {
       await client.close();
-      await this.cleanupStaging({ stagingHome } as LoginSession);
-      throw error;
+      this.scheduleStagingCleanup({ stagingHome } as LoginSession);
+      throw new Error("account_login_start_failed", { cause: error });
     }
   }
 
@@ -95,7 +100,7 @@ export class AccountLoginService {
           session.status = "failed";
           session.error = "credential_read_failed";
           await session.client.close();
-          await this.cleanupStaging(session);
+          this.scheduleStagingCleanup(session);
         }
       }
     }
@@ -112,7 +117,7 @@ export class AccountLoginService {
     } finally {
       session.status = "cancelled";
       await session.client.close();
-      await this.cleanupStaging(session);
+      this.scheduleStagingCleanup(session);
     }
   }
 
@@ -121,8 +126,25 @@ export class AccountLoginService {
   }
 
   async close(): Promise<void> {
-    await Promise.all([...this.logins.values()].map((session) => session.client.close()));
+    const sessions = [...this.logins.values()];
+    await Promise.all(sessions.map((session) => session.client.close()));
+    for (const session of sessions) this.scheduleStagingCleanup(session);
     this.logins.clear();
+    if (this.cleanupTasks.size > 0) {
+      await Promise.race([
+        Promise.allSettled([...this.cleanupTasks.values()]),
+        new Promise((resolve) => setTimeout(resolve, 1_000)),
+      ]);
+    }
+  }
+
+  async cleanupStaleStaging(): Promise<void> {
+    await mkdir(this.config.loginStagingDir, { recursive: true });
+    const entries = await readdir(this.config.loginStagingDir, { withFileTypes: true }).catch(() => []);
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      void this.removeTree(path.join(this.config.loginStagingDir, entry.name)).catch(() => undefined);
+    }
   }
 
   private view(session: LoginSession): LoginSessionView {
@@ -146,19 +168,22 @@ export class AccountLoginService {
   }
 
   private async completeLoginInner(session: LoginSession): Promise<void> {
+    let promoted = false;
     try {
       const credential = await this.reader.read(session.stagingHome);
       if (credential.fedRamp) {
         session.status = "failed";
         session.error = "fedramp_accounts_not_supported";
-        await this.cleanupStaging(session);
+        await session.client.close();
+        this.scheduleStagingCleanup(session);
         return;
       }
       const existing = this.database.accounts.findByChatgptAccountId(credential.accountId);
       if (existing) {
         session.status = "failed";
         session.error = "account_already_exists";
-        await this.cleanupStaging(session);
+        await session.client.close();
+        this.scheduleStagingCleanup(session);
         return;
       }
 
@@ -178,56 +203,61 @@ export class AccountLoginService {
         // Login is complete even when a separate rate-limit read is temporarily unavailable.
       }
 
-      // The app-server process holds the staging CODEX_HOME directory handle on
-      // Windows; it must be closed before the directory is moved, otherwise the
-      // move fails with EPERM. `close()` is idempotent, so the later `finally`
-      // call is harmless. Even after the app-server exits, grandchild processes
-      // (plugin git clones, sandboxes) can briefly retain handles, so we copy
-      // the directory instead of renaming it and retry on transient lock errors.
+      // Commit a validated copy before treating staging cleanup as best-effort.
+      // Child processes can retain Windows handles below CODEX_HOME after the
+      // app-server exits, so login success must not depend on deleting staging.
       await session.client.close();
-      await this.moveStagingToAccount(session);
-      this.database.accounts.insert({ id: session.stagingUuid, codexHome: session.accountCodexHome });
-      this.database.accounts.update(session.stagingUuid, {
-        chatgptAccountId: credential.accountId,
-        email: stringAt(official, "email") ?? credential.email,
-        planType: stringAt(official, "planType", "plan_type") ?? credential.planType,
-        authStatus: "ready",
-      });
-      if (limits) this.database.accounts.updateRateLimits(session.stagingUuid, limits);
-      this.database.accounts.markAuthRefreshed(session.stagingUuid);
+      await this.promoteStagingToAccount(session, credential.accountId);
+      promoted = true;
+      this.database.raw.transaction(() => {
+        this.database.accounts.insert({ id: session.stagingUuid, codexHome: session.accountCodexHome });
+        this.database.accounts.update(session.stagingUuid, {
+          chatgptAccountId: credential.accountId,
+          email: stringAt(official, "email") ?? credential.email,
+          planType: stringAt(official, "planType", "plan_type") ?? credential.planType,
+          authStatus: "ready",
+        });
+        if (limits) this.database.accounts.updateRateLimits(session.stagingUuid, limits);
+        this.database.accounts.markAuthRefreshed(session.stagingUuid);
+      })();
 
       session.createdAccountId = session.stagingUuid;
       session.status = "complete";
+      this.scheduleStagingCleanup(session);
     } catch (error) {
       session.status = "failed";
-      session.error = (error as Error).message ?? "credential_read_failed";
+      session.error = this.loginErrorCode(error);
       await session.client.close();
-      await this.cleanupStaging(session);
+      if (promoted) await this.removeTree(path.dirname(session.accountCodexHome)).catch(() => undefined);
+      this.scheduleStagingCleanup(session);
     } finally {
       await session.client.close();
     }
   }
 
-  private async moveStagingToAccount(session: LoginSession): Promise<void> {
+  private async promoteStagingToAccount(session: LoginSession, expectedAccountId: string): Promise<void> {
     const target = session.accountCodexHome;
-    await mkdir(path.dirname(target), { recursive: true });
-    await rm(target, { recursive: true, force: true });
-    const maxAttempts = 3;
-    for (let attempt = 1; ; attempt++) {
-      try {
-        await cp(session.stagingHome, target, { recursive: true });
-        await rm(session.stagingHome, { recursive: true, force: true });
-        await rm(path.dirname(session.stagingHome), { recursive: true, force: true });
-        return;
-      } catch (error) {
-        const code = (error as NodeJS.ErrnoException).code;
-        const retryable = code === "EPERM" || code === "EBUSY" || code === "ENOTEMPTY" || code === "EACCES";
-        if (!retryable || attempt >= maxAttempts) throw error;
-        // Grandchild processes (plugin git clones, sandboxes, SQLite WAL
-        // checkpoints) release their CODEX_HOME handles a few seconds after the
-        // app-server exits. Back off and try again before surfacing the failure.
-        await new Promise((resolve) => setTimeout(resolve, 2_500));
-      }
+    const accountRoot = path.dirname(target);
+    const promoting = path.join(accountRoot, ".codex-home-promoting");
+    await mkdir(accountRoot, { recursive: true });
+    await this.removeTree(promoting).catch(() => undefined);
+    try {
+      await cp(session.stagingHome, promoting, {
+        recursive: true,
+        filter: (source) => {
+          const relative = path.relative(session.stagingHome, source);
+          if (!relative) return true;
+          const root = relative.split(path.sep)[0];
+          return root !== ".tmp" && root !== "tmp";
+        },
+      });
+      const copied = await this.reader.read(promoting);
+      if (copied.accountId !== expectedAccountId) throw new Error("promoted_account_mismatch");
+      await this.removeTree(target).catch(() => undefined);
+      await rename(promoting, target);
+    } catch {
+      await this.removeTree(promoting).catch(() => undefined);
+      throw new Error("account_promotion_failed");
     }
   }
 
@@ -235,11 +265,27 @@ export class AccountLoginService {
     const root = path.resolve(session.stagingHome, "..");
     const expectedRoot = path.resolve(this.config.loginStagingDir);
     if (path.dirname(root) !== expectedRoot) return;
-    try {
-      await rm(root, { recursive: true, force: true });
-    } catch {
-      // Best-effort cleanup.
-    }
+    await this.removeTree(root);
+  }
+
+  private scheduleStagingCleanup(session: LoginSession): void {
+    const root = path.resolve(session.stagingHome, "..");
+    if (this.cleanupTasks.has(root)) return;
+    const task = this.cleanupStaging(session).catch(() => undefined).finally(() => {
+      this.cleanupTasks.delete(root);
+    });
+    this.cleanupTasks.set(root, task);
+  }
+
+  private removeTree(target: string): Promise<void> {
+    return rm(target, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 });
+  }
+
+  private loginErrorCode(error: unknown): string {
+    const code = (error as Error).message;
+    if (code === "account_promotion_failed") return code;
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return "credential_read_failed";
+    return "account_login_finalize_failed";
   }
 }
 

@@ -1,5 +1,22 @@
 # Known issues
 
+## Resolved: Windows plugin clone locks could fail completed account logins
+
+Codex plugin startup sync can briefly retain a handle below
+`login-staging/<id>/codex-home/.tmp/plugins-clone-*` after the login app-server exits.
+Older builds coupled account promotion to recursive staging deletion, so a Windows
+`EBUSY` could report a completed OAuth login as failed after the target credentials
+had already been copied.
+
+Implemented resolution:
+
+- Login-only app-servers disable the unrelated Codex plugins feature.
+- Account credentials are copied without transient `.tmp`/`tmp` trees, validated,
+  and atomically promoted before the SQLite transaction commits.
+- Staging cleanup is best-effort with bounded Windows lock retries and startup
+  cleanup; it cannot roll back a committed account.
+- Login status exposes stable error codes instead of local filesystem paths.
+
 ## Resolved: repeated `/models` failures were over-counted
 
 Observed behavior:
