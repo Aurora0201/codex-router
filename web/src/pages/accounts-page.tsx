@@ -114,7 +114,7 @@ export function AccountsPage({
 
   return (
     <section className="flex flex-col gap-5">
-      <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-end">
+      <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">{t("账号与路由")}</h1>
           <p className="mt-1 text-sm text-muted-foreground">

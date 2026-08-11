@@ -9,7 +9,7 @@ import {
 } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
-import { Button } from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button"
 import {
   Dialog,
   DialogContent,
@@ -129,7 +129,7 @@ export function OAuthDialog({
         {t("添加账号")}
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>{t("添加 ChatGPT/Codex 账号")}</DialogTitle>
             <DialogDescription>
@@ -137,7 +137,7 @@ export function OAuthDialog({
             </DialogDescription>
           </DialogHeader>
           {!session ? (
-            <div className="flex flex-col gap-4">
+            <>
               <p className="text-sm text-muted-foreground">
                 {t("启动登录会话后，请在官方授权页面完成账号登录。")}
               </p>
@@ -154,35 +154,34 @@ export function OAuthDialog({
                   {busy ? t("启动中") : t("启动登录")}
                 </Button>
               </DialogFooter>
-            </div>
+            </>
           ) : (
-            <div className="flex flex-col gap-5">
-              <LoginStatus status={session.status} />
-              <p className="text-sm text-muted-foreground">
-                {session.status === "waiting"
-                  ? t("授权会话已准备好，请打开下面的链接完成登录。")
-                  : session.status === "complete"
-                    ? t("新账号已安全写入 Codex Router 账号池。")
-                    : (session.error ?? t("登录流程未完成。"))}
-              </p>
-              <div className="rounded-xl bg-muted p-3 font-mono text-xs break-all">
-                {session.authUrl}
+            <>
+              <div className="flex flex-col gap-5">
+                <LoginStatus status={session.status} />
+                <p className="text-sm text-muted-foreground">
+                  {session.status === "waiting"
+                    ? t("授权会话已准备好，请打开下面的链接完成登录。")
+                    : session.status === "complete"
+                      ? t("新账号已安全写入 Codex Router 账号池。")
+                      : (session.error ?? t("登录流程未完成。"))}
+                </p>
+                <div className="rounded-xl bg-muted p-3 font-mono text-xs break-all">
+                  {session.authUrl}
+                </div>
               </div>
-              <DialogFooter>
+              <DialogFooter className="sm:flex-wrap">
                 {session.status === "waiting" ? (
                   <>
-                    <Button
-                      render={
-                        <a
-                          href={session.authUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                        />
-                      }
+                    <a
+                      className={buttonVariants()}
+                      href={session.authUrl}
+                      target="_blank"
+                      rel="noreferrer"
                     >
                       <ExternalLinkIcon data-icon="inline-start" />
                       {t("打开授权页面")}
-                    </Button>
+                    </a>
                     <Button
                       variant="outline"
                       onClick={() => {
@@ -209,7 +208,7 @@ export function OAuthDialog({
                   {t("完成")}
                 </Button>
               </DialogFooter>
-            </div>
+            </>
           )}
         </DialogContent>
       </Dialog>

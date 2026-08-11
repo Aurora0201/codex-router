@@ -13,6 +13,9 @@ const lockMs = Number(process.env.CODEX_FAKE_LOCK_MS ?? 4000);
 
 function holdCodexHome() {
   const home = process.env.CODEX_HOME;
+  const clone = path.join(home, ".tmp", "plugins-clone-test");
+  fs.mkdirSync(path.join(clone, ".git"), { recursive: true });
+  fs.writeFileSync(path.join(clone, ".git", "config"), "[remote \"origin\"]\n\turl = https://github.com/openai/plugins.git\n");
   const deadline = Date.now() + lockMs;
   const child = spawn(process.execPath, ["-e", `
     process.chdir(process.argv[1]);
@@ -21,11 +24,11 @@ function holdCodexHome() {
       setTimeout(hold, 200);
     };
     setTimeout(hold, 200);
-  `, home, String(deadline)], {
+  `, clone, String(deadline)], {
     detached: true,
     stdio: "ignore",
     windowsHide: true,
-    cwd: home,
+    cwd: clone,
   });
   child.unref();
 }

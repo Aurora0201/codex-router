@@ -1,8 +1,8 @@
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { access } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { AppServerClient } from "../src/accounts/app-server-client.js";
 import { AccountService } from "../src/accounts/account-service.js";
 import { AccountLoginService } from "../src/accounts/account-login-service.js";
@@ -423,7 +423,7 @@ describe("Codex app-server adapter", () => {  it("uses isolated CODEX_HOME and J
 
   it("completes login when a grandchild still holds the staging directory", async () => {
     const previousLockMs = process.env.CODEX_FAKE_LOCK_MS;
-    process.env.CODEX_FAKE_LOCK_MS = "1500";
+    process.env.CODEX_FAKE_LOCK_MS = "6500";
     try {
       const root = await tempDir();
       const config = loadConfig({
@@ -438,15 +438,20 @@ describe("Codex app-server adapter", () => {  it("uses isolated CODEX_HOME and J
       const database = new GatewayDatabase(config.databasePath);
       const logins = new AccountLoginService(config, database);
       const login = await logins.start();
+      const stagingEntries = await readdir(config.loginStagingDir);
+      const stagingRoot = path.join(config.loginStagingDir, stagingEntries[0]);
+      expect(await readFile(path.join(stagingRoot, "codex-home", "config.toml"), "utf8")).toContain("plugins = false");
+      const startedAt = Date.now();
       const completed = await logins.getStatus(login.loginId);
+      expect(Date.now() - startedAt).toBeLessThan(5_000);
       expect(completed.status).toBe("complete");
       const accounts = database.accounts.list();
       expect(accounts).toHaveLength(1);
       expect(accounts[0].chatgptAccountId).toBe("isolated-account");
       const accountRoot = path.join(root, "data", "accounts", accounts[0].id);
       expect(await pathExists(path.join(accountRoot, "codex-home", "auth.json"))).toBe(true);
-      const stagingRoot = path.join(root, "data", "login-staging", accounts[0].id);
-      for (let attempt = 0; attempt < 40; attempt++) {
+      expect(await pathExists(path.join(accountRoot, "codex-home", ".tmp"))).toBe(false);
+      for (let attempt = 0; attempt < 60; attempt++) {
         if (!(await pathExists(stagingRoot))) break;
         await new Promise((resolve) => setTimeout(resolve, 250));
       }
@@ -457,6 +462,55 @@ describe("Codex app-server adapter", () => {  it("uses isolated CODEX_HOME and J
       if (previousLockMs === undefined) delete process.env.CODEX_FAKE_LOCK_MS;
       else process.env.CODEX_FAKE_LOCK_MS = previousLockMs;
     }
+  });
+
+  it("cleans stale staging directories without blocking startup", async () => {
+    const root = await tempDir();
+    const config = loadConfig({
+      dataDir: path.join(root, "data"),
+      accountsDir: path.join(root, "data", "accounts"),
+      loginStagingDir: path.join(root, "data", "login-staging"),
+      databasePath: path.join(root, "data", "gateway.db"),
+      developerMode: true,
+    });
+    const stale = path.join(config.loginStagingDir, "stale-login", "codex-home");
+    await mkdir(stale, { recursive: true });
+    await writeFile(path.join(stale, "config.toml"), "stale");
+    const database = new GatewayDatabase(config.databasePath);
+    const logins = new AccountLoginService(config, database);
+    await logins.cleanupStaleStaging();
+    for (let attempt = 0; attempt < 20; attempt++) {
+      if (!(await pathExists(path.dirname(stale)))) break;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    expect(await pathExists(path.dirname(stale))).toBe(false);
+    database.close();
+  });
+
+  it("rolls back a promoted account and exposes only a stable finalize error", async () => {
+    const root = await tempDir();
+    const config = loadConfig({
+      dataDir: path.join(root, "data"),
+      accountsDir: path.join(root, "data", "accounts"),
+      loginStagingDir: path.join(root, "data", "login-staging"),
+      databasePath: path.join(root, "data", "gateway.db"),
+      codexCliPath: process.execPath,
+      codexCliArgs: [path.resolve("test/fake-app-server.mjs")],
+      developerMode: true,
+    });
+    const database = new GatewayDatabase(config.databasePath);
+    const logins = new AccountLoginService(config, database);
+    const login = await logins.start();
+    const insert = vi.spyOn(database.accounts, "insert").mockImplementation(() => {
+      throw new Error(`EBUSY: resource busy or locked, rmdir '${config.loginStagingDir}'`);
+    });
+    const result = await logins.getStatus(login.loginId);
+    expect(result).toMatchObject({ status: "failed", error: "account_login_finalize_failed" });
+    expect(result.error).not.toContain(config.loginStagingDir);
+    expect(database.accounts.list()).toHaveLength(0);
+    insert.mockRestore();
+    await logins.close();
+    database.close();
   });
 
   it("rejects a duplicate chatgpt account id on a second login", async () => {
@@ -475,12 +529,91 @@ describe("Codex app-server adapter", () => {  it("uses isolated CODEX_HOME and J
     const first = await logins.start();
     await logins.getStatus(first.loginId);
     const second = await logins.start();
-    await logins.getStatus(second.loginId);
+    const duplicate = await logins.getStatus(second.loginId);
+    expect(duplicate).toMatchObject({ status: "failed", error: "account_already_exists" });
     const accountId = database.accounts.list()[0].id;
     expect(database.accounts.get(accountId)!.chatgptAccountId).toBe("isolated-account");
     const secondAccount = database.accounts.list().find((item) => item.id !== accountId);
     expect(secondAccount).toBeUndefined();
     await logins.close();
     database.close();
+  });
+
+  it("closes the app-server before cleaning a cancelled login", async () => {
+    const root = await tempDir();
+    const config = loadConfig({
+      dataDir: path.join(root, "data"),
+      accountsDir: path.join(root, "data", "accounts"),
+      loginStagingDir: path.join(root, "data", "login-staging"),
+      databasePath: path.join(root, "data", "gateway.db"),
+      codexCliPath: process.execPath,
+      codexCliArgs: [path.resolve("test/fake-app-server.mjs")],
+      developerMode: true,
+    });
+    const database = new GatewayDatabase(config.databasePath);
+    const logins = new AccountLoginService(config, database);
+    const login = await logins.start();
+    const stagingRoot = path.join(config.loginStagingDir, (await readdir(config.loginStagingDir))[0]);
+    await logins.cancel(login.loginId);
+    expect(logins.list()[0].status).toBe("cancelled");
+    for (let attempt = 0; attempt < 20; attempt++) {
+      if (!(await pathExists(stagingRoot))) break;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    expect(await pathExists(stagingRoot)).toBe(false);
+    await logins.close();
+    database.close();
+  });
+
+  it("cleans waiting login staging when the service closes", async () => {
+    const root = await tempDir();
+    const config = loadConfig({
+      dataDir: path.join(root, "data"),
+      accountsDir: path.join(root, "data", "accounts"),
+      loginStagingDir: path.join(root, "data", "login-staging"),
+      databasePath: path.join(root, "data", "gateway.db"),
+      codexCliPath: process.execPath,
+      codexCliArgs: [path.resolve("test/fake-app-server.mjs")],
+      developerMode: true,
+    });
+    const database = new GatewayDatabase(config.databasePath);
+    const logins = new AccountLoginService(config, database);
+    await logins.start();
+    const stagingRoot = path.join(config.loginStagingDir, (await readdir(config.loginStagingDir))[0]);
+    await logins.close();
+    for (let attempt = 0; attempt < 20; attempt++) {
+      if (!(await pathExists(stagingRoot))) break;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    expect(await pathExists(stagingRoot)).toBe(false);
+    database.close();
+  });
+
+  it("rejects FedRAMP login with a stable error after closing the app-server", async () => {
+    const previousFedRamp = process.env.CODEX_FAKE_FEDRAMP;
+    process.env.CODEX_FAKE_FEDRAMP = "1";
+    try {
+      const root = await tempDir();
+      const config = loadConfig({
+        dataDir: path.join(root, "data"),
+        accountsDir: path.join(root, "data", "accounts"),
+        loginStagingDir: path.join(root, "data", "login-staging"),
+        databasePath: path.join(root, "data", "gateway.db"),
+        codexCliPath: process.execPath,
+        codexCliArgs: [path.resolve("test/fake-app-server.mjs")],
+        developerMode: true,
+      });
+      const database = new GatewayDatabase(config.databasePath);
+      const logins = new AccountLoginService(config, database);
+      const login = await logins.start();
+      const result = await logins.getStatus(login.loginId);
+      expect(result).toMatchObject({ status: "failed", error: "fedramp_accounts_not_supported" });
+      expect(database.accounts.list()).toHaveLength(0);
+      await logins.close();
+      database.close();
+    } finally {
+      if (previousFedRamp === undefined) delete process.env.CODEX_FAKE_FEDRAMP;
+      else process.env.CODEX_FAKE_FEDRAMP = previousFedRamp;
+    }
   });
 });
