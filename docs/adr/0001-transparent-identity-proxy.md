@@ -12,7 +12,7 @@
 
 - **锚定 Codex 登录账号，后端动态切换请求账号。** Codex 桌面端保持登录一个账号；网关在转发时用另一个（用户手动选中的 active）账号的凭证替换 `Authorization` 与 `chatgpt-account-id`，从而实现"不切换 Codex 登录即可换后端账号"。账号不匹配是设计常态，而非错误。
 - **数据面透明。** 网关不重写 Responses 工具 payload，数据面字节保持不透明；唯一只读例外是从 WebSocket JSON 包络提取 Codex 官方定义的请求类型、生命周期事件和规范化错误码，用于安全诊断。
-- **无会话绑定。** 每个请求独立使用当前 active 账号；切换 active 在下一个请求立即生效，无会话/线程粘滞（session binding 机制已移除）。
+- **无会话绑定。** HTTP 请求独立使用当前 active 账号；WebSocket 身份固定于握手，因此切换 active 时，空闲旧连接立即正常退役，存在进行中响应的旧连接在协议终态转发完成后退役。Codex 随后的连接使用新账号重新握手，不建立会话/线程粘滞（session binding 机制已移除）。
 - **多账号隔离。** 每个账号有独立 `CODEX_HOME`（`data/accounts/<id>/codex-home`）与 `auth.json`，凭证不落 SQLite、不进日志。
 - **接入方式。** 网关注入全局 `~/.codex/config.toml` 的 `openai_base_url` 指向自身，使 Codex 内置 `openai` provider 的流量全部经过网关。
 
@@ -41,6 +41,7 @@
 ### WebSocket
 
 - 握手阶段注入所选账号认证（`websocketUpgradeHeaders`，保留 codex 依赖的 `x-codex-turn-state`、session/thread 头、`OpenAI-Beta` 等）。
+- active 账号变化时，不在既有连接内热换认证或上游。绑定旧账号的空闲连接以正常关闭码退役；进行中的 `response.create` 可完成并转发终态，随后连接退役，使 Codex 在下一请求重新握手并取得新账号认证。账号切换导致的正常退役属于连接级成功诊断，不计作上游故障。
 - 升级成功后**双向透明转发**文本/二进制帧，诊断提取不得改变帧字节；解析失败必须继续转发。
 - 文本帧使用流式 JSON 路径筛选器且 `keepStack: false`，客户端仅读取顶层 `type`、`generate` 和 `client_metadata.x-codex-turn-metadata`，上游仅读取顶层 `type`、`response.error.code` 和 `response.incomplete_details.reason`。不组装完整 payload，不读取或记录 input、instructions、prompt、工具参数、工具结果和响应正文。
 - 每个非 prewarm `response.create` 独立记录请求生命周期；复用连接中的 `request_kind = "compaction"` 记录为 `compact`。握手和连接关闭属于连接级诊断，不参与 API 可用性。

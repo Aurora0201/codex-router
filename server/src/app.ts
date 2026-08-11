@@ -95,11 +95,11 @@ export async function buildGateway(overrides: Partial<GatewayConfig> = {}): Prom
     if (typeof persistedLogLevel === "string") app.log.level = persistedLogLevel;
   }
   await backfillChatgptAccountIds(database);
-  const accounts = new AccountService(config, database);
+  const activeAccounts = new ActiveAccountService(database);
+  const accounts = new AccountService(config, database, activeAccounts);
   const logins = new AccountLoginService(config, database);
   const auth = new AccountAuthService(config, database);
   const usage = new AccountUsageService(config, database);
-  const activeAccounts = new ActiveAccountService(database);
   const csrf = new CsrfGuard();
   const proxy = new HttpProxy({ upstreamBaseUrl: config.upstreamBaseUrl, activeAccounts, auth, usage, database });
   const codexConfig = new CodexConfigService();

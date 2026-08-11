@@ -75,6 +75,28 @@ describe("security and routing core", () => {
     database.close();
   });
 
+  it("notifies listeners only when the active account actually changes", async () => {
+    const root = await tempDir();
+    const database = new GatewayDatabase(path.join(root, "gateway.db"));
+    database.accounts.insert({ id: "a", codexHome: path.join(root, "a") });
+    database.accounts.insert({ id: "b", codexHome: path.join(root, "b") });
+    database.accounts.update("a", { authStatus: "ready" });
+    database.accounts.update("b", { authStatus: "ready" });
+    const activeAccounts = new ActiveAccountService(database);
+    const changes: Array<[string | null, string | null]> = [];
+    const unsubscribe = activeAccounts.onChange((previous, current) => changes.push([previous, current]));
+
+    activeAccounts.select("a");
+    activeAccounts.select("a");
+    activeAccounts.select("b");
+    activeAccounts.clear();
+    unsubscribe();
+    activeAccounts.select("a");
+
+    expect(changes).toEqual([[null, "a"], ["a", "b"], ["b", null]]);
+    database.close();
+  });
+
   it("rejects requests without a manually selected active account", async () => {
     const root = await tempDir();
     const database = new GatewayDatabase(path.join(root, "gateway.db"));

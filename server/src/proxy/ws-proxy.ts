@@ -45,6 +45,30 @@ interface PendingRequest {
   bytesOut: number;
 }
 
+interface ResponseLifecycle {
+  request: PendingRequest | undefined;
+}
+
+interface ManagedConnection {
+  accountId: string;
+  retire: () => void;
+}
+
+class WebSocketConnectionRegistry {
+  private readonly connections = new Set<ManagedConnection>();
+
+  add(connection: ManagedConnection): () => void {
+    this.connections.add(connection);
+    return () => this.connections.delete(connection);
+  }
+
+  retireAccount(accountId: string): void {
+    for (const connection of this.connections) {
+      if (connection.accountId === accountId) connection.retire();
+    }
+  }
+}
+
 class WebSocketHandshakeError extends Error {
   constructor(readonly statusCode: number) {
     super(`upstream_websocket_handshake_${statusCode}`);
@@ -108,6 +132,11 @@ async function connectWithAuthRetry(
 
 export async function registerWebSocketProxy(app: FastifyInstance, options: WsProxyOptions): Promise<void> {
   await app.register(websocket, { options: { maxPayload: MAX_PAYLOAD_BYTES, autoPong: false } });
+  const connections = new WebSocketConnectionRegistry();
+  const unsubscribeAccountChanges = options.activeAccounts.onChange((previousAccountId, accountId) => {
+    if (previousAccountId && previousAccountId !== accountId) connections.retireAccount(previousAccountId);
+  });
+  app.addHook("onClose", async () => unsubscribeAccountChanges());
   const prepared = new WeakMap<FastifyRequest, PreparedConnection>();
   const upgradeHeaders = new WeakMap<IncomingMessage, Record<string, string>>();
   app.websocketServer.on("headers", (headers, request) => {
@@ -187,7 +216,9 @@ export async function registerWebSocketProxy(app: FastifyInstance, options: WsPr
     let pendingBytes = 0;
     let closed = false;
     let requestSequence = 0;
-    const pendingRequests: PendingRequest[] = [];
+    const responseLifecycles: ResponseLifecycle[] = [];
+    let retiring = false;
+    let removeManagedConnection: () => void = () => undefined;
 
     const finishRequest = (pendingRequest: PendingRequest, outcome: "success" | "rejected" | "upstream_error" | "client_cancelled", errorCode?: string) => {
       options.database.requestLog.log({
@@ -206,7 +237,9 @@ export async function registerWebSocketProxy(app: FastifyInstance, options: WsPr
     };
 
     const finishPending = (outcome: "upstream_error" | "client_cancelled", errorCode: string) => {
-      for (const pendingRequest of pendingRequests.splice(0)) finishRequest(pendingRequest, outcome, errorCode);
+      for (const lifecycle of responseLifecycles.splice(0)) {
+        if (lifecycle.request) finishRequest(lifecycle.request, outcome, errorCode);
+      }
     };
 
     const closeOnce = (statusCode: number, errorCode?: string) => {
@@ -225,6 +258,21 @@ export async function registerWebSocketProxy(app: FastifyInstance, options: WsPr
       });
     };
 
+    const closeRetiredConnection = () => {
+      if (!retiring || responseLifecycles.length > 0 || closed) return;
+      closeOnce(101, "account_switch_connection_retired");
+      if (client.readyState === WebSocket.OPEN) client.close(1000, "account_changed");
+      if (context.upstream.readyState === WebSocket.OPEN) context.upstream.close(1000, "account_changed");
+    };
+
+    removeManagedConnection = connections.add({
+      accountId: context.account.id,
+      retire: () => {
+        retiring = true;
+        closeRetiredConnection();
+      },
+    });
+
     const forwardOrQueue = (data: RawData, isBinary: boolean) => {
       if (context.upstream.readyState === WebSocket.OPEN) {
         context.upstream.send(data, { binary: isBinary });
@@ -242,18 +290,20 @@ export async function registerWebSocketProxy(app: FastifyInstance, options: WsPr
     // These handlers are deliberately installed synchronously before any await.
     client.on("message", (data, isBinary) => {
       const metadata = inspectClientFrame(data, isBinary);
-      if (metadata?.type === "response.create" && metadata.generate !== false && pendingRequests.length < MAX_PENDING_FRAMES) {
-        pendingRequests.push({
+      if (metadata?.type === "response.create" && responseLifecycles.length < MAX_PENDING_FRAMES) {
+        const trackedRequest = metadata.generate === false ? undefined : {
           requestId: `${request.id}:${++requestSequence}`,
           startedAt: Date.now(),
-          transport: metadata.requestKind === "compaction" ? "compact" : "ws",
+          transport: metadata.requestKind === "compaction" ? "compact" as const : "ws" as const,
           bytesIn: rawDataBuffer(data).byteLength,
           bytesOut: 0,
-        });
+        };
+        responseLifecycles.push({ request: trackedRequest });
       }
       forwardOrQueue(data, isBinary);
     });
     client.on("close", (code, reason) => {
+      removeManagedConnection();
       if (context.upstream.readyState === WebSocket.OPEN || context.upstream.readyState === WebSocket.CONNECTING) {
         closePeer(context.upstream, code, reason);
       }
@@ -261,6 +311,7 @@ export async function registerWebSocketProxy(app: FastifyInstance, options: WsPr
       closeOnce(101, `client_close_${code}`);
     });
     client.on("error", () => {
+      removeManagedConnection();
       context.upstream.terminate();
       finishPending("client_cancelled", "client_websocket_error");
       closeOnce(502, "client_websocket_error");
@@ -277,24 +328,26 @@ export async function registerWebSocketProxy(app: FastifyInstance, options: WsPr
       pendingBytes = 0;
     });
     context.upstream.on("message", (data, isBinary) => {
-      const pendingRequest = pendingRequests[0];
-      if (pendingRequest) {
-        pendingRequest.bytesOut += rawDataBuffer(data).byteLength;
-        const metadata = inspectServerFrame(data, isBinary);
-        const terminal = metadata && websocketTerminalOutcome(metadata);
-        if (terminal) {
-          pendingRequests.shift();
-          finishRequest(pendingRequest, terminal.outcome, terminal.errorCode);
-        }
+      const lifecycle = responseLifecycles[0];
+      if (lifecycle?.request) lifecycle.request.bytesOut += rawDataBuffer(data).byteLength;
+      const metadata = lifecycle && inspectServerFrame(data, isBinary);
+      const terminal = metadata && websocketTerminalOutcome(metadata);
+      if (terminal && lifecycle) {
+        responseLifecycles.shift();
+        if (lifecycle.request) finishRequest(lifecycle.request, terminal.outcome, terminal.errorCode);
       }
-      if (client.readyState === WebSocket.OPEN) client.send(data, { binary: isBinary });
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(data, { binary: isBinary }, terminal && retiring ? closeRetiredConnection : undefined);
+      }
     });
     context.upstream.on("close", (code, reason) => {
+      removeManagedConnection();
       if (client.readyState === WebSocket.OPEN || client.readyState === WebSocket.CONNECTING) closePeer(client, code, reason);
       finishPending("upstream_error", "upstream_connection_closed");
       closeOnce(101, `upstream_close_${code}`);
     });
     context.upstream.on("error", () => {
+      removeManagedConnection();
       if (client.readyState === WebSocket.OPEN) client.close(1011, "upstream_error");
       finishPending("upstream_error", "upstream_websocket_error");
       closeOnce(502, "upstream_websocket_error");
