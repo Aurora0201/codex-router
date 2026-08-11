@@ -6,11 +6,11 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import open from "open";
 import WebSocket, { WebSocketServer } from "ws";
 import { buildGateway, type GatewayApp } from "../src/app.js";
+import { openDirectory } from "../src/system/directory-opener.js";
 
-vi.mock("open", () => ({ default: vi.fn(async () => undefined) }));
+vi.mock("../src/system/directory-opener.js", () => ({ openDirectory: vi.fn(async () => undefined) }));
 
 interface ReceivedRequest { url: string; body: Buffer; headers: IncomingHttpHeaders; }
 
@@ -390,7 +390,7 @@ describe("security and admin API", () => {
 
     const opened = await fetch(`${gatewayUrl}/api/local-environment/open`, { method: "POST", headers: { origin: gatewayUrl, cookie, "x-csrf-token": data.csrfToken, "content-type": "application/json" }, body: '{"target":"data"}' });
     expect(opened.status).toBe(204);
-    expect(vi.mocked(open)).toHaveBeenCalledWith(gateway.config.dataDir, { wait: false });
+    expect(vi.mocked(openDirectory)).toHaveBeenCalledWith(gateway.config.dataDir);
     const invalidTarget = await fetch(`${gatewayUrl}/api/local-environment/open`, { method: "POST", headers: { origin: gatewayUrl, cookie, "x-csrf-token": data.csrfToken, "content-type": "application/json" }, body: '{"target":"arbitrary-path"}' });
     expect(invalidTarget.status).toBe(400);
   });

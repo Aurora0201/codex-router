@@ -18,10 +18,10 @@ const themeItems = [
 
 function EnvironmentItem({ title, description, icon: Icon, disabled = false, onActivate }: { title: string; description: string; icon: typeof PackageIcon; disabled?: boolean; onActivate(): void }) {
   return (
-    <Item variant="outline" render={<button type="button" disabled={disabled} onClick={onActivate} aria-label={title} />} className="min-w-0 flex-nowrap text-left disabled:cursor-not-allowed disabled:opacity-60">
-      <ItemMedia variant="icon" className="rounded-md bg-muted p-2"><Icon /></ItemMedia>
+    <Item variant="outline" render={<button type="button" disabled={disabled} onClick={onActivate} aria-label={title} />} className="min-w-0 flex-nowrap text-left enabled:cursor-pointer enabled:hover:border-ring/40 enabled:hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-60">
+      <ItemMedia variant="icon" className="size-10 self-center! translate-y-0! rounded-md bg-muted"><Icon /></ItemMedia>
       <ItemContent className="min-w-0"><ItemTitle>{title}</ItemTitle><ItemDescription className="truncate font-mono text-xs">{description}</ItemDescription></ItemContent>
-      <ItemActions><ChevronRightIcon className="size-4 text-muted-foreground" aria-hidden="true" /></ItemActions>
+      <ItemActions className="text-muted-foreground [&_svg]:size-4"><ChevronRightIcon aria-hidden="true" /></ItemActions>
     </Item>
   )
 }

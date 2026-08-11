@@ -1,7 +1,7 @@
 import path from "node:path";
 import type { FastifyInstance } from "fastify";
-import open from "open";
 import type { CodexConfigService } from "../../codex/codex-config.js";
+import { openDirectory } from "../../system/directory-opener.js";
 import type { AdminContext } from "./context.js";
 import { apiAction, csrfProtect, jsonBody } from "./helpers.js";
 
@@ -25,7 +25,7 @@ export function registerLocalEnvironmentRoutes(
         directory = path.dirname(ctx.config.logFilePath);
       }
 
-      await open(directory, { wait: false });
+      await openDirectory(directory);
     });
   });
 }
