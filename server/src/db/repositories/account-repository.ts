@@ -82,7 +82,9 @@ export class AccountRepository {
       UPDATE accounts SET
         primary_used_percent=?, primary_resets_at=?, primary_window_minutes=?,
         secondary_used_percent=?, secondary_resets_at=?, secondary_window_minutes=?,
-        rate_limit_reached_type=?, last_limits_refresh_at=?, updated_at=?
+        rate_limit_reached_type=?,
+        auth_status=CASE WHEN auth_status='rate_limited' AND ? IS NULL THEN 'ready' ELSE auth_status END,
+        last_limits_refresh_at=?, updated_at=?
       WHERE id=?
     `).run(
       limits.primary?.usedPercent ?? null,
@@ -91,6 +93,7 @@ export class AccountRepository {
       limits.secondary?.usedPercent ?? null,
       limits.secondary?.resetsAt ?? null,
       limits.secondary?.windowDurationMins ?? null,
+      limits.rateLimitReachedType ?? null,
       limits.rateLimitReachedType ?? null,
       limits.loadedAt,
       Date.now(),

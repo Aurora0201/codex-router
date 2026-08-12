@@ -33,11 +33,15 @@ export interface GatewayApp {
 }
 
 function startUsageRefreshScheduler(accounts: AccountService, usage: AccountUsageService, onRefresh: () => void): NodeJS.Timeout {
-  const timer = setInterval(() => {
-    for (const account of accounts.list().filter((item) => item.enabled && item.authStatus === "ready")) {
-      void usage.refresh(account.id).then(onRefresh).catch(() => undefined);
+  const refreshAccounts = () => {
+    for (const account of accounts.list().filter((item) => item.enabled && (item.authStatus === "ready" || item.authStatus === "rate_limited"))) {
+      void usage.refreshInBackground(account.id).then((refreshed) => {
+        if (refreshed) onRefresh();
+      });
     }
-  }, 5 * 60_000);
+  };
+  refreshAccounts();
+  const timer = setInterval(refreshAccounts, 5 * 60_000);
   timer.unref();
   return timer;
 }

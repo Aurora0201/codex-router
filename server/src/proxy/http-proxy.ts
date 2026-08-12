@@ -52,7 +52,7 @@ export class HttpProxy {
       request.raw.once("aborted",abort);reply.raw.once("close",abort);
       const send=()=>undiciRequest(this.upstreamUrl(request,path),{method:request.method as Dispatcher.HttpMethod,headers:credential?buildUpstreamHeaders(request.headers,credential,request.method==="GET"?undefined:rawBody.length):buildClientPassthroughHeaders(request.headers,request.method==="GET"?undefined:rawBody.length),body:request.method==="GET"?undefined:rawBody,signal:controller.signal,headersTimeout:120_000,bodyTimeout:0,dispatcher:this.dispatcher});
       let upstream=await send(); if(upstream.statusCode===401&&selectedAccount&&credential){await upstream.body.dump();credential=await this.options.auth.refresh(selectedAccount.id);upstream=await send();}
-      if(upstream.statusCode===429&&selectedAccount){this.options.database.accounts.update(selectedAccount.id,{authStatus:"rate_limited"});void this.options.usage.refresh(selectedAccount.id).catch(()=>undefined);}
+      if(upstream.statusCode===429&&selectedAccount){this.options.database.accounts.update(selectedAccount.id,{authStatus:"rate_limited"});void this.options.usage.refreshInBackground(selectedAccount.id);}
       const headers=upstream.headers as Record<string,string|string[]|undefined>; const safe=safeResponseMetadata(headers);
       failureStage="streaming";copyResponseHeaders(headers,reply.raw);reply.hijack();reply.raw.writeHead(upstream.statusCode);
       let bytesOut=0;const counter=new Transform({transform(chunk:Buffer,_e,cb){bytesOut+=chunk.length;cb(null,chunk);}});
@@ -64,6 +64,7 @@ export class HttpProxy {
         const terminal=inspector.terminal; evidence=terminal?classifyProtocolTerminal(terminal.type??"",terminal.errorCode??terminal.incompleteReason,terminal.status)??transportFailure("protocol_terminal_unrecognized","terminal"):transportFailure(inspector.parseFailed?"protocol_event_parse_failed":"protocol_terminal_missing","terminal");
       }
       this.options.database.requestLog.finishRequest(logId,{...evidence,...safe,bytesIn:rawBody.length,bytesOut});
+      if(selectedAccount)this.options.usage.refreshIfStale(selectedAccount.id);
     }catch(error){
       const rawCode=(error as Error).message; const status=errorStatus(error); const gateway=["no_active_account_selected","account_disabled","account_not_ready","fedramp_accounts_not_supported","raw_request_body_unavailable"].includes(rawCode);
       this.options.database.requestLog.setContext(logId,{accountId:selectedAccount?.id,identityMode,bytesIn:rawBody.length});
