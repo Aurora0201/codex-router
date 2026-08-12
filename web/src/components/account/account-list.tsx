@@ -1,10 +1,12 @@
 import { useMemo, useState } from "react"
-import { Clock3Icon, SearchXIcon } from "lucide-react"
+import { CircleAlertIcon, CircleCheckIcon, Clock3Icon, SearchXIcon } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import {
   Card,
+  CardAction,
   CardContent,
   CardDescription,
   CardHeader,
@@ -129,6 +131,12 @@ export function AccountList({
         <CardDescription>
           {t("搜索授权身份，并手动选择后续请求使用的路由账号。")}
         </CardDescription>
+        <CardAction>
+          <Badge variant="outline" className={cn(activeAccountId ? "text-success" : "text-warning")}>
+            {activeAccountId ? <CircleCheckIcon data-icon="inline-start" /> : <CircleAlertIcon data-icon="inline-start" />}
+            {activeAccountId ? t("已选择路由") : t("未选择路由")}
+          </Badge>
+        </CardAction>
         <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
           <Input
             value={query}

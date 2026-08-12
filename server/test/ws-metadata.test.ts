@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   inspectClientFrame,
   inspectServerFrame,
-  websocketTerminalOutcome,
 } from "../src/proxy/ws-metadata.js";
+import { classifyProtocolTerminal } from "../src/proxy/request-classification.js";
 
 describe("bounded WebSocket metadata inspection", () => {
   it("detects compaction metadata regardless of field ordering", () => {
@@ -39,9 +39,9 @@ describe("bounded WebSocket metadata inspection", () => {
       response: { error: { code: "rate_limit_exceeded", message: "sensitive upstream message" } },
     })), false)!;
     expect(failed).toEqual({ type: "response.failed", errorCode: "rate_limit_exceeded", incompleteReason: undefined });
-    expect(websocketTerminalOutcome(failed)).toEqual({ outcome: "rejected", errorCode: "rate_limit_exceeded" });
-    expect(websocketTerminalOutcome({ type: "response.failed", errorCode: "future_private_code" })).toEqual({ outcome: "upstream_error", errorCode: "response_failed" });
-    expect(websocketTerminalOutcome({ type: "response.incomplete", incompleteReason: "max_output_tokens" })).toEqual({ outcome: "rejected", errorCode: "max_output_tokens" });
-    expect(websocketTerminalOutcome({ type: "response.completed" })).toEqual({ outcome: "success" });
+    expect(classifyProtocolTerminal(failed.type!, failed.errorCode)).toMatchObject({ state: "failed", outcome: "upstream_error", protocolErrorCode: "rate_limit_exceeded" });
+    expect(classifyProtocolTerminal("response.failed", "future_private_code")).toMatchObject({ outcome: "upstream_error", protocolErrorCode: "future_private_code" });
+    expect(classifyProtocolTerminal("response.incomplete", "max_output_tokens")).toMatchObject({ outcome: "rejected", protocolErrorCode: "max_output_tokens" });
+    expect(classifyProtocolTerminal("response.completed")).toEqual({ state: "completed", outcome: "success" });
   });
 });

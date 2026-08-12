@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react"
 import {
-  CircleAlertIcon,
+  PlusIcon,
   TriangleAlertIcon,
   UsersRoundIcon,
 } from "lucide-react"
@@ -20,6 +20,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Card, CardContent } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
 import {
   Empty,
   EmptyContent,
@@ -50,6 +51,7 @@ export function AccountsPage({
   const { t } = useTranslation()
   const [busyId, setBusyId] = useState<string | null>(null)
   const [removing, setRemoving] = useState<AccountView | null>(null)
+  const [loginOpen, setLoginOpen] = useState(false)
   const { accounts, activeAccountId } = snapshot.accounts
   const active =
     accounts.find((account) => account.id === activeAccountId) ?? null
@@ -121,18 +123,11 @@ export function AccountsPage({
             {t("所有请求只会进入你手动选定的认证账号，不自动轮换，不绑定会话。")}
           </p>
         </div>
-        <OAuthDialog service={service} onComplete={reload} />
+        <Button onClick={() => setLoginOpen(true)}>
+          <PlusIcon data-icon="inline-start" />
+          {t("添加账号")}
+        </Button>
       </div>
-
-      {accounts.length > 0 && active === null ? (
-        <Alert>
-          <CircleAlertIcon />
-          <AlertTitle>{t("尚未选择路由账号")}</AlertTitle>
-          <AlertDescription>
-            {t("后续请求暂时无法路由，请在账号池中选择一个认证就绪账号。")}
-          </AlertDescription>
-        </Alert>
-      ) : null}
 
       {activeUnavailable ? (
         <Alert variant="destructive">
@@ -161,16 +156,20 @@ export function AccountsPage({
                 </EmptyMedia>
                 <EmptyTitle>{t("尚未添加账号")}</EmptyTitle>
                 <EmptyDescription>
-                  {t("添加一个你有权使用的 ChatGPT/Codex 账号后，再手动指定路由账号。")}
+                  {t("账号池为空时，请求会使用 Codex 当前登录账号透传；添加账号后可手动指定路由账号。")}
                 </EmptyDescription>
               </EmptyHeader>
               <EmptyContent>
-                <OAuthDialog service={service} onComplete={reload} />
+                <Button onClick={() => setLoginOpen(true)}>
+                  <PlusIcon data-icon="inline-start" />
+                  {t("添加账号")}
+                </Button>
               </EmptyContent>
             </Empty>
           </CardContent>
         </Card>
       )}
+      <OAuthDialog open={loginOpen} onOpenChange={setLoginOpen} service={service} onComplete={reload} />
       <AlertDialog
         open={removing !== null}
         onOpenChange={(open) => {

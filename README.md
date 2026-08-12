@@ -8,7 +8,7 @@
 
 <h1 align="center">Codex Router</h1>
 
-Codex Router 是一个只监听本机的透明代理。它为每个已授权 ChatGPT/Codex 账号维护独立 `CODEX_HOME`，按用户手动选择的当前账号转发 Codex HTTP/SSE、WebSocket、remote compact 与 model catalog 请求。Router 不执行工具、不重写 Responses JSON，也不实现 OAuth refresh。
+Codex Router 是一个只监听本机的透明代理。它为每个已授权 ChatGPT/Codex 账号维护独立 `CODEX_HOME`，按用户手动选择的当前账号转发 Codex HTTP/SSE、WebSocket、remote compact 与 model catalog 请求。账号池完全为空时，它保留 Codex 当前登录身份直接透传，避免安装或升级后阻断请求。Router 不执行工具、不重写 Responses JSON，也不实现 OAuth refresh。
 
 ## 安装与快速开始
 

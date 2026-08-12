@@ -32,12 +32,12 @@ describe("Gateway SSE subscription", () => {
     expect(source.url).toBe("/api/events")
     source.onopen?.()
     source.listeners.get("invalidate")?.(new MessageEvent("invalidate", {
-      data: JSON.stringify({ resources: ["accounts", "stats"] }),
+      data: JSON.stringify({ resources: ["accounts", "stats", "websocketConnections"] }),
     }))
     source.onerror?.()
 
     expect(connection.mock.calls).toEqual([[true], [false]])
-    expect(invalidate).toHaveBeenCalledWith(["accounts", "stats"])
+    expect(invalidate).toHaveBeenCalledWith(["accounts", "stats", "websocketConnections"])
     unsubscribe()
     expect(source.close).toHaveBeenCalledOnce()
   })

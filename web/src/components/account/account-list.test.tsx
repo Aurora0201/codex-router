@@ -55,6 +55,7 @@ describe("AccountList", () => {
     expect(screen.queryByText("当前路由")).not.toBeInTheDocument()
     expect(screen.queryByText("设为当前")).not.toBeInTheDocument()
     expect(screen.getAllByRole("button", { name: "账号操作" })).toHaveLength(2)
+    expect(screen.getByText("已选择路由").closest('[data-slot="badge"]')).toHaveClass("text-success")
   })
 
   it("orders route selection, identity, usage, and secondary actions by priority", () => {

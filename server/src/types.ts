@@ -10,7 +10,10 @@ export type AuthStatus =
 
 export type Transport = "http" | "ws" | "compact" | "models" | "search";
 export type RequestOutcome = "success" | "rejected" | "upstream_error" | "gateway_error" | "client_cancelled";
-export type RequestScope = "request" | "connection";
+export type RequestState = "running" | "completed" | "failed" | "rejected" | "cancelled" | "interrupted";
+export type FailureSource = "gateway" | "upstream_http" | "upstream_protocol" | "transport" | "client";
+export type FailureStage = "routing" | "authentication" | "handshake" | "sending" | "streaming" | "terminal";
+export type IdentityMode = "managed_account" | "client_passthrough";
 
 export interface AccountRecord {
   id: string;
