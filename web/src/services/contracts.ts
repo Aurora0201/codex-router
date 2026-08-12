@@ -96,6 +96,7 @@ export type GatewayResource = "accounts" | "stats" | "settings" | "codex" | "log
 export type RequestLogRange = "1h" | "24h" | "7d"
 export type RequestOutcome = "success" | "rejected" | "upstream_error" | "gateway_error" | "client_cancelled"
 export type RequestScope = "request" | "connection"
+export type IdentityMode = "managed_account" | "client_passthrough"
 export interface RequestLogFilters {
   range: RequestLogRange
   status?: "success" | "rejected" | "error" | "cancelled"
@@ -120,6 +121,7 @@ export interface RequestLogView {
   errorCode?: string
   outcome: RequestOutcome
   scope: RequestScope
+  identityMode: IdentityMode
   createdAt: number
 }
 export interface RequestLogsResponse {

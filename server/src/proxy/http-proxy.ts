@@ -9,7 +9,7 @@ import { AccountUsageService } from "../accounts/account-usage-service.js";
 import { GatewayDatabase } from "../db/database.js";
 import { ActiveAccountService } from "../routing/active-account-service.js";
 import { hasBrowserOrigin } from "../security/origin-guard.js";
-import { buildUpstreamHeaders, copyResponseHeaders, isCompactionRequest } from "./headers.js";
+import { buildClientPassthroughHeaders, buildUpstreamHeaders, copyResponseHeaders, isCompactionRequest } from "./headers.js";
 
 export type ProxyPath = "/responses" | "/responses/compact" | "/models" | "/alpha/search";
 
@@ -49,14 +49,17 @@ export class HttpProxy {
     const transport: Transport = path === "/models" ? "models" : path === "/responses/compact" || (path === "/responses" && isCompactionRequest(request.headers)) ? "compact" : path === "/alpha/search" ? "search" : "http";
 
     let selectedAccount: AccountRecord | null = null;
+    let identityMode: "managed_account" | "client_passthrough" = "managed_account";
     let clientCancelled = false;
     try {
       rawBody = request.method === "GET" ? Buffer.alloc(0) : this.rawBody(request.body);
-      const account = this.options.activeAccounts.get();
-      if (!account) throw new Error("no_active_account_selected");
+      const identity = this.options.activeAccounts.resolveIdentity();
+      if (identity.mode === "unavailable") throw new Error("no_active_account_selected");
+      identityMode = identity.mode;
+      const account = identity.mode === "managed_account" ? identity.account : null;
       selectedAccount = account;
-      if (account.fedRamp) throw new Error("fedramp_accounts_not_supported");
-      let credential = await this.options.auth.getCredential(account.id);
+      if (account?.fedRamp) throw new Error("fedramp_accounts_not_supported");
+      let credential = account ? await this.options.auth.getCredential(account.id) : null;
       const controller = new AbortController();
       const abort = () => {
         if (!reply.raw.writableEnded) {
@@ -69,7 +72,9 @@ export class HttpProxy {
 
       const send = (): Promise<Dispatcher.ResponseData> => undiciRequest(this.upstreamUrl(request, path), {
         method: request.method as Dispatcher.HttpMethod,
-        headers: buildUpstreamHeaders(request.headers, credential, request.method === "GET" ? undefined : rawBody.byteLength),
+        headers: credential
+          ? buildUpstreamHeaders(request.headers, credential, request.method === "GET" ? undefined : rawBody.byteLength)
+          : buildClientPassthroughHeaders(request.headers, request.method === "GET" ? undefined : rawBody.byteLength),
         body: request.method === "GET" ? undefined : rawBody,
         signal: controller.signal,
         headersTimeout: 120_000,
@@ -77,12 +82,12 @@ export class HttpProxy {
       });
 
       let upstream = await send();
-      if (upstream.statusCode === 401) {
+      if (upstream.statusCode === 401 && account && credential) {
         await upstream.body.dump();
         credential = await this.options.auth.refresh(account.id);
         upstream = await send();
       }
-      if (upstream.statusCode === 429) {
+      if (upstream.statusCode === 429 && account) {
         this.options.database.accounts.update(account.id, { authStatus: "rate_limited" });
         void this.options.usage.refresh(account.id).catch(() => undefined);
       }
@@ -102,12 +107,13 @@ export class HttpProxy {
         requestId: request.id,
         route: path,
         transport,
-        accountId: account.id,
+        accountId: account?.id,
         statusCode: upstream.statusCode,
         durationMs: Date.now() - startedAt,
         bytesIn: rawBody.byteLength,
         bytesOut,
         scope: "request",
+        identityMode,
       });
     } catch (error) {
       const status = errorStatus(error);
@@ -129,6 +135,7 @@ export class HttpProxy {
         errorCode,
         outcome: wasClientCancellation ? "client_cancelled" : gatewayError ? "gateway_error" : "upstream_error",
         scope: "request",
+        identityMode,
       });
       if (wasClientCancellation) return;
       if (!reply.raw.headersSent) await reply.code(status).send({ error: errorCode });

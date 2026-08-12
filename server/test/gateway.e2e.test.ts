@@ -19,6 +19,9 @@ let upstream: http.Server;
 let upstreamUrl: string;
 let gateway: GatewayApp;
 let gatewayUrl: string;
+let emptyGatewayRoot: string;
+let emptyGateway: GatewayApp;
+let emptyGatewayUrl: string;
 let wsServer: WebSocketServer;
 let webDir: string;
 const received: ReceivedRequest[] = [];
@@ -86,6 +89,9 @@ beforeAll(async () => {
       response.writeHead(200, { "content-type": "application/json", "x-models-etag": "models-1" });
       response.end('{"data":[{"id":"mock-codex"}]}');
       return;
+    }
+    if (body.includes(Buffer.from('"passthrough401":true'))) {
+      response.writeHead(401, { "content-type": "application/json" }); response.end('{"error":"expired"}'); return;
     }
     if (body.includes(Buffer.from('"cause401":true')) && unauthorizedAttempts++ === 0) {
       response.writeHead(401, { "content-type": "application/json" }); response.end('{"error":"expired"}'); return;
@@ -155,15 +161,91 @@ beforeAll(async () => {
   gateway.database.accounts.update("second", { authStatus: "ready", email: "second@example.test", planType: "plus", chatgptAccountId: "upstream-account-2" });
   gateway.activeAccounts.select("local");
   gatewayUrl = await gateway.app.listen({ host: "127.0.0.1", port: 0 });
+
+  emptyGatewayRoot = path.join(root, "empty-gateway");
+  emptyGateway = await buildGateway({
+    host: "127.0.0.1",
+    port: 0,
+    upstreamBaseUrl: upstreamUrl,
+    developerMode: true,
+    dataDir: emptyGatewayRoot,
+    accountsDir: path.join(emptyGatewayRoot, "accounts"),
+    databasePath: path.join(emptyGatewayRoot, "gateway.db"),
+    webDistDir: webDir,
+  });
+  emptyGatewayUrl = await emptyGateway.app.listen({ host: "127.0.0.1", port: 0 });
 });
 
 afterAll(async () => {
   await gateway.app.close();
+  await emptyGateway.app.close();
   wsServer.close();
   upstream.closeAllConnections();
   await new Promise<void>((resolve) => upstream.close(() => resolve()));
   await rm(root, { recursive: true, force: true });
   delete process.env.GATEWAY_LOG_LEVEL;
+});
+
+describe("empty account pool passthrough", () => {
+  const clientHeaders = {
+    authorization: "Bearer client-secret",
+    "chatgpt-account-id": "client-account",
+    "x-codex-feature": "passthrough",
+    cookie: "must-not-forward=true",
+  };
+
+  it("passes HTTP routes through with the Codex client identity and records the identity mode", async () => {
+    const raw = Buffer.from('{"opaque":"unchanged"}');
+    for (const route of ["responses", "responses/compact", "alpha/search"]) {
+      const result = await streamRequest(`${emptyGatewayUrl}/backend-api/codex/${route}`, raw, clientHeaders);
+      expect(result.status).toBe(200);
+      const request = received.findLast((entry) => entry.url.endsWith(`/${route}`))!;
+      expect(request.body.equals(raw)).toBe(true);
+      expect(request.headers.authorization).toBe("Bearer client-secret");
+      expect(request.headers["chatgpt-account-id"]).toBe("client-account");
+      expect(request.headers["x-codex-feature"]).toBe("passthrough");
+      expect(request.headers.cookie).toBeUndefined();
+    }
+    const models = await fetch(`${emptyGatewayUrl}/backend-api/codex/models?client_version=0.147.0`, { headers: clientHeaders });
+    expect(models.status).toBe(200);
+    const modelsRequest = received.findLast((entry) => entry.url.endsWith("/models?client_version=0.147.0"))!;
+    expect(modelsRequest.headers.authorization).toBe("Bearer client-secret");
+    expect(modelsRequest.headers["chatgpt-account-id"]).toBe("client-account");
+
+    const logs = emptyGateway.database.requestLog.query({ since: 0, accountId: "__client_passthrough__", limit: 100 });
+    expect(logs.items).toHaveLength(4);
+    expect(logs.items.every((entry) => entry.identityMode === "client_passthrough" && entry.accountId === undefined)).toBe(true);
+    expect(JSON.stringify(logs)).not.toContain("client-secret");
+  });
+
+  it("does not refresh or mutate managed accounts for passthrough 401 and 429 responses", async () => {
+    const before401 = received.length;
+    const unauthorized = await streamRequest(`${emptyGatewayUrl}/backend-api/codex/responses`, Buffer.from('{"passthrough401":true}'), clientHeaders);
+    expect(unauthorized.status).toBe(401);
+    expect(received.length - before401).toBe(1);
+
+    const limited = await streamRequest(`${emptyGatewayUrl}/backend-api/codex/responses`, Buffer.from('{"rate429":true}'), clientHeaders);
+    expect(limited.status).toBe(429);
+    expect(emptyGateway.database.accounts.list()).toEqual([]);
+  });
+
+  it("passes WebSocket authentication and frames through without registering a managed account", async () => {
+    const socket = new WebSocket(emptyGatewayUrl.replace("http:", "ws:") + "/backend-api/codex/responses", {
+      headers: clientHeaders,
+    });
+    await once(socket, "open");
+    const frame = '{"type":"response.create","opaque":"client-frame"}';
+    socket.send(frame);
+    expect((await once(socket, "message"))[0].toString()).toBe(frame);
+    await once(socket, "message");
+    expect(wsAccounts.at(-1)).toBe("client-account");
+    socket.close(1000, "done");
+    await once(socket, "close");
+
+    const logs = emptyGateway.database.requestLog.query({ since: 0, accountId: "__client_passthrough__", transport: "ws", limit: 100 });
+    expect(logs.items.some((entry) => entry.scope === "request" && entry.outcome === "success")).toBe(true);
+    expect(logs.items.every((entry) => entry.identityMode === "client_passthrough")).toBe(true);
+  });
 });
 
 describe("HTTP, SSE, compact and models", () => {

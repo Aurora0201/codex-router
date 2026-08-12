@@ -21,7 +21,7 @@
 ### 通用
 
 - 路由白名单仅限：`POST /responses`、`POST /responses/compact`、`GET /models`、`POST /alpha/search`（Codex `web.run` 工具的独立网页搜索端点，见 `codex-rs/ext/web-search`），以及 `GET /responses` 的 WebSocket Upgrade。其余 `backend-api/codex/*` 一律 `501`。
-- 每个请求从 `active_account` 解析出账号，经 `auth.getCredential()` 取得其 access token。
+- 每个请求优先从 `active_account` 解析账号，经 `auth.getCredential()` 取得其 access token。仅当账号数据库完全为空时，网关进入 `client_passthrough`：保留 Codex 客户端自带的 `Authorization` 与 `chatgpt-account-id`，不替换身份。账号池非空但未选择、禁用或失效时仍拒绝请求，不自动回退。
 - 认证替换由 `buildUpstreamHeaders` 完成：设置 `Authorization: Bearer <token>` 与 `chatgpt-account-id`；剥离 `cookie`、`host`、`connection`、`content-length` 等请求头（由网关重建）。
 - 响应头经 `copyResponseHeaders` 转发，剥离 `set-cookie`、`connection` 等传输层头。
 - 浏览器 Origin 请求（`hasBrowserOrigin`）一律拒绝（数据面仅服务本地 Codex 客户端）。
@@ -33,6 +33,7 @@
 - 上游响应体经 `pipeline(upstream.body, counter, reply.raw)` **流式透传**，不完整缓冲到内存；SSE 事件原样流回。
 - 上游 URL 由 `upstreamUrl(request, path)` 构造：`upstreamBaseUrl + path`，并**透传客户端 query string**（例如 `/models?client_version=<ver>`），保证路由元数据不丢失。
 - 下游断开（`aborted` / `close`）时通过 `AbortController` 中止上游请求。
+- `client_passthrough` 不执行账号 refresh，也不因 429 修改账号池状态；上游状态原样返回并按正常请求统计。
 - 上游返回 `401` 且尚未产生有效流：对**同一账号**执行一次认证刷新并重试一次。
 - 上游返回 `429`：将该账号标记为 `rate_limited`，并异步刷新额度展示。
 - 大请求体与长连接不受网关限制（`bodyTimeout: 0`）。
@@ -42,6 +43,7 @@
 
 - 握手阶段注入所选账号认证（`websocketUpgradeHeaders`，保留 codex 依赖的 `x-codex-turn-state`、session/thread 头、`OpenAI-Beta` 等）。
 - active 账号变化时，不在既有连接内热换认证或上游。绑定旧账号的空闲连接以正常关闭码退役；进行中的 `response.create` 可完成并转发终态，随后连接退役，使 Codex 在下一请求重新握手并取得新账号认证。账号切换导致的正常退役属于连接级成功诊断，不计作上游故障。
+- 空账号池建立的 `client_passthrough` 连接使用客户端握手认证，不加入托管账号连接注册表，也不执行认证刷新。
 - 升级成功后**双向透明转发**文本/二进制帧，诊断提取不得改变帧字节；解析失败必须继续转发。
 - 文本帧使用流式 JSON 路径筛选器且 `keepStack: false`，客户端仅读取顶层 `type`、`generate` 和 `client_metadata.x-codex-turn-metadata`，上游仅读取顶层 `type`、`response.error.code` 和 `response.incomplete_details.reason`。不组装完整 payload，不读取或记录 input、instructions、prompt、工具参数、工具结果和响应正文。
 - 每个非 prewarm `response.create` 独立记录请求生命周期；复用连接中的 `request_kind = "compaction"` 记录为 `compact`。握手和连接关闭属于连接级诊断，不参与 API 可用性。

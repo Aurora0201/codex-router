@@ -2,7 +2,7 @@ import type Database from "better-sqlite3";
 
 type SqliteDatabase = Database.Database;
 
-export const SCHEMA_VERSION = 7;
+export const SCHEMA_VERSION = 8;
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS request_log (
   error_code TEXT,
   outcome TEXT NOT NULL DEFAULT 'upstream_error',
   scope TEXT NOT NULL DEFAULT 'request',
+  identity_mode TEXT NOT NULL DEFAULT 'managed_account',
   created_at INTEGER NOT NULL,
   FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE SET NULL
 );
@@ -151,6 +152,12 @@ export function migrate(db: SqliteDatabase): void {
       END
       WHERE scope = 'request';
     `);
+  }
+  if (version < 8) {
+    const logColumns = tableColumns(db, "request_log");
+    if (!logColumns.has("identity_mode")) {
+      db.exec("ALTER TABLE request_log ADD COLUMN identity_mode TEXT NOT NULL DEFAULT 'managed_account'");
+    }
   }
 
   db.prepare("INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (?, ?)").run(SCHEMA_VERSION, Date.now());

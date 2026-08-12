@@ -200,6 +200,20 @@ describe("database migration v2", () => {
 });
 
 describe("schema diagnostics", () => {
+  it("adds a managed identity mode to historical request logs", async () => {
+    const root = await tempDir();
+    const dbPath = path.join(root, "identity-mode.db");
+    const database = new GatewayDatabase(dbPath);
+    database.requestLog.log({ requestId: "historical", route: "/models", transport: "models", statusCode: 200 });
+    database.raw.exec("ALTER TABLE request_log DROP COLUMN identity_mode");
+    database.raw.prepare("DELETE FROM schema_migrations WHERE version = 8").run();
+    database.close();
+
+    const migrated = new GatewayDatabase(dbPath);
+    expect(migrated.requestLog.query({ since: 0, limit: 10 }).items[0]).toMatchObject({ identityMode: "managed_account" });
+    migrated.close();
+  });
+
   it("migrates historical reset seconds while preserving millisecond timestamps", async () => {
     const root = await tempDir();
     const dbPath = path.join(root, "timestamps.db");
@@ -251,7 +265,7 @@ describe("schema diagnostics", () => {
       INSERT INTO request_log(id, route, transport, status_code, outcome, scope, created_at)
       VALUES ('successful-old', '/responses', 'http', 200, 'upstream_error', 'request', 1)
     `).run();
-    database.raw.prepare("DELETE FROM schema_migrations WHERE version = 7").run();
+    database.raw.prepare("DELETE FROM schema_migrations WHERE version >= 7").run();
     database.close();
 
     const migrated = new GatewayDatabase(dbPath);

@@ -7,6 +7,12 @@ const REQUEST_BLOCKLIST = new Set([
   "te", "trailer", "transfer-encoding", "upgrade", "content-length",
 ]);
 
+const PASSTHROUGH_REQUEST_BLOCKLIST = new Set([
+  "cookie", "host", "connection", "proxy-connection", "keep-alive",
+  "proxy-authenticate", "proxy-authorization", "te", "trailer",
+  "transfer-encoding", "upgrade", "content-length",
+]);
+
 const RESPONSE_BLOCKLIST = new Set([
   "connection", "proxy-connection", "keep-alive", "proxy-authenticate", "proxy-authorization",
   "te", "trailer", "transfer-encoding", "upgrade", "set-cookie",
@@ -25,6 +31,16 @@ export function buildUpstreamHeaders(headers: IncomingHttpHeaders, credential: C
   return result;
 }
 
+export function buildClientPassthroughHeaders(headers: IncomingHttpHeaders, bodyLength?: number): Record<string, string | string[]> {
+  const result: Record<string, string | string[]> = {};
+  for (const [name, value] of Object.entries(headers)) {
+    if (PASSTHROUGH_REQUEST_BLOCKLIST.has(name.toLowerCase()) || value === undefined) continue;
+    result[name] = Array.isArray(value) ? value : String(value);
+  }
+  if (bodyLength !== undefined) result["content-length"] = String(bodyLength);
+  return result;
+}
+
 export function copyResponseHeaders(
   headers: Record<string, string | string[] | undefined>,
   target: { setHeader(name: string, value: string | string[]): unknown },
@@ -37,6 +53,15 @@ export function copyResponseHeaders(
 
 export function websocketUpgradeHeaders(headers: IncomingHttpHeaders, credential: CredentialSnapshot): Record<string, string | string[]> {
   const result = buildUpstreamHeaders(headers, credential);
+  delete result["sec-websocket-key"];
+  delete result["sec-websocket-version"];
+  delete result["sec-websocket-extensions"];
+  delete result["sec-websocket-protocol"];
+  return result;
+}
+
+export function clientPassthroughWebsocketHeaders(headers: IncomingHttpHeaders): Record<string, string | string[]> {
+  const result = buildClientPassthroughHeaders(headers);
   delete result["sec-websocket-key"];
   delete result["sec-websocket-version"];
   delete result["sec-websocket-extensions"];

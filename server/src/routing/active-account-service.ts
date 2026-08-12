@@ -16,6 +16,16 @@ export class ActiveAccountService {
     return account;
   }
 
+  resolveIdentity():
+    | { mode: "managed_account"; account: AccountRecord }
+    | { mode: "client_passthrough" }
+    | { mode: "unavailable" } {
+    const account = this.get();
+    if (account) return { mode: "managed_account", account };
+    if (this.database.accounts.list().length === 0) return { mode: "client_passthrough" };
+    return { mode: "unavailable" };
+  }
+
   select(accountId: string): AccountRecord {
     const account = this.database.accounts.get(accountId);
     if (!account) throw new Error("account_not_found");

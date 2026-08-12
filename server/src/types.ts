@@ -11,6 +11,7 @@ export type AuthStatus =
 export type Transport = "http" | "ws" | "compact" | "models" | "search";
 export type RequestOutcome = "success" | "rejected" | "upstream_error" | "gateway_error" | "client_cancelled";
 export type RequestScope = "request" | "connection";
+export type IdentityMode = "managed_account" | "client_passthrough";
 
 export interface AccountRecord {
   id: string;

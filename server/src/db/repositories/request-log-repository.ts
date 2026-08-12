@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
-import type { RequestOutcome, RequestScope, Transport } from "../../types.js";
+import type { IdentityMode, RequestOutcome, RequestScope, Transport } from "../../types.js";
 import type { SettingsRepository } from "./settings-repository.js";
 
 type SqliteDatabase = Database.Database;
@@ -17,6 +17,7 @@ export interface RequestLogEntry {
   errorCode?: string;
   outcome?: RequestOutcome;
   scope?: RequestScope;
+  identityMode?: IdentityMode;
 }
 
 export interface RequestLogFilters {
@@ -50,6 +51,7 @@ interface RequestLogRow {
   error_code: string | null;
   outcome: RequestOutcome;
   scope: RequestScope;
+  identity_mode: IdentityMode;
   created_at: number;
 }
 
@@ -77,12 +79,12 @@ export class RequestLogRepository {
   log(input: RequestLogEntry): void {
     if (!this.settings.requestMetadataLoggingEnabled()) return;
     this.db.prepare(`
-      INSERT INTO request_log(id, request_id, route, transport, account_id, status_code, duration_ms, bytes_in, bytes_out, error_code, outcome, scope, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO request_log(id, request_id, route, transport, account_id, status_code, duration_ms, bytes_in, bytes_out, error_code, outcome, scope, identity_mode, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       randomUUID(), input.requestId ?? null, input.route, input.transport, input.accountId ?? null,
       input.statusCode ?? null, input.durationMs ?? null, input.bytesIn ?? null, input.bytesOut ?? null,
-      input.errorCode ?? null, input.outcome ?? requestOutcome(input.statusCode, input.errorCode), input.scope ?? "request", Date.now(),
+      input.errorCode ?? null, input.outcome ?? requestOutcome(input.statusCode, input.errorCode), input.scope ?? "request", input.identityMode ?? "managed_account", Date.now(),
     );
     this.onLogged?.();
   }
@@ -116,8 +118,11 @@ export class RequestLogRepository {
       values.push(filters.transport);
     }
     if (filters.accountId) {
-      where.push("request_log.account_id = ?");
-      values.push(filters.accountId);
+      if (filters.accountId === "__client_passthrough__") where.push("request_log.identity_mode = 'client_passthrough'");
+      else {
+        where.push("request_log.account_id = ?");
+        values.push(filters.accountId);
+      }
     }
     if (filters.query) {
       where.push("(request_log.request_id LIKE ? OR request_log.route LIKE ? OR request_log.error_code LIKE ? OR accounts.email LIKE ? OR accounts.chatgpt_account_id LIKE ?)");
@@ -186,6 +191,7 @@ export class RequestLogRepository {
       errorCode: row.error_code ?? undefined,
       outcome: row.outcome,
       scope: row.scope,
+      identityMode: row.identity_mode,
       createdAt: row.created_at,
     }));
     const last = page.at(-1);

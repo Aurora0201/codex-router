@@ -2,12 +2,12 @@ import type { IncomingMessage } from "node:http";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import websocket from "@fastify/websocket";
 import WebSocket, { type RawData } from "ws";
-import type { AccountRecord, CredentialSnapshot } from "../types.js";
+import type { AccountRecord, IdentityMode } from "../types.js";
 import { AccountAuthService } from "../accounts/account-auth-service.js";
 import { GatewayDatabase } from "../db/database.js";
 import { ActiveAccountService } from "../routing/active-account-service.js";
 import { hasBrowserOrigin } from "../security/origin-guard.js";
-import { IMPORTANT_WS_RESPONSE_HEADERS, isCompactionRequest, websocketUpgradeHeaders } from "./headers.js";
+import { clientPassthroughWebsocketHeaders, IMPORTANT_WS_RESPONSE_HEADERS, isCompactionRequest, websocketUpgradeHeaders } from "./headers.js";
 import { inspectClientFrame, inspectServerFrame, rawDataBuffer, websocketTerminalOutcome } from "./ws-metadata.js";
 
 const MAX_PENDING_FRAMES = 32;
@@ -32,7 +32,8 @@ interface UpstreamConnection {
 
 interface PreparedConnection {
   upstream: WebSocket;
-  account: AccountRecord;
+  account: AccountRecord | null;
+  identityMode: IdentityMode;
   startedAt: number;
   transport: "ws" | "compact";
 }
@@ -91,12 +92,12 @@ function captureResponseHeaders(response: IncomingMessage): Record<string, strin
   return result;
 }
 
-function connectOnce(url: string, request: FastifyRequest, credential: CredentialSnapshot): Promise<UpstreamConnection> {
+function connectOnce(url: string, request: FastifyRequest, headers: Record<string, string | string[]>): Promise<UpstreamConnection> {
   return new Promise((resolve, reject) => {
     const protocolHeader = request.headers["sec-websocket-protocol"];
     const protocols = typeof protocolHeader === "string" ? protocolHeader.split(",").map((value) => value.trim()).filter(Boolean) : [];
     const socket = new WebSocket(url, protocols, {
-      headers: websocketUpgradeHeaders(request.headers, credential),
+      headers,
       followRedirects: false,
       handshakeTimeout: 120_000,
       perMessageDeflate: false,
@@ -122,11 +123,11 @@ async function connectWithAuthRetry(
 ): Promise<UpstreamConnection> {
   let credential = await options.auth.getCredential(account.id);
   try {
-    return await connectOnce(upstreamWsUrl(options.upstreamBaseUrl), request, credential);
+    return await connectOnce(upstreamWsUrl(options.upstreamBaseUrl), request, websocketUpgradeHeaders(request.headers, credential));
   } catch (error) {
     if (!(error instanceof WebSocketHandshakeError) || error.statusCode !== 401) throw error;
     credential = await options.auth.refresh(account.id);
-    return connectOnce(upstreamWsUrl(options.upstreamBaseUrl), request, credential);
+    return connectOnce(upstreamWsUrl(options.upstreamBaseUrl), request, websocketUpgradeHeaders(request.headers, credential));
   }
 }
 
@@ -152,8 +153,8 @@ export async function registerWebSocketProxy(app: FastifyInstance, options: WsPr
       }
       const startedAt = Date.now();
       const transport = isCompactionRequest(request.headers) ? "compact" : "ws";
-      const account = options.activeAccounts.get();
-      if (!account) {
+      const identity = options.activeAccounts.resolveIdentity();
+      if (identity.mode === "unavailable") {
         options.database.requestLog.log({
           requestId: request.id,
           route: "/responses",
@@ -167,7 +168,8 @@ export async function registerWebSocketProxy(app: FastifyInstance, options: WsPr
         await reply.code(503).send({ error: "no_active_account_selected" });
         return;
       }
-      if (account.fedRamp) {
+      const account = identity.mode === "managed_account" ? identity.account : null;
+      if (account?.fedRamp) {
         options.database.requestLog.log({
           requestId: request.id,
           route: "/responses",
@@ -182,10 +184,12 @@ export async function registerWebSocketProxy(app: FastifyInstance, options: WsPr
         return;
       }
       try {
-        const connection = await connectWithAuthRetry(options, request, account);
+        const connection = account
+          ? await connectWithAuthRetry(options, request, account)
+          : await connectOnce(upstreamWsUrl(options.upstreamBaseUrl), request, clientPassthroughWebsocketHeaders(request.headers));
         upgradeHeaders.set(request.raw, connection.responseHeaders);
         for (const [name, value] of Object.entries(connection.responseHeaders)) reply.header(name, value);
-        prepared.set(request, { upstream: connection.socket, account, startedAt, transport });
+        prepared.set(request, { upstream: connection.socket, account, identityMode: identity.mode, startedAt, transport });
       } catch (error) {
         const status = error instanceof WebSocketHandshakeError ? error.statusCode : 502;
         const errorCode = error instanceof WebSocketHandshakeError ? error.message : "upstream_websocket_handshake_failed";
@@ -193,12 +197,13 @@ export async function registerWebSocketProxy(app: FastifyInstance, options: WsPr
           requestId: request.id,
           route: "/responses",
           transport,
-          accountId: account.id,
+          accountId: account?.id,
           statusCode: status,
           durationMs: Date.now() - startedAt,
           errorCode,
           outcome: "upstream_error",
           scope: "connection",
+          identityMode: identity.mode,
         });
         await reply.code(status).send({ error: errorCode });
       }
@@ -225,7 +230,7 @@ export async function registerWebSocketProxy(app: FastifyInstance, options: WsPr
         requestId: pendingRequest.requestId,
         route: "/responses",
         transport: pendingRequest.transport,
-        accountId: context.account.id,
+        accountId: context.account?.id,
         statusCode: outcome === "success" ? 200 : undefined,
         durationMs: Date.now() - pendingRequest.startedAt,
         bytesIn: pendingRequest.bytesIn,
@@ -233,6 +238,7 @@ export async function registerWebSocketProxy(app: FastifyInstance, options: WsPr
         errorCode,
         outcome,
         scope: "request",
+        identityMode: context.identityMode,
       });
     };
 
@@ -249,12 +255,13 @@ export async function registerWebSocketProxy(app: FastifyInstance, options: WsPr
         requestId: request.id,
         route: "/responses",
         transport: context.transport,
-        accountId: context.account.id,
+        accountId: context.account?.id,
         statusCode,
         durationMs: Date.now() - context.startedAt,
         errorCode,
         outcome: errorCode?.startsWith("upstream_") ? "upstream_error" : errorCode === "client_websocket_error" ? "client_cancelled" : "success",
         scope: "connection",
+        identityMode: context.identityMode,
       });
     };
 
@@ -265,13 +272,15 @@ export async function registerWebSocketProxy(app: FastifyInstance, options: WsPr
       if (context.upstream.readyState === WebSocket.OPEN) context.upstream.close(1000, "account_changed");
     };
 
-    removeManagedConnection = connections.add({
-      accountId: context.account.id,
-      retire: () => {
-        retiring = true;
-        closeRetiredConnection();
-      },
-    });
+    if (context.account) {
+      removeManagedConnection = connections.add({
+        accountId: context.account.id,
+        retire: () => {
+          retiring = true;
+          closeRetiredConnection();
+        },
+      });
+    }
 
     const forwardOrQueue = (data: RawData, isBinary: boolean) => {
       if (context.upstream.readyState === WebSocket.OPEN) {
