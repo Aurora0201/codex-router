@@ -1,10 +1,9 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import {
   BanIcon,
   CircleCheckIcon,
   CopyIcon,
   ExternalLinkIcon,
-  PlusIcon,
   TriangleAlertIcon,
 } from "lucide-react"
 import { useTranslation } from "react-i18next"
@@ -57,23 +56,38 @@ function LoginStatus({ status }: { status: LoginSessionView["status"] }) {
 }
 
 export function OAuthDialog({
+  open,
+  onOpenChange,
   service,
   onComplete,
 }: {
+  open: boolean
+  onOpenChange(open: boolean): void
   service: GatewayService
   onComplete(): Promise<void>
 }) {
-  const [open, setOpen] = useState(false)
   const [session, setSession] = useState<LoginSessionView | null>(null)
   const [busy, setBusy] = useState(false)
+  const generation = useRef(0)
   const { t } = useTranslation()
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) {
+      generation.current += 1
+      setSession(null)
+      setBusy(false)
+    }
+    onOpenChange(nextOpen)
+  }
 
   useEffect(() => {
     if (!open || session?.status !== "waiting") return
+    const currentGeneration = generation.current
     const timer = window.setInterval(() => {
       void service
         .getLoginStatus(session.loginId)
         .then(async (next) => {
+          if (generation.current !== currentGeneration) return
           setSession(next)
           if (next.status === "complete") {
             await onComplete()
@@ -85,6 +99,7 @@ export function OAuthDialog({
           }
         })
         .catch((error: Error) => {
+          if (generation.current !== currentGeneration) return
           setSession({ ...session, status: "failed", error: error.message })
         })
     }, 900)
@@ -92,43 +107,51 @@ export function OAuthDialog({
   }, [onComplete, open, service, session, t])
 
   const start = async () => {
+    const currentGeneration = ++generation.current
+    let authWindow: Window | null = null
+    try {
+      authWindow = window.open("about:blank", "_blank")
+      if (authWindow) authWindow.opener = null
+    } catch {
+      // The authorization link remains available in the dialog as a fallback.
+    }
     setBusy(true)
     try {
-      setSession(await service.startLogin())
+      const next = await service.startLogin()
+      if (generation.current !== currentGeneration) {
+        authWindow?.close()
+        return
+      }
+      setSession(next)
+      if (authWindow) authWindow.location.replace(next.authUrl)
+      else toast.add({ title: t("授权页面未自动打开"), description: t("请点击“打开授权页面”继续登录。") })
     } catch (error) {
+      authWindow?.close()
+      if (generation.current !== currentGeneration) return
       toast.add({
         title: t("无法启动登录"),
         description: (error as Error).message,
         type: "error",
       })
     } finally {
-      setBusy(false)
+      if (generation.current === currentGeneration) setBusy(false)
     }
   }
 
   const cancel = async () => {
     if (!session) return
+    const currentGeneration = generation.current
     setBusy(true)
     try {
       await service.cancelLogin(session.loginId)
-      setSession({ ...session, status: "cancelled" })
+      if (generation.current === currentGeneration) setSession({ ...session, status: "cancelled" })
     } finally {
-      setBusy(false)
+      if (generation.current === currentGeneration) setBusy(false)
     }
   }
 
   return (
-    <>
-      <Button
-        onClick={() => {
-          setOpen(true)
-          setSession(null)
-        }}
-      >
-        <PlusIcon data-icon="inline-start" />
-        {t("添加账号")}
-      </Button>
-      <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>{t("添加 ChatGPT/Codex 账号")}</DialogTitle>
@@ -142,7 +165,7 @@ export function OAuthDialog({
                 {t("启动登录会话后，请在官方授权页面完成账号登录。")}
               </p>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setOpen(false)}>
+                <Button variant="outline" onClick={() => handleOpenChange(false)}>
                   {t("取消")}
                 </Button>
                 <Button disabled={busy} onClick={() => void start()}>
@@ -204,14 +227,13 @@ export function OAuthDialog({
                   session.status === "cancelled" ? (
                   <Button onClick={() => void start()}>{t("重试")}</Button>
                 ) : null}
-                <Button variant="secondary" onClick={() => setOpen(false)}>
+                <Button variant="secondary" onClick={() => handleOpenChange(false)}>
                   {t("完成")}
                 </Button>
               </DialogFooter>
             </>
           )}
         </DialogContent>
-      </Dialog>
-    </>
+    </Dialog>
   )
 }
