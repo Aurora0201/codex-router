@@ -409,6 +409,76 @@ describe("Codex app-server adapter", () => {  it("uses isolated CODEX_HOME and J
     database.close();
   });
 
+  it("coalesces quota refreshes, throttles recent attempts and restores a released rate limit", async () => {
+    const root = await tempDir();
+    const accountHome = path.join(root, "account");
+    await mkdir(accountHome, { recursive: true });
+    const config = loadConfig({
+      dataDir: path.join(root, "data"),
+      accountsDir: path.join(root, "data", "accounts"),
+      loginStagingDir: path.join(root, "data", "login-staging"),
+      databasePath: path.join(root, "data", "gateway.db"),
+      codexCliPath: process.execPath,
+      codexCliArgs: [path.resolve("test/fake-app-server.mjs")],
+      developerMode: true,
+    });
+    const database = new GatewayDatabase(config.databasePath);
+    database.accounts.insert({ id: "limited", codexHome: accountHome });
+    database.accounts.update("limited", { authStatus: "rate_limited" });
+    const usage = new AccountUsageService(config, database);
+
+    await Promise.all([
+      usage.refresh("limited"),
+      usage.refresh("limited"),
+      usage.refresh("limited"),
+    ]);
+
+    const firstLog = await readFile(path.join(accountHome, "rpc.log"), "utf8");
+    expect(firstLog.match(/account\/rateLimits\/read/g)).toHaveLength(1);
+    expect(database.accounts.get("limited")).toMatchObject({
+      authStatus: "ready",
+      primaryUsedPercent: 25,
+      secondaryUsedPercent: 10,
+    });
+
+    usage.refreshIfStale("limited");
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const throttledLog = await readFile(path.join(accountHome, "rpc.log"), "utf8");
+    expect(throttledLog.match(/account\/rateLimits\/read/g)).toHaveLength(1);
+    database.close();
+  });
+
+  it("retries a background quota refresh once without retrying a manual refresh", async () => {
+    const root = await tempDir();
+    const database = new GatewayDatabase(path.join(root, "gateway.db"));
+    database.accounts.insert({ id: "account", codexHome: path.join(root, "account") });
+    database.accounts.update("account", { authStatus: "ready" });
+    const usage = new AccountUsageService({} as never, database);
+    const snapshot = { primary: null, secondary: null, rateLimitReachedType: null, loadedAt: Date.now() };
+    const refreshOnce = vi.spyOn(
+      usage as unknown as { refreshOnce(accountId: string): Promise<typeof snapshot> },
+      "refreshOnce",
+    );
+
+    refreshOnce.mockRejectedValueOnce(new Error("temporary"));
+    await expect(usage.refresh("account")).rejects.toThrow("temporary");
+    expect(refreshOnce).toHaveBeenCalledTimes(1);
+
+    vi.useFakeTimers();
+    try {
+      refreshOnce.mockReset()
+        .mockRejectedValueOnce(new Error("temporary"))
+        .mockResolvedValueOnce(snapshot);
+      const background = usage.refreshInBackground("account");
+      await vi.advanceTimersByTimeAsync(2_500);
+      await expect(background).resolves.toBe(true);
+      expect(refreshOnce).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+    database.close();
+  });
+
   it("completes only once when login completion is triggered concurrently", async () => {
     const root = await tempDir();
     const config = loadConfig({
