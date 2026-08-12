@@ -1,8 +1,24 @@
-import { useEffect, useRef, useState } from "react"
-import { ChevronDownIcon, RadioIcon, SearchIcon } from "lucide-react"
+import { useEffect, useMemo, useRef, useState } from "react"
+import {
+  BanIcon,
+  CheckCircle2Icon,
+  CircleMinusIcon,
+  RadioIcon,
+  SearchIcon,
+  SlidersHorizontalIcon,
+  TriangleAlertIcon,
+} from "lucide-react"
+import {
+  type ColumnDef,
+  flexRender,
+  getCoreRowModel,
+  useReactTable,
+} from "@tanstack/react-table"
 import { useTranslation } from "react-i18next"
 
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { ColumnResizeHandle } from "@/components/request/column-resize-handle"
 import {
   Card,
   CardContent,
@@ -27,6 +43,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty"
 import { Input } from "@/components/ui/input"
+import { Field, FieldGroup } from "@/components/ui/field"
 import {
   Pagination,
   PaginationContent,
@@ -36,6 +53,14 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination"
+import {
+  Popover,
+  PopoverContent,
+  PopoverDescription,
+  PopoverHeader,
+  PopoverTitle,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
 import {
   Select,
@@ -84,6 +109,36 @@ const LABELS: Record<WebSocketConnectionLogView["outcome"], string> = {
   retired: "正常退役",
   closed: "已关闭",
 }
+function ConnectionOutcomeBadge({
+  outcome,
+}: {
+  outcome: WebSocketConnectionLogView["outcome"]
+}) {
+  const { t } = useTranslation()
+  const Icon =
+    outcome === "connected"
+      ? CheckCircle2Icon
+      : outcome === "rejected"
+        ? BanIcon
+        : outcome === "failed"
+          ? TriangleAlertIcon
+          : CircleMinusIcon
+  return (
+    <Badge
+      variant="outline"
+      className={cn(
+        outcome === "connected" && "text-success",
+        outcome === "rejected" && "text-warning",
+        outcome === "failed" && "text-destructive",
+        (outcome === "retired" || outcome === "closed") &&
+          "text-muted-foreground"
+      )}
+    >
+      <Icon data-icon="inline-start" />
+      {t(LABELS[outcome])}
+    </Badge>
+  )
+}
 const value = (input: unknown) =>
   input === undefined || input === null ? "—" : String(input)
 const local = (time?: number) =>
@@ -107,15 +162,17 @@ function Choice({
   value,
   items,
   onChange,
+  className,
 }: {
   label: string
   value: string
   items: Array<{ value: string; label: string }>
   onChange(value: string): void
+  className?: string
 }) {
   return (
     <Select value={value} onValueChange={(next) => next && onChange(next)}>
-      <SelectTrigger className="w-40" aria-label={label}>
+      <SelectTrigger className={cn("w-40", className)} aria-label={label}>
         <SelectValue>
           {items.find((item) => item.value === value)?.label}
         </SelectValue>
@@ -162,7 +219,7 @@ function AccountFilter({
       itemToStringLabel={(item) => item.label}
       itemToStringValue={(item) => item.value}
     >
-      <ComboboxInput className="w-56" aria-label="账号筛选" />
+      <ComboboxInput className="w-full" aria-label="账号筛选" />
       <ComboboxContent>
         <ComboboxEmpty>没有匹配的账号</ComboboxEmpty>
         <ComboboxList>
@@ -194,7 +251,6 @@ export function WebSocketConnectionLogsPanel({
     limit: PAGE_SIZE,
   })
   const [query, setQuery] = useState("")
-  const [advanced, setAdvanced] = useState(false)
   const [result, setResult] = useState(EMPTY)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
@@ -217,8 +273,6 @@ export function WebSocketConnectionLogsPanel({
   }, [query])
   useEffect(() => {
     const current = ++sequence.current
-    // Query-key changes intentionally reset the visible async state before fetching.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true)
     setError(false)
     void service
@@ -256,153 +310,101 @@ export function WebSocketConnectionLogsPanel({
     if (!loading && next >= 1 && next <= result.pagination.totalPages)
       setFilters((current) => ({ ...current, page: next, cursor: undefined }))
   }
+  const advancedCount = [
+    filters.from,
+    filters.accountId,
+    filters.closeInitiator,
+    filters.handshakeHttpStatus,
+    filters.clientCloseCode,
+    filters.upstreamCloseCode,
+  ].filter((entry) => entry !== undefined).length
+  const columns = useMemo<ColumnDef<WebSocketConnectionLogView>[]>(
+    () => [
+      {
+        id: "result",
+        size: 250,
+        minSize: 220,
+        maxSize: 340,
+        header: t("时间与结果"),
+        cell: ({ row }) => (
+          <div className="flex items-center gap-2">
+            <span className="w-20 tabular-nums">
+              {new Date(row.original.startedAt).toLocaleTimeString(locale)}
+            </span>
+            <ConnectionOutcomeBadge outcome={row.original.outcome} />
+          </div>
+        ),
+      },
+      {
+        accessorKey: "connectionId",
+        size: 260,
+        minSize: 180,
+        maxSize: 360,
+        header: t("连接"),
+        cell: ({ row }) => (
+          <span className="block truncate" title={row.original.connectionId}>
+            {row.original.connectionId}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "handshakeHttpStatus",
+        size: 120,
+        minSize: 100,
+        maxSize: 180,
+        header: t("握手 HTTP"),
+        cell: ({ row }) => (
+          <span className="tabular-nums">
+            {value(row.original.handshakeHttpStatus)}
+          </span>
+        ),
+      },
+      {
+        id: "closeCode",
+        size: 130,
+        minSize: 110,
+        maxSize: 200,
+        header: t("关闭码"),
+        cell: ({ row }) => (
+          <span
+            className="tabular-nums"
+            title={`${t("客户端")}: ${value(row.original.clientCloseCode)} · ${t("上游")}: ${value(row.original.upstreamCloseCode)}`}
+          >
+            {row.original.clientCloseCode !== undefined
+              ? `C ${row.original.clientCloseCode}`
+              : row.original.upstreamCloseCode !== undefined
+                ? `U ${row.original.upstreamCloseCode}`
+                : "—"}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "closeReasonCode",
+        size: 260,
+        minSize: 180,
+        maxSize: 420,
+        header: t("关闭原因"),
+        cell: ({ row }) => (
+          <span className="block truncate" title={row.original.closeReasonCode}>
+            {value(row.original.closeReasonCode)}
+          </span>
+        ),
+      },
+    ],
+    [locale, t]
+  )
+  // TanStack exposes stateful callbacks as the official table integration seam.
+  // eslint-disable-next-line react-hooks/incompatible-library
+  const table = useReactTable({
+    data: result.items,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+    enableColumnResizing: true,
+    columnResizeMode: "onChange",
+  })
   return (
     <>
-      <Card>
-        <CardHeader>
-          <CardTitle>{t("筛选连接")}</CardTitle>
-          <CardDescription>
-            {t("摘要和连接列表使用相同筛选范围。")}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-wrap items-center gap-2">
-          <Choice
-            label={t("时间范围")}
-            value={filters.from !== undefined ? "custom" : filters.range}
-            onChange={(range) =>
-              update(
-                range === "custom"
-                  ? { from: Date.now() - 3_600_000, to: Date.now() }
-                  : {
-                      range: range as WebSocketConnectionLogFilters["range"],
-                      from: undefined,
-                      to: undefined,
-                    }
-              )
-            }
-            items={[
-              { value: "1h", label: t("最近 1 小时") },
-              { value: "24h", label: t("最近 24 小时") },
-              { value: "7d", label: t("最近 7 天") },
-              { value: "custom", label: t("自定义时间") },
-            ]}
-          />
-          <Choice
-            label={t("连接结果")}
-            value={filters.outcome ?? "all"}
-            onChange={(outcome) =>
-              update({
-                outcome:
-                  outcome === "all"
-                    ? undefined
-                    : (outcome as WebSocketConnectionLogFilters["outcome"]),
-              })
-            }
-            items={[
-              { value: "all", label: t("全部结果") },
-              ...Object.entries(LABELS).map(([value, label]) => ({
-                value,
-                label: t(label),
-              })),
-            ]}
-          />
-          <div className="relative min-w-64 flex-1">
-            <SearchIcon className="pointer-events-none absolute top-2 left-2.5 size-4 text-muted-foreground" />
-            <Input
-              className="pl-8"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder={t("搜索连接 ID、关闭原因或账号")}
-            />
-          </div>
-          <Button
-            variant="outline"
-            onClick={() => setAdvanced((value) => !value)}
-            aria-expanded={advanced}
-          >
-            {t("更多筛选")}
-            <ChevronDownIcon data-icon="inline-end" />
-          </Button>
-          {filters.from !== undefined && (
-            <div className="flex basis-full flex-wrap items-center gap-2">
-              <Input
-                type="datetime-local"
-                aria-label={t("开始时间")}
-                className="w-auto"
-                value={local(filters.from)}
-                onChange={(event) =>
-                  event.target.value &&
-                  update({ from: new Date(event.target.value).getTime() })
-                }
-              />
-              <span className="text-muted-foreground">—</span>
-              <Input
-                type="datetime-local"
-                aria-label={t("结束时间")}
-                className="w-auto"
-                value={local(filters.to)}
-                onChange={(event) =>
-                  event.target.value &&
-                  update({ to: new Date(event.target.value).getTime() })
-                }
-              />
-            </div>
-          )}
-          {advanced && (
-            <div className="flex basis-full flex-wrap items-center gap-2 border-t pt-3">
-              <AccountFilter
-                accounts={accounts}
-                value={filters.accountId}
-                onChange={(accountId) => update({ accountId })}
-              />
-              <Choice
-                label={t("关闭发起方")}
-                value={filters.closeInitiator ?? "all"}
-                onChange={(closeInitiator) =>
-                  update({
-                    closeInitiator:
-                      closeInitiator === "all"
-                        ? undefined
-                        : (closeInitiator as WebSocketConnectionLogFilters["closeInitiator"]),
-                  })
-                }
-                items={[
-                  { value: "all", label: t("全部发起方") },
-                  { value: "client", label: "client" },
-                  { value: "upstream", label: "upstream" },
-                  { value: "gateway", label: "gateway" },
-                ]}
-              />
-              {[
-                ["handshakeHttpStatus", "握手 HTTP"],
-                ["clientCloseCode", "客户端关闭码"],
-                ["upstreamCloseCode", "上游关闭码"],
-              ].map(([key, label]) => (
-                <Input
-                  key={key}
-                  aria-label={t(label)}
-                  className="w-36"
-                  inputMode="numeric"
-                  placeholder={t(label)}
-                  value={
-                    (filters[
-                      key as keyof WebSocketConnectionLogFilters
-                    ] as number) ?? ""
-                  }
-                  onChange={(event) =>
-                    update({
-                      [key]: event.target.value
-                        ? Number(event.target.value)
-                        : undefined,
-                    })
-                  }
-                />
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         {[
           [t("连接总数"), result.summary.connections],
           [t("失败 / 拒绝"), result.summary.failures],
@@ -423,16 +425,176 @@ export function WebSocketConnectionLogsPanel({
           </Card>
         ))}
       </div>
-      <Card className="min-h-0 gap-0 overflow-hidden">
-        <CardHeader className="border-b">
+      <Card className="gap-3 rounded-b-none pb-3 lg:shrink-0">
+        <CardHeader>
           <CardTitle>{t("WebSocket 连接诊断")}</CardTitle>
           <CardDescription>
             {t("握手与关闭证据独立于请求结果，不参与请求成功率。")}
           </CardDescription>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <Choice
+              label={t("时间范围")}
+              value={filters.from !== undefined ? "custom" : filters.range}
+              onChange={(range) =>
+                update(
+                  range === "custom"
+                    ? { from: Date.now() - 3_600_000, to: Date.now() }
+                    : {
+                        range: range as WebSocketConnectionLogFilters["range"],
+                        from: undefined,
+                        to: undefined,
+                      }
+                )
+              }
+              items={[
+                { value: "1h", label: t("最近 1 小时") },
+                { value: "24h", label: t("最近 24 小时") },
+                { value: "7d", label: t("最近 7 天") },
+                { value: "custom", label: t("自定义时间") },
+              ]}
+            />
+            <Choice
+              label={t("连接结果")}
+              value={filters.outcome ?? "all"}
+              onChange={(outcome) =>
+                update({
+                  outcome:
+                    outcome === "all"
+                      ? undefined
+                      : (outcome as WebSocketConnectionLogFilters["outcome"]),
+                })
+              }
+              items={[
+                { value: "all", label: t("全部结果") },
+                ...Object.entries(LABELS).map(([value, label]) => ({
+                  value,
+                  label: t(label),
+                })),
+              ]}
+            />
+            <div className="relative min-w-64 flex-1">
+              <SearchIcon className="pointer-events-none absolute top-2 left-2.5 size-4 text-muted-foreground" />
+              <Input
+                className="pl-8"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder={t("搜索连接 ID、关闭原因或账号")}
+              />
+            </div>
+            <Popover>
+              <PopoverTrigger render={<Button variant="outline" />}>
+                <SlidersHorizontalIcon data-icon="inline-start" />
+                {t("更多筛选")}
+                {advancedCount > 0 && (
+                  <Badge variant="secondary">{advancedCount}</Badge>
+                )}
+              </PopoverTrigger>
+              <PopoverContent
+                align="end"
+                className="w-[min(34rem,calc(100vw-2rem))]"
+              >
+                <PopoverHeader>
+                  <PopoverTitle>{t("更多筛选")}</PopoverTitle>
+                  <PopoverDescription>
+                    {t("摘要和连接列表使用相同筛选范围。")}
+                  </PopoverDescription>
+                </PopoverHeader>
+                {filters.from !== undefined && (
+                  <FieldGroup className="grid gap-3 sm:grid-cols-2">
+                    <Field>
+                      <Input
+                        type="datetime-local"
+                        aria-label={t("开始时间")}
+                        className="w-full"
+                        value={local(filters.from)}
+                        onChange={(event) =>
+                          event.target.value &&
+                          update({
+                            from: new Date(event.target.value).getTime(),
+                          })
+                        }
+                      />
+                    </Field>
+                    <Field>
+                      <Input
+                        type="datetime-local"
+                        aria-label={t("结束时间")}
+                        className="w-full"
+                        value={local(filters.to)}
+                        onChange={(event) =>
+                          event.target.value &&
+                          update({ to: new Date(event.target.value).getTime() })
+                        }
+                      />
+                    </Field>
+                  </FieldGroup>
+                )}
+                <FieldGroup className="grid gap-3 sm:grid-cols-2">
+                  <Field>
+                    <AccountFilter
+                      accounts={accounts}
+                      value={filters.accountId}
+                      onChange={(accountId) => update({ accountId })}
+                    />
+                  </Field>
+                  <Field>
+                    <Choice
+                      className="w-full"
+                      label={t("关闭发起方")}
+                      value={filters.closeInitiator ?? "all"}
+                      onChange={(closeInitiator) =>
+                        update({
+                          closeInitiator:
+                            closeInitiator === "all"
+                              ? undefined
+                              : (closeInitiator as WebSocketConnectionLogFilters["closeInitiator"]),
+                        })
+                      }
+                      items={[
+                        { value: "all", label: t("全部发起方") },
+                        { value: "client", label: "client" },
+                        { value: "upstream", label: "upstream" },
+                        { value: "gateway", label: "gateway" },
+                      ]}
+                    />
+                  </Field>
+                  {[
+                    ["handshakeHttpStatus", "握手 HTTP"],
+                    ["clientCloseCode", "客户端关闭码"],
+                    ["upstreamCloseCode", "上游关闭码"],
+                  ].map(([key, label]) => (
+                    <Field key={key}>
+                      <Input
+                        key={key}
+                        aria-label={t(label)}
+                        className="w-full"
+                        inputMode="numeric"
+                        placeholder={t(label)}
+                        value={
+                          (filters[
+                            key as keyof WebSocketConnectionLogFilters
+                          ] as number) ?? ""
+                        }
+                        onChange={(event) =>
+                          update({
+                            [key]: event.target.value
+                              ? Number(event.target.value)
+                              : undefined,
+                          })
+                        }
+                      />
+                    </Field>
+                  ))}
+                </FieldGroup>
+              </PopoverContent>
+            </Popover>
+          </div>
         </CardHeader>
-        <CardContent className="p-0">
+      </Card>
+      <Card className="-mt-4 min-h-0 gap-0 overflow-hidden rounded-t-none py-0 lg:flex-1">
+        <CardContent className="flex min-h-0 flex-1 flex-col p-0">
           {error ? (
-            <Empty className="min-h-80 border-0">
+            <Empty className="h-full min-h-80 border-0 lg:min-h-0">
               <EmptyHeader>
                 <EmptyMedia variant="icon">
                   <RadioIcon />
@@ -444,7 +606,7 @@ export function WebSocketConnectionLogsPanel({
               </EmptyHeader>
             </Empty>
           ) : !loading && result.items.length === 0 ? (
-            <Empty className="min-h-80 border-0">
+            <Empty className="h-full min-h-80 border-0 lg:min-h-0">
               <EmptyHeader>
                 <EmptyMedia variant="icon">
                   <RadioIcon />
@@ -456,73 +618,56 @@ export function WebSocketConnectionLogsPanel({
           ) : (
             <ScrollArea
               ref={scroll}
-              className="h-[31rem] [&_[data-slot=table-container]]:overflow-visible"
+              className="min-h-0 flex-1 [&_[data-slot=table-container]]:overflow-visible"
             >
-              <Table className="min-w-[760px] table-fixed">
+              <Table
+                className="table-fixed"
+                style={{ minWidth: table.getTotalSize() }}
+              >
                 <TableHeader className="sticky top-0 z-10 [&_th]:bg-card [&_tr]:shadow-sm">
-                  <TableRow>
-                    <TableHead className="w-56 pl-4">
-                      {t("时间与结果")}
-                    </TableHead>
-                    <TableHead>{t("连接")}</TableHead>
-                    <TableHead className="w-28">{t("握手 HTTP")}</TableHead>
-                    <TableHead className="w-32">{t("关闭码")}</TableHead>
-                    <TableHead className="w-56">{t("关闭原因")}</TableHead>
-                  </TableRow>
+                  {table.getHeaderGroups().map((group) => (
+                    <TableRow key={group.id}>
+                      {group.headers.map((header) => (
+                        <TableHead
+                          key={header.id}
+                          className="relative h-11 px-4 py-0 align-middle"
+                          style={{ width: header.getSize() }}
+                        >
+                          {flexRender(
+                            header.column.columnDef.header,
+                            header.getContext()
+                          )}
+                          <ColumnResizeHandle header={header} />
+                        </TableHead>
+                      ))}
+                    </TableRow>
+                  ))}
                 </TableHeader>
                 <TableBody>
-                  {result.items.map((item) => (
+                  {table.getRowModel().rows.map((row) => (
                     <TableRow
-                      key={item.id}
+                      key={row.id}
                       role="button"
                       tabIndex={0}
                       className="h-11 cursor-pointer"
-                      onClick={() => setSelected(item)}
+                      onClick={() => setSelected(row.original)}
                       onKeyDown={(event) => {
                         if (event.key === "Enter" || event.key === " ")
-                          setSelected(item)
+                          setSelected(row.original)
                       }}
                     >
-                      <TableCell className="pl-4">
-                        <span className="inline-flex items-center gap-2">
-                          <span className="tabular-nums">
-                            {new Date(item.startedAt).toLocaleTimeString(
-                              locale
-                            )}
-                          </span>
-                          <span>{t(LABELS[item.outcome])}</span>
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <span
-                          className="block truncate"
-                          title={item.connectionId}
+                      {row.getVisibleCells().map((cell) => (
+                        <TableCell
+                          key={cell.id}
+                          className="px-4"
+                          style={{ width: cell.column.getSize() }}
                         >
-                          {item.connectionId}
-                        </span>
-                      </TableCell>
-                      <TableCell className="tabular-nums">
-                        {value(item.handshakeHttpStatus)}
-                      </TableCell>
-                      <TableCell className="tabular-nums">
-                        <span
-                          title={`${t("客户端")}: ${value(item.clientCloseCode)} · ${t("上游")}: ${value(item.upstreamCloseCode)}`}
-                        >
-                          {item.clientCloseCode !== undefined
-                            ? `C ${item.clientCloseCode}`
-                            : item.upstreamCloseCode !== undefined
-                              ? `U ${item.upstreamCloseCode}`
-                              : "—"}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <span
-                          className="block truncate"
-                          title={item.closeReasonCode}
-                        >
-                          {value(item.closeReasonCode)}
-                        </span>
-                      </TableCell>
+                          {flexRender(
+                            cell.column.columnDef.cell,
+                            cell.getContext()
+                          )}
+                        </TableCell>
+                      ))}
                     </TableRow>
                   ))}
                 </TableBody>

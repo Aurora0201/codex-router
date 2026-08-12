@@ -8,11 +8,11 @@ import {
 import {
   BanIcon,
   CheckCircle2Icon,
-  ChevronDownIcon,
   CircleMinusIcon,
   ClipboardIcon,
   FileClockIcon,
   SearchIcon,
+  SlidersHorizontalIcon,
   TriangleAlertIcon,
   XIcon,
 } from "lucide-react"
@@ -54,6 +54,14 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination"
+import {
+  Popover,
+  PopoverContent,
+  PopoverDescription,
+  PopoverHeader,
+  PopoverTitle,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
 import {
   Select,
@@ -83,6 +91,8 @@ import {
 import { toast } from "@/components/ui/toast"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { WebSocketConnectionLogsPanel } from "@/components/request/websocket-connection-logs-panel"
+import { ColumnResizeHandle } from "@/components/request/column-resize-handle"
+import { Field, FieldGroup } from "@/components/ui/field"
 import { cn } from "@/lib/utils"
 import type {
   AccountView,
@@ -252,7 +262,7 @@ function AccountCombobox({
       itemToStringValue={(option) => option.value}
     >
       <ComboboxInput
-        className="w-56"
+        className="w-full"
         placeholder={t("搜索账号邮箱")}
         aria-label={t("账号筛选")}
       />
@@ -296,7 +306,9 @@ function RequestDataTable({
     () => [
       {
         id: "status",
-        size: 280,
+        size: 250,
+        minSize: 220,
+        maxSize: 340,
         header: t("时间与状态"),
         cell: ({ row }) => {
           const item = row.original
@@ -318,7 +330,9 @@ function RequestDataTable({
       },
       {
         accessorKey: "route",
-        size: 310,
+        size: 240,
+        minSize: 160,
+        maxSize: 420,
         header: t("路由"),
         cell: ({ row }) => (
           <span
@@ -331,7 +345,9 @@ function RequestDataTable({
       },
       {
         id: "account",
-        size: 250,
+        size: 220,
+        minSize: 160,
+        maxSize: 360,
         header: t("账号"),
         cell: ({ row }) => {
           const label =
@@ -348,6 +364,8 @@ function RequestDataTable({
       {
         accessorKey: "durationMs",
         size: 110,
+        minSize: 90,
+        maxSize: 180,
         header: t("耗时"),
         cell: ({ row }) => (
           <span className="block tabular-nums">
@@ -360,6 +378,8 @@ function RequestDataTable({
       {
         id: "traffic",
         size: 160,
+        minSize: 130,
+        maxSize: 240,
         header: t("流量"),
         cell: ({ row }) => (
           <span className="block tabular-nums">
@@ -377,11 +397,13 @@ function RequestDataTable({
     data: items,
     columns,
     getCoreRowModel: getCoreRowModel(),
+    enableColumnResizing: true,
+    columnResizeMode: "onChange",
   })
   return (
     <ScrollArea
       ref={scrollAreaRef}
-      className="h-[31rem] [&_[data-slot=table-container]]:overflow-visible"
+      className="min-h-0 flex-1 [&_[data-slot=table-container]]:overflow-visible"
     >
       <Table className="table-fixed" style={{ minWidth: table.getTotalSize() }}>
         <TableHeader className="sticky top-0 z-10 [&_th]:bg-card [&_tr]:shadow-sm">
@@ -389,7 +411,7 @@ function RequestDataTable({
             <TableRow key={group.id}>
               {group.headers.map((header) => (
                 <TableHead
-                  className="h-11 px-4 py-0 align-middle"
+                  className="relative h-11 px-4 py-0 align-middle"
                   key={header.id}
                   style={{ width: header.getSize() }}
                 >
@@ -397,6 +419,7 @@ function RequestDataTable({
                     header.column.columnDef.header,
                     header.getContext()
                   )}
+                  <ColumnResizeHandle header={header} />
                 </TableHead>
               ))}
             </TableRow>
@@ -635,7 +658,6 @@ export function RequestLogsPage({
     limit: PAGE_SIZE,
   })
   const [queryDraft, setQueryDraft] = useState("")
-  const [advanced, setAdvanced] = useState(false)
   const [result, setResult] = useState(EMPTY_RESULT)
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<SelectedRequest | null>(null)
@@ -748,7 +770,7 @@ export function RequestLogsPage({
     })
 
   return (
-    <section className="flex w-full flex-col gap-5">
+    <section className="flex w-full flex-col gap-4 lg:h-full lg:min-h-0">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">
           {t("请求日志")}
@@ -774,268 +796,7 @@ export function RequestLogsPage({
         />
       ) : (
         <>
-          <Card>
-            <CardHeader>
-              <CardTitle>{t("筛选请求")}</CardTitle>
-              <CardDescription>
-                {t("摘要和请求列表使用相同筛选范围。")}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-wrap items-center gap-2">
-              <FilterSelect
-                label={t("时间范围")}
-                value={filters.from !== undefined ? "custom" : filters.range}
-                onChange={(range) =>
-                  update(
-                    range === "custom"
-                      ? { from: Date.now() - 3_600_000, to: Date.now() }
-                      : {
-                          range: range as RequestLogFilters["range"],
-                          from: undefined,
-                          to: undefined,
-                        }
-                  )
-                }
-                items={[
-                  { value: "1h", label: t("最近 1 小时") },
-                  { value: "24h", label: t("最近 24 小时") },
-                  { value: "7d", label: t("最近 7 天") },
-                  { value: "custom", label: t("自定义时间") },
-                ]}
-              />
-              <FilterSelect
-                label={t("请求结果")}
-                value={
-                  filters.status === "error"
-                    ? "error"
-                    : (filters.outcome ?? "all")
-                }
-                onChange={(outcome) =>
-                  update(
-                    outcome === "error"
-                      ? { status: "error", outcome: undefined }
-                      : {
-                          status: undefined,
-                          outcome:
-                            outcome === "all"
-                              ? undefined
-                              : (outcome as RequestLogFilters["outcome"]),
-                        }
-                  )
-                }
-                items={[
-                  { value: "all", label: t("全部结果") },
-                  { value: "error", label: t("全部故障") },
-                  ...Object.entries(OUTCOME_LABELS).map(([value, label]) => ({
-                    value,
-                    label: t(label),
-                  })),
-                ]}
-              />
-              <FilterSelect
-                label={t("传输类型")}
-                className="w-40"
-                value={filters.transport ?? "all"}
-                onChange={(transport) =>
-                  update({
-                    transport:
-                      transport === "all"
-                        ? undefined
-                        : (transport as RequestLogFilters["transport"]),
-                  })
-                }
-                items={[
-                  { value: "all", label: t("全部传输") },
-                  { value: "http", label: "HTTP" },
-                  { value: "ws", label: "WebSocket" },
-                  { value: "compact", label: t("压缩") },
-                  { value: "models", label: t("模型") },
-                  { value: "search", label: t("搜索") },
-                ]}
-              />
-              <div className="relative min-w-64 flex-1">
-                <SearchIcon className="pointer-events-none absolute top-2 left-2.5 size-4 text-muted-foreground" />
-                <Input
-                  className="pl-8"
-                  value={queryDraft}
-                  onChange={(event) => setQueryDraft(event.target.value)}
-                  placeholder={t("搜索路由、请求 ID、账号或错误码")}
-                />
-              </div>
-              <Button
-                variant="outline"
-                onClick={() => setAdvanced((value) => !value)}
-                aria-expanded={advanced}
-              >
-                {t("更多筛选")}
-                <ChevronDownIcon data-icon="inline-end" />
-              </Button>
-              {filters.from !== undefined && (
-                <div className="flex basis-full flex-wrap items-center gap-2">
-                  <Input
-                    aria-label={t("开始时间")}
-                    type="datetime-local"
-                    className="w-auto"
-                    value={toLocalDateTime(filters.from)}
-                    onChange={(event) =>
-                      event.target.value &&
-                      update({ from: new Date(event.target.value).getTime() })
-                    }
-                  />
-                  <span className="text-muted-foreground">—</span>
-                  <Input
-                    aria-label={t("结束时间")}
-                    type="datetime-local"
-                    className="w-auto"
-                    value={toLocalDateTime(filters.to)}
-                    onChange={(event) =>
-                      event.target.value &&
-                      update({ to: new Date(event.target.value).getTime() })
-                    }
-                  />
-                </div>
-              )}
-              {advanced && (
-                <div className="flex basis-full flex-wrap items-center gap-2 border-t pt-3">
-                  <FilterSelect
-                    label={t("生命周期")}
-                    value={filters.state ?? "all"}
-                    onChange={(value) =>
-                      update({
-                        state:
-                          value === "all"
-                            ? undefined
-                            : (value as RequestLogFilters["state"]),
-                      })
-                    }
-                    items={[
-                      { value: "all", label: t("全部生命周期") },
-                      ...Object.entries(STATE_LABELS).map(([value, label]) => ({
-                        value,
-                        label: t(label),
-                      })),
-                    ]}
-                  />
-                  <FilterSelect
-                    label={t("失败来源")}
-                    value={filters.failureSource ?? "all"}
-                    onChange={(value) =>
-                      update({
-                        failureSource:
-                          value === "all"
-                            ? undefined
-                            : (value as RequestLogFilters["failureSource"]),
-                      })
-                    }
-                    items={[
-                      { value: "all", label: t("全部来源") },
-                      ...(
-                        [
-                          "gateway",
-                          "upstream_http",
-                          "upstream_protocol",
-                          "transport",
-                          "client",
-                        ] as const
-                      ).map((value) => ({ value, label: value })),
-                    ]}
-                  />
-                  <FilterSelect
-                    label={t("失败阶段")}
-                    value={filters.failureStage ?? "all"}
-                    onChange={(value) =>
-                      update({
-                        failureStage:
-                          value === "all"
-                            ? undefined
-                            : (value as RequestLogFilters["failureStage"]),
-                      })
-                    }
-                    items={[
-                      { value: "all", label: t("全部阶段") },
-                      ...(
-                        [
-                          "routing",
-                          "authentication",
-                          "handshake",
-                          "sending",
-                          "streaming",
-                          "terminal",
-                        ] as const
-                      ).map((value) => ({ value, label: value })),
-                    ]}
-                  />
-                  <AccountCombobox
-                    accounts={accounts}
-                    value={filters.accountId}
-                    onChange={(accountId) => update({ accountId })}
-                  />
-                  <Input
-                    aria-label={t("HTTP 状态")}
-                    className="w-28"
-                    inputMode="numeric"
-                    placeholder={t("HTTP 状态")}
-                    value={filters.httpStatus ?? ""}
-                    onChange={(event) =>
-                      update({
-                        httpStatus: event.target.value
-                          ? Number(event.target.value)
-                          : undefined,
-                      })
-                    }
-                  />
-                  <Input
-                    aria-label={t("协议错误码")}
-                    className="w-44"
-                    placeholder={t("协议错误码")}
-                    value={filters.protocolErrorCode ?? ""}
-                    onChange={(event) =>
-                      update({
-                        protocolErrorCode: event.target.value || undefined,
-                      })
-                    }
-                  />
-                  <Input
-                    aria-label={t("诊断码")}
-                    className="w-44"
-                    placeholder={t("诊断码")}
-                    value={filters.diagnosticCode ?? ""}
-                    onChange={(event) =>
-                      update({
-                        diagnosticCode: event.target.value || undefined,
-                      })
-                    }
-                  />
-                </div>
-              )}
-              {advancedEntries.length > 0 && (
-                <div className="flex basis-full flex-wrap items-center gap-2">
-                  {advancedEntries.map(([key, label]) => (
-                    <Badge key={key} variant="secondary">
-                      {String(label)}
-                      <button
-                        type="button"
-                        aria-label={t("移除筛选 {{filter}}", {
-                          filter: String(label),
-                        })}
-                        onClick={() => clearAdvanced(key)}
-                      >
-                        <XIcon />
-                      </button>
-                    </Badge>
-                  ))}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => clearAdvanced()}
-                  >
-                    {t("清除全部")}
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             {[
               [t("请求数量"), result.summary.requests.toLocaleString(locale)],
               [t("故障数量"), result.summary.errors.toLocaleString(locale)],
@@ -1065,16 +826,310 @@ export function RequestLogsPage({
               </Card>
             ))}
           </div>
-          <Card className="min-h-0 gap-0 overflow-hidden">
-            <CardHeader className="border-b">
+          <Card className="gap-3 rounded-b-none pb-3 lg:shrink-0">
+            <CardHeader>
               <CardTitle>{t("请求记录")}</CardTitle>
               <CardDescription>
                 {t("按时间倒序显示，选择一行查看允许记录的完整元数据。")}
               </CardDescription>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <FilterSelect
+                  label={t("时间范围")}
+                  value={filters.from !== undefined ? "custom" : filters.range}
+                  onChange={(range) =>
+                    update(
+                      range === "custom"
+                        ? { from: Date.now() - 3_600_000, to: Date.now() }
+                        : {
+                            range: range as RequestLogFilters["range"],
+                            from: undefined,
+                            to: undefined,
+                          }
+                    )
+                  }
+                  items={[
+                    { value: "1h", label: t("最近 1 小时") },
+                    { value: "24h", label: t("最近 24 小时") },
+                    { value: "7d", label: t("最近 7 天") },
+                    { value: "custom", label: t("自定义时间") },
+                  ]}
+                />
+                <FilterSelect
+                  label={t("请求结果")}
+                  value={
+                    filters.status === "error"
+                      ? "error"
+                      : (filters.outcome ?? "all")
+                  }
+                  onChange={(outcome) =>
+                    update(
+                      outcome === "error"
+                        ? { status: "error", outcome: undefined }
+                        : {
+                            status: undefined,
+                            outcome:
+                              outcome === "all"
+                                ? undefined
+                                : (outcome as RequestLogFilters["outcome"]),
+                          }
+                    )
+                  }
+                  items={[
+                    { value: "all", label: t("全部结果") },
+                    { value: "error", label: t("全部故障") },
+                    ...Object.entries(OUTCOME_LABELS).map(([value, label]) => ({
+                      value,
+                      label: t(label),
+                    })),
+                  ]}
+                />
+                <FilterSelect
+                  label={t("传输类型")}
+                  className="w-40"
+                  value={filters.transport ?? "all"}
+                  onChange={(transport) =>
+                    update({
+                      transport:
+                        transport === "all"
+                          ? undefined
+                          : (transport as RequestLogFilters["transport"]),
+                    })
+                  }
+                  items={[
+                    { value: "all", label: t("全部传输") },
+                    { value: "http", label: "HTTP" },
+                    { value: "ws", label: "WebSocket" },
+                    { value: "compact", label: t("压缩") },
+                    { value: "models", label: t("模型") },
+                    { value: "search", label: t("搜索") },
+                  ]}
+                />
+                <div className="relative min-w-64 flex-1">
+                  <SearchIcon className="pointer-events-none absolute top-2 left-2.5 size-4 text-muted-foreground" />
+                  <Input
+                    className="pl-8"
+                    value={queryDraft}
+                    onChange={(event) => setQueryDraft(event.target.value)}
+                    placeholder={t("搜索路由、请求 ID、账号或错误码")}
+                  />
+                </div>
+                <Popover>
+                  <PopoverTrigger render={<Button variant="outline" />}>
+                    <SlidersHorizontalIcon data-icon="inline-start" />
+                    {t("更多筛选")}
+                    {advancedEntries.length > 0 && (
+                      <Badge variant="secondary">
+                        {advancedEntries.length}
+                      </Badge>
+                    )}
+                  </PopoverTrigger>
+                  <PopoverContent
+                    align="end"
+                    className="w-[min(34rem,calc(100vw-2rem))]"
+                  >
+                    <PopoverHeader>
+                      <PopoverTitle>{t("更多筛选")}</PopoverTitle>
+                      <PopoverDescription>
+                        {t("摘要和请求列表使用相同筛选范围。")}
+                      </PopoverDescription>
+                    </PopoverHeader>
+                    {filters.from !== undefined && (
+                      <FieldGroup className="grid gap-3 sm:grid-cols-2">
+                        <Field>
+                          <Input
+                            aria-label={t("开始时间")}
+                            type="datetime-local"
+                            className="w-full"
+                            value={toLocalDateTime(filters.from)}
+                            onChange={(event) =>
+                              event.target.value &&
+                              update({
+                                from: new Date(event.target.value).getTime(),
+                              })
+                            }
+                          />
+                        </Field>
+                        <Field>
+                          <Input
+                            aria-label={t("结束时间")}
+                            type="datetime-local"
+                            className="w-full"
+                            value={toLocalDateTime(filters.to)}
+                            onChange={(event) =>
+                              event.target.value &&
+                              update({
+                                to: new Date(event.target.value).getTime(),
+                              })
+                            }
+                          />
+                        </Field>
+                      </FieldGroup>
+                    )}
+                    <FieldGroup className="grid gap-3 sm:grid-cols-2">
+                      <Field>
+                        <FilterSelect
+                          className="w-full"
+                          label={t("生命周期")}
+                          value={filters.state ?? "all"}
+                          onChange={(value) =>
+                            update({
+                              state:
+                                value === "all"
+                                  ? undefined
+                                  : (value as RequestLogFilters["state"]),
+                            })
+                          }
+                          items={[
+                            { value: "all", label: t("全部生命周期") },
+                            ...Object.entries(STATE_LABELS).map(
+                              ([value, label]) => ({
+                                value,
+                                label: t(label),
+                              })
+                            ),
+                          ]}
+                        />
+                      </Field>
+                      <Field>
+                        <AccountCombobox
+                          accounts={accounts}
+                          value={filters.accountId}
+                          onChange={(accountId) => update({ accountId })}
+                        />
+                      </Field>
+                      <Field>
+                        <FilterSelect
+                          className="w-full"
+                          label={t("失败来源")}
+                          value={filters.failureSource ?? "all"}
+                          onChange={(value) =>
+                            update({
+                              failureSource:
+                                value === "all"
+                                  ? undefined
+                                  : (value as RequestLogFilters["failureSource"]),
+                            })
+                          }
+                          items={[
+                            { value: "all", label: t("全部来源") },
+                            ...(
+                              [
+                                "gateway",
+                                "upstream_http",
+                                "upstream_protocol",
+                                "transport",
+                                "client",
+                              ] as const
+                            ).map((value) => ({ value, label: value })),
+                          ]}
+                        />
+                      </Field>
+                      <Field>
+                        <FilterSelect
+                          className="w-full"
+                          label={t("失败阶段")}
+                          value={filters.failureStage ?? "all"}
+                          onChange={(value) =>
+                            update({
+                              failureStage:
+                                value === "all"
+                                  ? undefined
+                                  : (value as RequestLogFilters["failureStage"]),
+                            })
+                          }
+                          items={[
+                            { value: "all", label: t("全部阶段") },
+                            ...(
+                              [
+                                "routing",
+                                "authentication",
+                                "handshake",
+                                "sending",
+                                "streaming",
+                                "terminal",
+                              ] as const
+                            ).map((value) => ({ value, label: value })),
+                          ]}
+                        />
+                      </Field>
+                      <Field>
+                        <Input
+                          aria-label={t("HTTP 状态")}
+                          className="w-full"
+                          inputMode="numeric"
+                          placeholder={t("HTTP 状态")}
+                          value={filters.httpStatus ?? ""}
+                          onChange={(event) =>
+                            update({
+                              httpStatus: event.target.value
+                                ? Number(event.target.value)
+                                : undefined,
+                            })
+                          }
+                        />
+                      </Field>
+                      <Field>
+                        <Input
+                          aria-label={t("协议错误码")}
+                          className="w-full"
+                          placeholder={t("协议错误码")}
+                          value={filters.protocolErrorCode ?? ""}
+                          onChange={(event) =>
+                            update({
+                              protocolErrorCode:
+                                event.target.value || undefined,
+                            })
+                          }
+                        />
+                      </Field>
+                      <Field>
+                        <Input
+                          aria-label={t("诊断码")}
+                          className="w-full"
+                          placeholder={t("诊断码")}
+                          value={filters.diagnosticCode ?? ""}
+                          onChange={(event) =>
+                            update({
+                              diagnosticCode: event.target.value || undefined,
+                            })
+                          }
+                        />
+                      </Field>
+                    </FieldGroup>
+                    {advancedEntries.length > 0 && (
+                      <div className="flex flex-wrap items-center gap-2">
+                        {advancedEntries.map(([key, label]) => (
+                          <Badge key={key} variant="secondary">
+                            {String(label)}
+                            <button
+                              type="button"
+                              aria-label={t("移除筛选 {{filter}}", {
+                                filter: String(label),
+                              })}
+                              onClick={() => clearAdvanced(key)}
+                            >
+                              <XIcon />
+                            </button>
+                          </Badge>
+                        ))}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => clearAdvanced()}
+                        >
+                          {t("清除全部")}
+                        </Button>
+                      </div>
+                    )}
+                  </PopoverContent>
+                </Popover>
+              </div>
             </CardHeader>
-            <CardContent className="p-0">
+          </Card>
+          <Card className="-mt-4 min-h-0 gap-0 overflow-hidden rounded-t-none py-0 lg:flex-1">
+            <CardContent className="flex min-h-0 flex-1 flex-col p-0">
               {!enabled || (!loading && result.items.length === 0) ? (
-                <Empty className="min-h-80 border-0">
+                <Empty className="h-full min-h-80 border-0 lg:min-h-0">
                   <EmptyHeader>
                     <EmptyMedia variant="icon">
                       <FileClockIcon />

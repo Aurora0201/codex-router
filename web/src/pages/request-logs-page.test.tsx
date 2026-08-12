@@ -95,15 +95,21 @@ describe("RequestLogsPage", () => {
     )
     expect(screen.getByText("81 ms")).not.toHaveClass("text-right")
     expect(screen.getByText("120 B / 40 B")).not.toHaveClass("text-right")
-    expect(
-      screen.getByText("请求记录").closest('[data-slot="card"]')
-    ).toHaveClass("gap-0")
-    expect(
-      screen
-        .getByText("请求记录")
-        .closest('[data-slot="card"]')
-        ?.querySelector('[data-slot="card-content"]')
-    ).toHaveClass("p-0")
+    const recordsHeaderCard = screen
+      .getByText("请求记录")
+      .closest('[data-slot="card"]')
+    const tableCard = screen
+      .getByRole("button", { name: "查看请求 req-1" })
+      .closest('[data-slot="card"]')
+    expect(recordsHeaderCard).toHaveClass("rounded-b-none")
+    expect(recordsHeaderCard).toContainElement(
+      screen.getByRole("button", { name: "更多筛选" })
+    )
+    expect(tableCard).toHaveClass("gap-0", "rounded-t-none")
+    expect(tableCard?.querySelector('[data-slot="card-content"]')).toHaveClass(
+      "p-0",
+      "flex-1"
+    )
     expect(
       screen
         .getByRole("button", { name: "查看请求 req-1" })
@@ -153,23 +159,21 @@ describe("RequestLogsPage", () => {
     const service = createGatewayServiceFixture()
     service.snapshot.accounts.accounts[1].email =
       "a-very-long-account-name@example.enterprise.test"
-    const requestLogs = vi
-      .fn()
-      .mockResolvedValue({
-        items: [],
-        summary: {
-          requests: 0,
-          errors: 0,
-          rejected: 0,
-          cancelled: 0,
-          availabilityRequests: 0,
-          availabilityErrors: 0,
-          averageDurationMs: null,
-        },
-        timeline: [],
-        nextCursor: null,
-        pagination: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0 },
-      })
+    const requestLogs = vi.fn().mockResolvedValue({
+      items: [],
+      summary: {
+        requests: 0,
+        errors: 0,
+        rejected: 0,
+        cancelled: 0,
+        availabilityRequests: 0,
+        availabilityErrors: 0,
+        averageDurationMs: null,
+      },
+      timeline: [],
+      nextCursor: null,
+      pagination: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0 },
+    })
     service.getRequestLogs = requestLogs
     render(
       <RequestLogsPage
@@ -351,25 +355,23 @@ describe("RequestLogsPage", () => {
 
   it("keeps connection diagnostics separate from request rows", async () => {
     const service = createGatewayServiceFixture()
-    service.getWebSocketConnectionLogs = vi
-      .fn()
-      .mockResolvedValue({
-        items: [
-          {
-            id: "connection-log-1",
-            connectionId: "connection-1",
-            accountLabel: null,
-            identityMode: "client_passthrough",
-            startedAt: Date.now(),
-            handshakeHttpStatus: 101,
-            outcome: "retired",
-            closeReasonCode: "account_switch_connection_retired",
-          },
-        ],
-        summary: { connections: 1, failures: 0, retired: 1 },
-        nextCursor: null,
-        pagination: { page: 1, pageSize: 20, totalItems: 1, totalPages: 1 },
-      })
+    service.getWebSocketConnectionLogs = vi.fn().mockResolvedValue({
+      items: [
+        {
+          id: "connection-log-1",
+          connectionId: "connection-1",
+          accountLabel: null,
+          identityMode: "client_passthrough",
+          startedAt: Date.now(),
+          handshakeHttpStatus: 101,
+          outcome: "retired",
+          closeReasonCode: "account_switch_connection_retired",
+        },
+      ],
+      summary: { connections: 1, failures: 0, retired: 1 },
+      nextCursor: null,
+      pagination: { page: 1, pageSize: 20, totalItems: 1, totalPages: 1 },
+    })
     render(
       <RequestLogsPage
         service={service}
@@ -380,9 +382,23 @@ describe("RequestLogsPage", () => {
         onShowPreferences={vi.fn()}
       />
     )
-    await userEvent.click(screen.getByRole("tab", { name: "连接诊断" }))
+    const connectionTab = screen.getByRole("tab", { name: "连接诊断" })
+    await userEvent.click(connectionTab)
     expect(await screen.findByText("connection-1")).toBeInTheDocument()
     expect(screen.getByText("101")).toBeInTheDocument()
     expect(screen.getAllByText("正常退役").length).toBeGreaterThanOrEqual(2)
+    expect(
+      connectionTab.compareDocumentPosition(screen.getByText("连接总数")) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy()
+    const diagnosticsHeaderCard = screen
+      .getByText("WebSocket 连接诊断")
+      .closest('[data-slot="card"]')
+    expect(diagnosticsHeaderCard).toContainElement(
+      screen.getByRole("button", { name: "更多筛选" })
+    )
+    expect(
+      screen.getByText("connection-1").closest('[data-slot="card"]')
+    ).toHaveClass("rounded-t-none", "lg:flex-1")
   })
 })

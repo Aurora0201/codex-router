@@ -14,6 +14,7 @@ import { AccountsPage } from "@/pages/accounts-page"
 import { SettingsPage } from "@/pages/settings-page"
 import { PreferencesPage } from "@/pages/preferences-page"
 import { RequestLogsPage } from "@/pages/request-logs-page"
+import { cn } from "@/lib/utils"
 import type { GatewayService, GatewaySnapshot } from "@/services/contracts"
 import { createHttpGatewayService } from "@/services/http/gateway-service"
 import { toast } from "@/components/ui/toast"
@@ -23,7 +24,10 @@ const defaultGatewayService = createHttpGatewayService()
 function LoadingPage() {
   const { t } = useTranslation()
   return (
-    <div className="flex flex-col gap-5" aria-label={t("正在载入 Codex Router 数据")}>
+    <div
+      className="flex flex-col gap-5"
+      aria-label={t("正在载入 Codex Router 数据")}
+    >
       <div className="flex flex-col gap-2">
         <Skeleton className="h-8 w-48" />
         <Skeleton className="h-4 w-96 max-w-full" />
@@ -95,10 +99,14 @@ export function App({
         },
         () => undefined,
         (event) => {
-          if (event.type === "request_started" || event.type === "request_finished" || event.type === "connection_updated") {
+          if (
+            event.type === "request_started" ||
+            event.type === "request_finished" ||
+            event.type === "connection_updated"
+          ) {
             setLogsRevision((value) => value + 1)
           }
-        },
+        }
       )
     }
     const initial = window.setTimeout(() => {
@@ -131,10 +139,15 @@ export function App({
     if (nextPage === "logs") setLogsErrorsOnly(false)
     setPage(nextPage)
   }
+  const fixedLogsLayout = page === "logs" && Boolean(snapshot) && !error
 
   return (
     <SidebarProvider className="h-dvh min-h-0 overflow-hidden">
-      <AppSidebar page={page} onPageChange={navigate} activeAccount={activeAccount} />
+      <AppSidebar
+        page={page}
+        onPageChange={navigate}
+        activeAccount={activeAccount}
+      />
       <SidebarInset className="min-h-0 overflow-hidden">
         <AppHeader
           page={page}
@@ -142,8 +155,19 @@ export function App({
           version={snapshot?.health.version}
           onThemeChange={changeTheme}
         />
-        <ScrollArea className="min-h-0 flex-1">
-          <div className="mx-auto w-full max-w-[88rem] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+        <ScrollArea
+          className={cn(
+            "min-h-0 flex-1",
+            fixedLogsLayout &&
+              "lg:[&_[data-slot=scroll-area-viewport]]:overflow-hidden"
+          )}
+        >
+          <div
+            className={cn(
+              "mx-auto w-full max-w-[88rem] px-4 py-6 sm:px-6 lg:px-8 lg:py-8",
+              fixedLogsLayout && "lg:h-full lg:py-4"
+            )}
+          >
             {error ? (
               <Alert variant="destructive" className="mb-6">
                 <TriangleAlertIcon />
@@ -174,7 +198,10 @@ export function App({
                 service={service}
                 reload={reload}
                 onShowAccounts={() => setPage("accounts")}
-                onShowLogs={() => { setLogsErrorsOnly(true); setPage("logs") }}
+                onShowLogs={() => {
+                  setLogsErrorsOnly(true)
+                  setPage("logs")
+                }}
                 logsRevision={logsRevision}
               />
             ) : page === "logs" ? (
