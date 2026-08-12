@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.2.0](https://github.com/Aurora0201/codex-router/compare/v0.1.0...v0.2.0) (2026-08-12)
+
+
+### Features
+
+* add interactive account CLI command ([2249c56](https://github.com/Aurora0201/codex-router/commit/2249c5633c3e9b3ed46fbbade07f13b6294ff14b))
+* add interactive account CLI command ([ff5e2e8](https://github.com/Aurora0201/codex-router/commit/ff5e2e8a887bfb700c51c93cdb1b49d3163ec698))
+* add request and websocket evidence model ([3090ab0](https://github.com/Aurora0201/codex-router/commit/3090ab0bf5f6f9793762b676a7e324f0b7c188ab))
+* improve runtime WebSocket observability ([4fd87c6](https://github.com/Aurora0201/codex-router/commit/4fd87c656974029999a15835ead2aafa301fe9c6))
+* passthrough client identity when account pool is empty ([8f6d10e](https://github.com/Aurora0201/codex-router/commit/8f6d10e2d80cdeb976fa13a1747e277bd8116572))
+
+
+### Bug Fixes
+
+* handle Windows account login staging locks ([1fffc9f](https://github.com/Aurora0201/codex-router/commit/1fffc9f8799bd208f54273eaa93deedd326da9d5))
+* preserve upstream transport error causes ([6997bcf](https://github.com/Aurora0201/codex-router/commit/6997bcffcd29572b412d8f2cb5b5678644e6d441))
+* refine preferences page interactions ([2e38e73](https://github.com/Aurora0201/codex-router/commit/2e38e7335c6102b41f8dea695d16a4d3ed15ac19))
+* refresh account quotas silently ([667e193](https://github.com/Aurora0201/codex-router/commit/667e193b779d67a12c5f20eb150e98d399b3d0b2))
+* unify account login entry points ([bc41dd3](https://github.com/Aurora0201/codex-router/commit/bc41dd383ca3256f1d55538996a68881a161bf60))
+* use static request log column widths ([58ffa38](https://github.com/Aurora0201/codex-router/commit/58ffa3822738dca2ae31634b57c40f9873ea4ca4))
+
 ## 0.1.0 (2026-08-11)
 
 
