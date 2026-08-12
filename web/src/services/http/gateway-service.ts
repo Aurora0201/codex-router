@@ -210,7 +210,5 @@ export function createHttpGatewayService(): GatewayService {
         "/api/codex/restart",
         json("POST", {})
       ),
-    openLocalEnvironment: (target) =>
-      request<void>("/api/local-environment/open", json("POST", { target })),
   }
 }

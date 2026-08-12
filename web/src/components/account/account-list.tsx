@@ -125,7 +125,7 @@ export function AccountList({
   }
 
   return (
-    <Card className="h-[30rem] min-h-0 lg:h-[clamp(30rem,calc(100dvh-13rem),48rem)]">
+    <Card className="h-[30rem] min-h-0 lg:h-full">
       <CardHeader className="shrink-0">
         <CardTitle>{t("授权账号")}</CardTitle>
         <CardDescription>

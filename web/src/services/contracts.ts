@@ -279,5 +279,4 @@ export interface GatewayService {
   applyCodexConfig(): Promise<CodexStatusView>
   restoreCodexConfig(): Promise<CodexStatusView>
   restartCodex(): Promise<{ running: boolean; codexPath: string | null }>
-  openLocalEnvironment(target: "data" | "backup" | "logs"): Promise<void>
 }

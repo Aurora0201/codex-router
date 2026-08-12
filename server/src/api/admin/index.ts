@@ -10,7 +10,6 @@ import { registerCodexRoutes } from "./codex-routes.js";
 import { CodexConfigService } from "../../codex/codex-config.js";
 import { registerAdminEventRoutes } from "./admin-events.js";
 import { registerRequestLogRoutes } from "./request-log-routes.js";
-import { registerLocalEnvironmentRoutes } from "./local-environment-routes.js";
 import { registerWebSocketConnectionRoutes } from "./websocket-connection-routes.js";
 import { registerWebSocketConnectionLogRoutes } from "./websocket-connection-log-routes.js";
 
@@ -28,7 +27,6 @@ export async function registerAdminApi(
   registerStatsRoutes(app, ctx);
   registerRequestLogRoutes(app, ctx);
   registerCodexRoutes(app, ctx, codexConfig);
-  registerLocalEnvironmentRoutes(app, ctx, codexConfig);
   registerWebSocketConnectionRoutes(app, ctx);
   registerWebSocketConnectionLogRoutes(app, ctx);
 }

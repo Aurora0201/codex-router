@@ -24,6 +24,19 @@ function account(values: Partial<AccountView>): AccountView {
 }
 
 describe("AccountList", () => {
+  it("fills its desktop parent without a viewport height cap", () => {
+    const { container } = render(
+      <TooltipProvider>
+        <AccountList accounts={[account({})]} busyId={null} onSelect={vi.fn()} onAction={vi.fn()} />
+      </TooltipProvider>
+    )
+
+    const card = container.querySelector('[data-slot="card"]')
+    expect(card).toHaveClass("h-[30rem]", "lg:h-full")
+    expect(card?.className).not.toContain("100dvh")
+    expect(card?.className).not.toContain("48rem")
+  })
+
   it("selects a ready account and keeps row actions available", async () => {
     const user = userEvent.setup()
     const onSelect = vi.fn()
