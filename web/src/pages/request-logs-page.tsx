@@ -91,7 +91,6 @@ import {
 import { toast } from "@/components/ui/toast"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { WebSocketConnectionLogsPanel } from "@/components/request/websocket-connection-logs-panel"
-import { ColumnResizeHandle } from "@/components/request/column-resize-handle"
 import { Field, FieldGroup } from "@/components/ui/field"
 import { cn } from "@/lib/utils"
 import type {
@@ -306,9 +305,6 @@ function RequestDataTable({
     () => [
       {
         id: "status",
-        size: 250,
-        minSize: 220,
-        maxSize: 340,
         header: t("时间与状态"),
         cell: ({ row }) => {
           const item = row.original
@@ -330,9 +326,6 @@ function RequestDataTable({
       },
       {
         accessorKey: "route",
-        size: 240,
-        minSize: 160,
-        maxSize: 420,
         header: t("路由"),
         cell: ({ row }) => (
           <span
@@ -345,9 +338,6 @@ function RequestDataTable({
       },
       {
         id: "account",
-        size: 220,
-        minSize: 160,
-        maxSize: 360,
         header: t("账号"),
         cell: ({ row }) => {
           const label =
@@ -363,9 +353,6 @@ function RequestDataTable({
       },
       {
         accessorKey: "durationMs",
-        size: 110,
-        minSize: 90,
-        maxSize: 180,
         header: t("耗时"),
         cell: ({ row }) => (
           <span className="block tabular-nums">
@@ -377,9 +364,6 @@ function RequestDataTable({
       },
       {
         id: "traffic",
-        size: 160,
-        minSize: 130,
-        maxSize: 240,
         header: t("流量"),
         cell: ({ row }) => (
           <span className="block tabular-nums">
@@ -391,35 +375,36 @@ function RequestDataTable({
     ],
     [locale, t]
   )
-  // TanStack returns stateful callbacks by design; this is the official Data Table integration seam.
-  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data: items,
     columns,
     getCoreRowModel: getCoreRowModel(),
-    enableColumnResizing: true,
-    columnResizeMode: "onChange",
   })
   return (
     <ScrollArea
       ref={scrollAreaRef}
       className="min-h-0 flex-1 [&_[data-slot=table-container]]:overflow-visible"
     >
-      <Table className="table-fixed" style={{ minWidth: table.getTotalSize() }}>
+      <Table className="min-w-[980px] table-fixed">
+        <colgroup>
+          <col className="w-[280px]" />
+          <col className="w-[180px]" />
+          <col className="w-[340px]" />
+          <col className="w-[140px]" />
+          <col />
+        </colgroup>
         <TableHeader className="sticky top-0 z-10 [&_th]:bg-card [&_tr]:shadow-sm">
           {table.getHeaderGroups().map((group) => (
             <TableRow key={group.id}>
               {group.headers.map((header) => (
                 <TableHead
-                  className="relative h-11 px-4 py-0 align-middle"
+                  className="h-11 px-4 py-0 align-middle"
                   key={header.id}
-                  style={{ width: header.getSize() }}
                 >
                   {flexRender(
                     header.column.columnDef.header,
                     header.getContext()
                   )}
-                  <ColumnResizeHandle header={header} />
                 </TableHead>
               ))}
             </TableRow>
@@ -449,7 +434,6 @@ function RequestDataTable({
                 <TableCell
                   className="px-4"
                   key={cell.id}
-                  style={{ width: cell.column.getSize() }}
                 >
                   {flexRender(cell.column.columnDef.cell, cell.getContext())}
                 </TableCell>
