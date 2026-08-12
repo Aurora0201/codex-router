@@ -140,6 +140,7 @@ export function App({
     setPage(nextPage)
   }
   const fixedLogsLayout = page === "logs" && Boolean(snapshot) && !error
+  const gatewayLayout = page === "gateway" && Boolean(snapshot) && !error
 
   return (
     <SidebarProvider className="h-dvh min-h-0 overflow-hidden">
@@ -152,7 +153,7 @@ export function App({
         <AppHeader
           page={page}
           online={!error}
-          version={snapshot?.health.version}
+          uptimeSeconds={snapshot?.stats.uptimeSeconds}
           onThemeChange={changeTheme}
         />
         <ScrollArea
@@ -165,7 +166,8 @@ export function App({
           <div
             className={cn(
               "mx-auto w-full max-w-[88rem] px-4 py-6 sm:px-6 lg:px-8 lg:py-8",
-              fixedLogsLayout && "lg:h-full lg:py-4"
+              fixedLogsLayout && "lg:h-full lg:py-4",
+              gatewayLayout && "lg:h-full lg:py-4"
             )}
           >
             {error ? (
@@ -198,10 +200,6 @@ export function App({
                 service={service}
                 reload={reload}
                 onShowAccounts={() => setPage("accounts")}
-                onShowLogs={() => {
-                  setLogsErrorsOnly(true)
-                  setPage("logs")
-                }}
                 logsRevision={logsRevision}
               />
             ) : page === "logs" ? (

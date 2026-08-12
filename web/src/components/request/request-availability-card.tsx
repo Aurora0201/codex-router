@@ -82,7 +82,7 @@ export function RequestAvailabilityCard({
         <CardAction className="flex items-center gap-3">
           <span className="text-base leading-snug font-medium tabular-nums">{availability == null ? "—" : `${availability.toFixed(1)}%`}</span>
           <Select value={range} onValueChange={(value) => {
-            if (!value) return
+            if (!value || value === range) return
             setData(EMPTY_AVAILABILITY)
             setEnd(Date.now())
             setRange(value as RequestLogRange)

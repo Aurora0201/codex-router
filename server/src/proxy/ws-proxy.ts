@@ -8,8 +8,8 @@ import { GatewayDatabase } from "../db/database.js";
 import { ActiveAccountService } from "../routing/active-account-service.js";
 import { hasBrowserOrigin } from "../security/origin-guard.js";
 import { clientPassthroughWebsocketHeaders, IMPORTANT_WS_RESPONSE_HEADERS, isCompactionRequest, websocketUpgradeHeaders } from "./headers.js";
-import { inspectClientFrame, inspectServerFrame, rawDataBuffer } from "./ws-metadata.js";
-import { WebSocketConnectionRegistry, type WebSocketConnectionHandle } from "./websocket-connection-registry.js";
+import { inspectClientFrame, inspectHandshakeTurnMetadata, inspectServerFrame, rawDataBuffer } from "./ws-metadata.js";
+import { WebSocketConnectionRegistry, type WebSocketConnectionActivity, type WebSocketConnectionHandle } from "./websocket-connection-registry.js";
 import { classifyProtocolTerminal, clientCancellation, transportFailure } from "./request-classification.js";
 
 const MAX_PENDING_FRAMES = 32;
@@ -55,6 +55,7 @@ interface PendingRequest {
 
 interface ResponseLifecycle {
   request: PendingRequest | undefined;
+  activity: WebSocketConnectionActivity;
 }
 
 class WebSocketHandshakeError extends Error {
@@ -159,6 +160,7 @@ export async function registerWebSocketProxy(app: FastifyInstance, options: WsPr
         connectionId: request.id,
         accountId: account?.id,
         connectedAt: startedAt,
+        ...inspectHandshakeTurnMetadata(request.headers),
       });
       const connectionLogId = options.database.websocketConnectionLog.start({ connectionId: request.id, accountId: account?.id, identityMode: identity.mode, startedAt });
       try {
@@ -242,6 +244,7 @@ export async function registerWebSocketProxy(app: FastifyInstance, options: WsPr
     client.on("message", (data, isBinary) => {
       const metadata = inspectClientFrame(data, isBinary);
       if (metadata?.type === "response.create" && responseLifecycles.length < MAX_PENDING_FRAMES) {
+        context.registryHandle.updateIdentifiers(metadata);
         const trackedRequest: PendingRequest | undefined = metadata.generate === false ? undefined : {
           logId: null,
           requestId: `${request.id}:${++requestSequence}`,
@@ -252,8 +255,15 @@ export async function registerWebSocketProxy(app: FastifyInstance, options: WsPr
           parseFailed: false,
         };
         if (trackedRequest) trackedRequest.logId = options.database.requestLog.startRequest({ requestId: trackedRequest.requestId, route: "/responses", transport: trackedRequest.transport, accountId: context.account?.id, identityMode: context.identityMode, startedAt: trackedRequest.startedAt, bytesIn: trackedRequest.bytesIn });
-        responseLifecycles.push({ request: trackedRequest });
-        context.registryHandle.update("transmitting", trackedRequest?.requestId);
+        const activity: WebSocketConnectionActivity = {
+          ...(trackedRequest ? { activeRequestId: trackedRequest.requestId } : {}),
+          ...(metadata.sessionId ? { sessionId: metadata.sessionId } : {}),
+          ...(metadata.threadId ? { threadId: metadata.threadId } : {}),
+          ...(metadata.turnId ? { turnId: metadata.turnId } : {}),
+          activityKind: metadata.generate === false ? "prewarm" : metadata.requestKind === "compaction" ? "compaction" : "response",
+        };
+        responseLifecycles.push({ request: trackedRequest, activity });
+        context.registryHandle.update("transmitting", responseLifecycles[0].activity);
       }
       forwardOrQueue(data, isBinary);
     });
@@ -291,8 +301,7 @@ export async function registerWebSocketProxy(app: FastifyInstance, options: WsPr
       if (terminal && lifecycle) {
         responseLifecycles.shift();
         if (lifecycle.request) options.database.requestLog.finishRequest(lifecycle.request.logId, { ...terminal, bytesIn: lifecycle.request.bytesIn, bytesOut: lifecycle.request.bytesOut });
-        const activeRequestId = responseLifecycles.find((item) => item.request)?.request?.requestId;
-        context.registryHandle.update(responseLifecycles.length > 0 ? "transmitting" : "idle", activeRequestId);
+        context.registryHandle.update(responseLifecycles.length > 0 ? "transmitting" : "idle", responseLifecycles[0]?.activity);
       }
       if (client.readyState === WebSocket.OPEN) {
         client.send(data, { binary: isBinary }, terminal && retiring ? closeRetiredConnection : undefined);

@@ -18,7 +18,6 @@ import { useTranslation } from "react-i18next"
 
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { ColumnResizeHandle } from "@/components/request/column-resize-handle"
 import {
   Card,
   CardContent,
@@ -322,9 +321,6 @@ export function WebSocketConnectionLogsPanel({
     () => [
       {
         id: "result",
-        size: 250,
-        minSize: 220,
-        maxSize: 340,
         header: t("时间与结果"),
         cell: ({ row }) => (
           <div className="flex items-center gap-2">
@@ -337,9 +333,6 @@ export function WebSocketConnectionLogsPanel({
       },
       {
         accessorKey: "connectionId",
-        size: 260,
-        minSize: 180,
-        maxSize: 360,
         header: t("连接"),
         cell: ({ row }) => (
           <span className="block truncate" title={row.original.connectionId}>
@@ -349,9 +342,6 @@ export function WebSocketConnectionLogsPanel({
       },
       {
         accessorKey: "handshakeHttpStatus",
-        size: 120,
-        minSize: 100,
-        maxSize: 180,
         header: t("握手 HTTP"),
         cell: ({ row }) => (
           <span className="tabular-nums">
@@ -361,9 +351,6 @@ export function WebSocketConnectionLogsPanel({
       },
       {
         id: "closeCode",
-        size: 130,
-        minSize: 110,
-        maxSize: 200,
         header: t("关闭码"),
         cell: ({ row }) => (
           <span
@@ -380,9 +367,6 @@ export function WebSocketConnectionLogsPanel({
       },
       {
         accessorKey: "closeReasonCode",
-        size: 260,
-        minSize: 180,
-        maxSize: 420,
         header: t("关闭原因"),
         cell: ({ row }) => (
           <span className="block truncate" title={row.original.closeReasonCode}>
@@ -393,14 +377,10 @@ export function WebSocketConnectionLogsPanel({
     ],
     [locale, t]
   )
-  // TanStack exposes stateful callbacks as the official table integration seam.
-  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data: result.items,
     columns,
     getCoreRowModel: getCoreRowModel(),
-    enableColumnResizing: true,
-    columnResizeMode: "onChange",
   })
   return (
     <>
@@ -620,24 +600,26 @@ export function WebSocketConnectionLogsPanel({
               ref={scroll}
               className="min-h-0 flex-1 [&_[data-slot=table-container]]:overflow-visible"
             >
-              <Table
-                className="table-fixed"
-                style={{ minWidth: table.getTotalSize() }}
-              >
+              <Table className="min-w-[960px] table-fixed">
+                <colgroup>
+                  <col className="w-[250px]" />
+                  <col className="w-[350px]" />
+                  <col className="w-[130px]" />
+                  <col className="w-[140px]" />
+                  <col />
+                </colgroup>
                 <TableHeader className="sticky top-0 z-10 [&_th]:bg-card [&_tr]:shadow-sm">
                   {table.getHeaderGroups().map((group) => (
                     <TableRow key={group.id}>
                       {group.headers.map((header) => (
                         <TableHead
                           key={header.id}
-                          className="relative h-11 px-4 py-0 align-middle"
-                          style={{ width: header.getSize() }}
+                          className="h-11 px-4 py-0 align-middle"
                         >
                           {flexRender(
                             header.column.columnDef.header,
                             header.getContext()
                           )}
-                          <ColumnResizeHandle header={header} />
                         </TableHead>
                       ))}
                     </TableRow>
@@ -660,7 +642,6 @@ export function WebSocketConnectionLogsPanel({
                         <TableCell
                           key={cell.id}
                           className="px-4"
-                          style={{ width: cell.column.getSize() }}
                         >
                           {flexRender(
                             cell.column.columnDef.cell,
