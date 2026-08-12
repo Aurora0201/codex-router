@@ -51,6 +51,30 @@ describe("App", () => {
     expect(screen.getByRole("switch", { name: "请求元数据记录" })).toBeChecked()
   })
 
+  it("uses one desktop top inset for regular and fixed-height pages", async () => {
+    const user = userEvent.setup()
+    renderApp()
+    const accountHeading = await screen.findByRole("heading", { name: "账号与路由" })
+    const pageContent = accountHeading.closest("section")?.parentElement
+
+    expect(pageContent).toHaveClass("lg:py-4")
+    expect(pageContent).toHaveClass("lg:h-full")
+    expect(pageContent).not.toHaveClass("lg:py-8")
+
+    await user.click(screen.getByRole("button", { name: "运行状态" }))
+    await screen.findByRole("heading", { name: "运行状态" })
+    expect(pageContent).toHaveClass("lg:h-full", "lg:py-4")
+
+    await user.click(screen.getByRole("button", { name: "请求日志" }))
+    await screen.findByRole("heading", { name: "请求日志" })
+    expect(pageContent).toHaveClass("lg:h-full", "lg:py-4")
+
+    await user.click(screen.getByRole("button", { name: "偏好设置" }))
+    await screen.findByRole("heading", { name: "偏好设置" })
+    expect(pageContent).toHaveClass("lg:py-4")
+    expect(pageContent).not.toHaveClass("lg:h-full")
+  })
+
   it("keeps the last snapshot while offline and recovers on polling", async () => {
     vi.useFakeTimers()
     const service = createGatewayServiceFixture()

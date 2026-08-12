@@ -181,7 +181,6 @@ export function createGatewayServiceFixture({
       snapshot.codex.codexRunning = true
       return { running: true, codexPath: "C:\\Program Files\\Codex\\Codex.exe" }
     },
-    async openLocalEnvironment() {},
   }
   return service
 }

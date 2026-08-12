@@ -25,14 +25,14 @@ function LoadingPage() {
   const { t } = useTranslation()
   return (
     <div
-      className="flex flex-col gap-5"
+      className="flex flex-col gap-5 lg:h-full lg:min-h-0"
       aria-label={t("正在载入 Codex Router 数据")}
     >
       <div className="flex flex-col gap-2">
         <Skeleton className="h-8 w-48" />
         <Skeleton className="h-4 w-96 max-w-full" />
       </div>
-      <Skeleton className="h-[30rem] w-full lg:h-[clamp(30rem,calc(100dvh-13rem),48rem)]" />
+      <Skeleton className="h-[30rem] w-full lg:min-h-0 lg:flex-1" />
     </div>
   )
 }
@@ -141,6 +141,7 @@ export function App({
   }
   const fixedLogsLayout = page === "logs" && Boolean(snapshot) && !error
   const gatewayLayout = page === "gateway" && Boolean(snapshot) && !error
+  const accountsLayout = page === "accounts" && Boolean(snapshot) && !error
 
   return (
     <SidebarProvider className="h-dvh min-h-0 overflow-hidden">
@@ -165,9 +166,10 @@ export function App({
         >
           <div
             className={cn(
-              "mx-auto w-full max-w-[88rem] px-4 py-6 sm:px-6 lg:px-8 lg:py-8",
-              fixedLogsLayout && "lg:h-full lg:py-4",
-              gatewayLayout && "lg:h-full lg:py-4"
+              "mx-auto w-full max-w-[88rem] px-4 py-6 sm:px-6 lg:px-8 lg:py-4",
+              fixedLogsLayout && "lg:h-full",
+              gatewayLayout && "lg:h-full",
+              accountsLayout && "lg:h-full"
             )}
           >
             {error ? (

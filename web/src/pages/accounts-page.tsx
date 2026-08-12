@@ -115,7 +115,7 @@ export function AccountsPage({
     active !== null && (!active.enabled || active.authStatus !== "ready")
 
   return (
-    <section className="flex flex-col gap-5">
+    <section className="flex flex-col gap-5 lg:h-full lg:min-h-0">
       <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">{t("账号与路由")}</h1>
@@ -140,14 +140,16 @@ export function AccountsPage({
       ) : null}
 
       {accounts.length ? (
-        <AccountList
-          accounts={accounts}
-          busyId={busyId}
-          onAction={accountAction}
-          onSelect={(account) => void selectAccount(account)}
-        />
+        <div className="min-h-0 lg:flex-1">
+          <AccountList
+            accounts={accounts}
+            busyId={busyId}
+            onAction={accountAction}
+            onSelect={(account) => void selectAccount(account)}
+          />
+        </div>
       ) : (
-        <Card>
+        <Card className="lg:min-h-0 lg:flex-1">
           <CardContent className="flex min-h-80 items-center justify-center">
             <Empty>
               <EmptyHeader>
