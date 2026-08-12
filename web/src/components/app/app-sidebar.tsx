@@ -8,6 +8,7 @@ import {
 } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
+import { BrandMark } from "@/components/app/brand-mark"
 import { Button } from "@/components/ui/button"
 import {
   Sidebar,
@@ -28,24 +29,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { cn } from "@/lib/utils"
 import type { AccountView } from "@/services/contracts"
-
-const brandIconUrl = `${import.meta.env.BASE_URL}codex-router-icon.png`
-const brandMaskStyle = {
-  maskImage: `url("${brandIconUrl}")`,
-  maskPosition: "center",
-  maskRepeat: "no-repeat",
-  maskSize: "contain",
-  WebkitMaskImage: `url("${brandIconUrl}")`,
-  WebkitMaskPosition: "center",
-  WebkitMaskRepeat: "no-repeat",
-  WebkitMaskSize: "contain",
-}
-
-function BrandMark({ className }: { className?: string }) {
-  return <span data-slot="brand-mark" aria-hidden="true" className={cn("shrink-0 bg-sidebar-foreground", className)} style={brandMaskStyle} />
-}
 
 export type AppPage = "accounts" | "gateway" | "logs" | "preferences"
 
@@ -106,7 +90,7 @@ export function AppSidebar({
                   />
                 }
               >
-                <BrandMark className="size-5 transition-opacity group-hover/logo-toggle:opacity-0 group-focus-visible/logo-toggle:opacity-0" />
+                <BrandMark className="size-5 text-sidebar-foreground transition-opacity group-hover/logo-toggle:opacity-0 group-focus-visible/logo-toggle:opacity-0" />
                 <PanelLeftIcon className="absolute opacity-0 transition-opacity group-hover/logo-toggle:opacity-100 group-focus-visible/logo-toggle:opacity-100" />
               </TooltipTrigger>
               <TooltipContent side="right">{t("展开导航栏")}</TooltipContent>
@@ -114,7 +98,7 @@ export function AppSidebar({
           </div>
         ) : (
           <div className="flex h-14 items-center gap-3 px-3">
-            <BrandMark className="size-6" />
+            <BrandMark className="size-6 text-sidebar-foreground" />
             <p className="min-w-0 truncate font-brand text-lg font-semibold leading-none">
               Codex Router
             </p>

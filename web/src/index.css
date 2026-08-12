@@ -146,6 +146,67 @@
   }
 }
 
+@keyframes route-flow-item-border {
+  0%, 24%, 100% {
+    background-position: 180% 0;
+    opacity: 0;
+  }
+  3% {
+    opacity: 0.2;
+  }
+  10%, 17% {
+    opacity: 0.8;
+  }
+  21% {
+    background-position: -80% 0;
+    opacity: 0;
+  }
+}
+
+@layer components {
+  .route-flow-item {
+    position: relative;
+    isolation: isolate;
+  }
+
+  .route-flow-item::before {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    border-radius: inherit;
+    padding: 1px;
+    content: "";
+    background: linear-gradient(90deg, transparent 25%, var(--primary) 50%, transparent 75%);
+    background-size: 250% 100%;
+    opacity: 0;
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask-composite: exclude;
+  }
+
+  .route-flow-item[data-flowing="true"]::before {
+    animation: route-flow-item-border 4.8s linear infinite;
+  }
+
+  .route-flow-item[data-flow-step="1"]::before {
+    animation-delay: 1.2s;
+  }
+
+  .route-flow-item[data-flow-step="2"]::before {
+    animation-delay: 2.4s;
+  }
+
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .route-flow-item[data-flowing="true"]::before {
+    animation: none;
+    opacity: 0;
+  }
+
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

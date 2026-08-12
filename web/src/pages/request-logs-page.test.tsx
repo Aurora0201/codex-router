@@ -10,7 +10,7 @@ describe("RequestLogsPage", () => {
   it("shows summaries, safe row metadata, and the details sheet", async () => {
     const service = createGatewayServiceFixture()
     service.getRequestLogs = vi.fn().mockResolvedValue({
-      items: [{ id: "log-1", requestId: "req-1", route: "/responses", transport: "http", accountId: "account-1", accountLabel: "account-1@example.com", statusCode: 502, durationMs: 81, bytesIn: 120, bytesOut: 40, errorCode: "upstream_error", outcome: "upstream_error", scope: "request", createdAt: Date.now() }],
+      items: [{ id: "log-1", requestId: "req-1", route: "/responses", transport: "http", accountId: "account-1", accountLabel: "account-1@example.com", statusCode: 502, durationMs: 81, bytesIn: 120, bytesOut: 40, errorCode: "upstream_error", outcome: "upstream_error", scope: "request", identityMode: "managed_account", createdAt: Date.now() }],
       summary: { requests: 8, errors: 1, rejected: 0, cancelled: 0, availabilityRequests: 8, availabilityErrors: 1, averageDurationMs: 31 },
       timeline: [{ id: "log-1", createdAt: Date.now(), durationMs: 81, statusCode: 502, outcome: "upstream_error" }],
       nextCursor: null,
@@ -68,10 +68,27 @@ describe("RequestLogsPage", () => {
     await waitFor(() => expect(requestLogs).toHaveBeenLastCalledWith(expect.objectContaining({ accountId: "account-2" })))
   })
 
+  it("labels and filters Codex client passthrough requests", async () => {
+    const service = createGatewayServiceFixture()
+    const requestLogs = vi.fn().mockResolvedValue({
+      items: [{ id: "passthrough", route: "/models", transport: "models", accountLabel: null, statusCode: 200, durationMs: 12, outcome: "success", scope: "request", identityMode: "client_passthrough", createdAt: Date.now() }],
+      summary: { requests: 1, errors: 0, rejected: 0, cancelled: 0, availabilityRequests: 1, availabilityErrors: 0, averageDurationMs: 12 },
+      timeline: [], nextCursor: null,
+      pagination: { page: 1, pageSize: 20, totalItems: 1, totalPages: 1 },
+    })
+    service.getRequestLogs = requestLogs
+    render(<RequestLogsPage service={service} accounts={[]} enabled initialErrorsOnly={false} revision={0} onShowPreferences={vi.fn()} />)
+    expect(await screen.findByText("Codex 默认账号")).toBeInTheDocument()
+    const input = screen.getByRole("combobox", { name: "账号筛选" })
+    await userEvent.click(input)
+    await userEvent.click(await screen.findByRole("option", { name: "Codex 默认账号" }))
+    await waitFor(() => expect(requestLogs).toHaveBeenLastCalledWith(expect.objectContaining({ accountId: "__client_passthrough__" })))
+  })
+
   it("uses numbered server pagination with direct middle-page access", async () => {
     const service = createGatewayServiceFixture()
     service.getRequestLogs = vi.fn().mockImplementation(async (filters) => ({
-      items: [{ id: `log-${filters.page}`, route: "/responses", transport: "http", accountLabel: "account@example.com", statusCode: 200, durationMs: 10, outcome: "success", scope: "request", createdAt: Date.now() }],
+      items: [{ id: `log-${filters.page}`, route: "/responses", transport: "http", accountLabel: "account@example.com", statusCode: 200, durationMs: 10, outcome: "success", scope: "request", identityMode: "managed_account", createdAt: Date.now() }],
       summary: { requests: 200, errors: 0, rejected: 0, cancelled: 0, availabilityRequests: 200, availabilityErrors: 0, averageDurationMs: 10 },
       timeline: [],
       nextCursor: null,

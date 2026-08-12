@@ -170,6 +170,7 @@ export function App({
                 reload={reload}
                 onShowAccounts={() => setPage("accounts")}
                 onShowLogs={() => { setLogsErrorsOnly(true); setPage("logs") }}
+                logsRevision={logsRevision}
               />
             ) : page === "logs" ? (
               <RequestLogsPage
