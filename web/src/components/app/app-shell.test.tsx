@@ -44,16 +44,27 @@ describe("application shell", () => {
     expect(screen.queryByText("Identity router")).not.toBeInTheDocument()
   })
 
-  it("renders a one-line header and plain Gateway status", () => {
+  it("renders a one-line header with compact uptime", () => {
     const { container } = render(
       <ShellProviders>
-        <AppHeader page="accounts" online version="0.2.0" />
+        <AppHeader page="accounts" online uptimeSeconds={93_600} />
       </ShellProviders>
     )
 
     expect(screen.getByText("账号路由")).toBeInTheDocument()
-    expect(screen.getByRole("status")).toHaveTextContent("在线 · v0.2.0")
+    expect(screen.getByRole("status")).toHaveTextContent("运行 1 天 2 小时")
     expect(screen.queryByText("身份、认证与流量控制")).not.toBeInTheDocument()
     expect(container.querySelector('[data-slot="badge"]')).toBeNull()
+  })
+
+  it("shows an offline warning instead of stale uptime", () => {
+    render(
+      <ShellProviders>
+        <AppHeader page="gateway" online={false} uptimeSeconds={93_600} />
+      </ShellProviders>
+    )
+
+    expect(screen.getByRole("status")).toHaveTextContent("Codex Router 离线")
+    expect(screen.queryByText("运行 1 天 2 小时")).not.toBeInTheDocument()
   })
 })

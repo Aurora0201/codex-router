@@ -814,6 +814,7 @@ describe("WebSocket transport", () => {
   it("exposes only live connection metadata through the admin API", async () => {
     const socket = new WebSocket(
       gatewayUrl.replace("http:", "ws:") + "/backend-api/codex/responses",
+      { headers: { "x-codex-turn-metadata": JSON.stringify({ session_id: "handshake-session", thread_id: "handshake-thread", turn_id: "handshake-turn", workspaces: { "private/path": {} } }) } },
     );
     await once(socket, "open");
 
@@ -824,19 +825,29 @@ describe("WebSocket transport", () => {
       state: string;
       connectedAt: number;
       activeRequestId?: string;
+      sessionId?: string;
+      threadId?: string;
+      turnId?: string;
+      activityKind?: "response" | "compaction" | "prewarm";
     }>;
     expect(idle).toHaveLength(1);
     expect(idle[0]).toMatchObject({
       state: "idle",
       connectedAt: expect.any(Number),
+      sessionId: "handshake-session",
+      threadId: "handshake-thread",
+      turnId: "handshake-turn",
     });
     expect(Object.keys(idle[0]).sort()).toEqual([
       "connectedAt",
       "connectionId",
+      "sessionId",
       "state",
+      "threadId",
+      "turnId",
     ]);
 
-    socket.send('{"type":"response.create","delayComplete":true}');
+    socket.send(JSON.stringify({ type: "response.create", delayComplete: true, client_metadata: { session_id: "session-live", thread_id: "thread-live", turn_id: "turn-live", workspaces: { "private/path": {} } } }));
     await once(socket, "message");
     const transmitting = (await fetch(
       `${gatewayUrl}/api/websocket-connections`,
@@ -845,6 +856,10 @@ describe("WebSocket transport", () => {
       connectionId: idle[0].connectionId,
       state: "transmitting",
       activeRequestId: `${idle[0].connectionId}:1`,
+      sessionId: "session-live",
+      threadId: "thread-live",
+      turnId: "turn-live",
+      activityKind: "response",
     });
 
     await once(socket, "message");
@@ -855,7 +870,12 @@ describe("WebSocket transport", () => {
       expect(connections[0]).toMatchObject({
         connectionId: idle[0].connectionId,
         state: "idle",
+        sessionId: "session-live",
+        threadId: "thread-live",
+        turnId: "turn-live",
       });
+      expect(connections[0]).not.toHaveProperty("activityKind");
+      expect(connections[0]).not.toHaveProperty("workspaces");
     });
     socket.close(1000, "done");
     await once(socket, "close");

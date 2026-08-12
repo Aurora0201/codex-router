@@ -1,4 +1,4 @@
-import { CircleIcon, MoonIcon, SunIcon } from "lucide-react"
+import { ClockArrowUpIcon, MoonIcon, SunIcon, WifiOffIcon } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
 import type { AppPage } from "@/components/app/app-sidebar"
@@ -20,15 +20,24 @@ const pageTitle: Record<AppPage, string> = {
   logs: "请求日志",
 }
 
+function formatUptime(uptimeSeconds: number | undefined, t: ReturnType<typeof useTranslation>["t"]) {
+  if (uptimeSeconds == null || uptimeSeconds < 60) return t("运行不足 1 分钟")
+  const days = Math.floor(uptimeSeconds / 86_400)
+  const hours = Math.floor(uptimeSeconds % 86_400 / 3_600)
+  if (days > 0) return t("运行 {{days}} 天 {{hours}} 小时", { days, hours })
+  const minutes = Math.floor(uptimeSeconds % 3_600 / 60)
+  return t("运行 {{hours}} 小时 {{minutes}} 分", { hours, minutes })
+}
+
 export function AppHeader({
   page,
   online,
-  version,
+  uptimeSeconds,
   onThemeChange,
 }: {
   page: AppPage
   online: boolean
-  version?: string
+  uptimeSeconds?: number
   onThemeChange?(theme: "light" | "dark"): Promise<void>
 }) {
   const { resolvedTheme, setTheme } = useTheme()
@@ -41,13 +50,13 @@ export function AppHeader({
       <div className="ml-auto flex items-center gap-2">
         <div
           className={cn(
-            "inline-flex items-center gap-1.5 text-xs font-medium [&_svg]:size-2",
+            "inline-flex items-center gap-1.5 text-xs font-medium [&_svg]:size-4",
             online ? "text-muted-foreground" : "text-destructive"
           )}
           role="status"
         >
-          <CircleIcon className="fill-current" aria-hidden="true" />
-          <span>{online ? t("Codex Router 在线 · v{{version}}", { version: version ?? "—" }) : t("Codex Router 离线")}</span>
+          {online ? <ClockArrowUpIcon aria-hidden="true" /> : <WifiOffIcon aria-hidden="true" />}
+          <span className="tabular-nums">{online ? formatUptime(uptimeSeconds, t) : t("Codex Router 离线")}</span>
         </div>
         <Tooltip>
           <TooltipTrigger

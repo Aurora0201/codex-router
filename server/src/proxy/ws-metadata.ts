@@ -1,12 +1,18 @@
 import { JSONParser } from "@streamparser/json";
+import type { IncomingHttpHeaders } from "node:http";
 import type { RawData } from "ws";
 
 const MAX_TURN_METADATA_BYTES = 8 * 1024;
+const MAX_SAFE_ID_BYTES = 256;
+const SAFE_ID = /^[A-Za-z0-9._:-]+$/;
 
 const CLIENT_PATHS = [
   "$.type",
   "$.generate",
   "$.client_metadata.x-codex-turn-metadata",
+  "$.client_metadata.session_id",
+  "$.client_metadata.thread_id",
+  "$.client_metadata.turn_id",
 ];
 
 const SERVER_PATHS = [
@@ -22,7 +28,11 @@ export interface ClientFrameMetadata {
   type?: string;
   generate?: boolean;
   requestKind?: string;
+  sessionId?: string;
+  threadId?: string;
+  turnId?: string;
 }
+export type TurnIdentifiers = Pick<ClientFrameMetadata, "sessionId" | "threadId" | "turnId">;
 export interface ServerFrameMetadata {
   type?: string;
   errorCode?: string;
@@ -63,20 +73,42 @@ function selectedValues(
   return failed ? null : values;
 }
 
-function requestKind(value: unknown): string | undefined {
+function safeId(value: unknown): string | undefined {
+  return typeof value === "string" && Buffer.byteLength(value) <= MAX_SAFE_ID_BYTES && SAFE_ID.test(value)
+    ? value
+    : undefined;
+}
+
+export function inspectTurnMetadata(value: unknown): Pick<ClientFrameMetadata, "requestKind" | "sessionId" | "threadId" | "turnId"> {
   if (
     typeof value !== "string" ||
     Buffer.byteLength(value) > MAX_TURN_METADATA_BYTES
   )
-    return undefined;
+    return {};
   try {
-    const parsed = JSON.parse(value) as { request_kind?: unknown };
-    return typeof parsed.request_kind === "string"
-      ? parsed.request_kind
-      : undefined;
+    const parsed = JSON.parse(value) as Record<string, unknown>;
+    return {
+      requestKind: typeof parsed.request_kind === "string" ? parsed.request_kind : undefined,
+      sessionId: safeId(parsed.session_id),
+      threadId: safeId(parsed.thread_id),
+      turnId: safeId(parsed.turn_id),
+    };
   } catch {
-    return undefined;
+    return {};
   }
+}
+
+function firstHeader(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+export function inspectHandshakeTurnMetadata(headers: IncomingHttpHeaders): TurnIdentifiers {
+  const nested = inspectTurnMetadata(firstHeader(headers["x-codex-turn-metadata"]));
+  return {
+    threadId: nested.threadId ?? safeId(firstHeader(headers["thread-id"])),
+    ...(nested.sessionId ? { sessionId: nested.sessionId } : {}),
+    ...(nested.turnId ? { turnId: nested.turnId } : {}),
+  };
 }
 
 export function inspectClientFrame(
@@ -86,6 +118,12 @@ export function inspectClientFrame(
   if (isBinary) return null;
   const values = selectedValues(data, CLIENT_PATHS);
   if (!values) return null;
+  const direct: TurnIdentifiers = {
+    sessionId: safeId(values.get("session_id")),
+    threadId: safeId(values.get("thread_id")),
+    turnId: safeId(values.get("turn_id")),
+  };
+  const metadata = inspectTurnMetadata(values.get("x-codex-turn-metadata"));
   return {
     type:
       typeof values.get("type") === "string"
@@ -95,7 +133,8 @@ export function inspectClientFrame(
       typeof values.get("generate") === "boolean"
         ? (values.get("generate") as boolean)
         : undefined,
-    requestKind: requestKind(values.get("x-codex-turn-metadata")),
+    ...direct,
+    ...Object.fromEntries(Object.entries(metadata).filter(([, value]) => value !== undefined)),
   };
 }
 export function inspectServerFrame(

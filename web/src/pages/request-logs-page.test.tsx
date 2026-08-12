@@ -82,9 +82,9 @@ describe("RequestLogsPage", () => {
         .find((item) => item.closest('[data-slot="badge"]'))
         ?.closest('[data-slot="badge"]')
     ).toHaveAttribute("data-variant", "outline")
-    expect(
-      screen.getByRole("columnheader", { name: "时间与状态" })
-    ).toHaveStyle({ width: "280px" })
+    expect(document.querySelector("colgroup col:first-child")).toHaveClass(
+      "w-[280px]"
+    )
     expect(screen.getByRole("columnheader", { name: "耗时" })).toHaveClass(
       "h-11",
       "py-0",

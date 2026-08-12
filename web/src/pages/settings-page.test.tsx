@@ -12,32 +12,26 @@ async function renderPage(mutate?: (snapshot: GatewaySnapshot) => void) {
   const service = createGatewayServiceFixture()
   mutate?.(service.snapshot)
   const onShowAccounts = vi.fn()
-  const onShowLogs = vi.fn()
   const reload = vi.fn(async () => undefined)
   render(
-    <ThemeProvider><Toaster><SettingsPage snapshot={await service.getSnapshot()} service={service} reload={reload} onShowAccounts={onShowAccounts} onShowLogs={onShowLogs} /></Toaster></ThemeProvider>
+    <ThemeProvider><Toaster><SettingsPage snapshot={await service.getSnapshot()} service={service} reload={reload} onShowAccounts={onShowAccounts} /></Toaster></ThemeProvider>
   )
-  return { service, onShowAccounts, onShowLogs, reload }
+  return { service, onShowAccounts, reload }
 }
 
 describe("SettingsPage", () => {
-  it("prioritizes the managed routing path and presents four metrics in one grid", async () => {
-    const user = userEvent.setup()
-    const { onShowAccounts, onShowLogs } = await renderPage()
+  it("prioritizes routing and API availability without duplicating daily metrics", async () => {
+    await renderPage()
 
-    expect(screen.getByText("Codex Router 接管正常")).toBeInTheDocument()
+    const takeoverHeading = screen.getByText("Codex Router 接管正常")
+    const availabilityHeading = screen.getByRole("heading", { name: "API 可用性" })
+    expect(takeoverHeading).toBeInTheDocument()
     expect(screen.getByText("接管正常").closest('[data-slot="badge"]')).toHaveClass("text-success")
     const route = screen.getByRole("list", { name: "当前路由链路" })
     expect(route.querySelectorAll('[data-slot="item"]')).toHaveLength(3)
     expect(within(route).getByText("account-1@example.com")).toBeInTheDocument()
-
-    const metrics = screen.getByText("今日运行").closest('[data-slot="card"]')?.querySelector('[data-slot="item-group"]')
-    expect(metrics).toHaveClass("grid-cols-2", "xl:grid-cols-4")
-    expect(metrics?.querySelectorAll('[data-slot="item"]')).toHaveLength(4)
-    await user.click(screen.getByLabelText("请求错误指标"))
-    await user.click(screen.getByRole("button", { name: "查看 3 个可路由账号" }))
-    expect(onShowLogs).toHaveBeenCalledOnce()
-    expect(onShowAccounts).toHaveBeenCalledOnce()
+    expect(screen.queryByText("今日运行")).not.toBeInTheDocument()
+    expect(takeoverHeading.compareDocumentPosition(availabilityHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   it("shows Codex client passthrough for an empty account pool", async () => {
@@ -84,7 +78,7 @@ describe("SettingsPage", () => {
     const { onShowAccounts } = await renderPage(mutate)
     expect(screen.getByText("等待可用的路由账号")).toBeInTheDocument()
     expect(screen.getByText("路由阻断").closest('[data-slot="badge"]')).toHaveClass("text-destructive")
-    expect(screen.queryByRole("alert")).toHaveTextContent("不记录 Prompt")
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument()
     await user.click(screen.getByRole("button", { name: "前往账号路由" }))
     expect(onShowAccounts).toHaveBeenCalledOnce()
   })
@@ -97,13 +91,22 @@ describe("SettingsPage", () => {
 
   it("condenses the safety boundary into one line", async () => {
     await renderPage()
-    expect(screen.getByRole("alert")).toHaveTextContent("只读取路由元数据，不记录 Prompt、工具参数、工具输出或响应正文")
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument()
     expect(screen.queryByText("网络与安全边界")).not.toBeInTheDocument()
   })
 
-  it("handles an empty request window without dividing by zero", async () => {
-    await renderPage((snapshot) => { snapshot.stats.requestsToday = 0; snapshot.stats.errorsToday = 0 })
-    expect(within(screen.getByLabelText("今日请求指标")).getByText("0")).toBeInTheDocument()
-    expect(within(screen.getByLabelText("请求错误指标")).getByText("0.00%")).toBeInTheDocument()
+  it("constrains the WebSocket card to the remaining desktop height", async () => {
+    await renderPage((snapshot) => {
+      snapshot.websocketConnections = [{ connectionId: "connection-1", state: "idle", connectedAt: Date.now() }]
+    })
+    expect(screen.getByLabelText("WebSocket 实时传输")).toHaveClass("lg:flex-1", "lg:basis-0", "lg:min-h-0")
+    const card = screen.getByLabelText("WebSocket 实时传输")
+    expect(card).toHaveClass("gap-0", "py-0")
+    const content = card.querySelector('[data-slot="card-content"]')
+    expect(content).toHaveClass("min-h-0", "flex-1", "overflow-hidden")
+    expect(card.querySelector('[data-slot="scroll-area"]')).toHaveClass("h-full", "overscroll-contain")
+    expect(card.querySelector('[data-slot="scroll-area"]')?.className).toContain("[&_[data-slot=table-container]]:overflow-visible")
+    expect(card.querySelector('[data-slot="scroll-area-viewport"]')).toBeInTheDocument()
+    for (const header of within(card).getAllByRole("columnheader")) expect(header).toHaveClass("sticky", "top-0", "bg-card")
   })
 })

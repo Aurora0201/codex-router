@@ -45,7 +45,7 @@
 - active 账号变化时，不在既有连接内热换认证或上游。绑定旧账号的空闲连接以正常关闭码退役；进行中的 `response.create` 可完成并转发终态，随后连接退役，使 Codex 在下一请求重新握手并取得新账号认证。账号切换导致的正常退役属于连接级成功诊断，不计作上游故障。
 - 空账号池建立的 `client_passthrough` 连接使用客户端握手认证，不加入托管账号连接注册表，也不执行认证刷新。
 - 升级成功后**双向透明转发**文本/二进制帧，诊断提取不得改变帧字节；解析失败必须继续转发。
-- 文本帧使用流式 JSON 路径筛选器且 `keepStack: false`，客户端仅读取顶层 `type`、`generate` 和 `client_metadata.x-codex-turn-metadata`，上游仅读取顶层 `type`、`response.error.code` 和 `response.incomplete_details.reason`。不组装完整 payload，不读取或记录 input、instructions、prompt、工具参数、工具结果和响应正文。
+- 握手头和文本帧使用同一安全白名单：握手只读取 `x-codex-turn-metadata` 与 `thread-id`，文本帧使用流式 JSON 路径筛选器且 `keepStack: false`，只读取顶层 `type`、`generate`、`client_metadata.x-codex-turn-metadata` 及兼容的直接 session/thread/turn 字段。metadata 只允许提取有长度与字符约束的 `session_id`、`thread_id`、`turn_id`、`request_kind`，用于进程内活动连接观测，原始 metadata 不保存。上游仅读取顶层 `type`、`response.error.code` 和 `response.incomplete_details.reason`。不组装完整 payload，不读取或记录 workspace、input、instructions、prompt、工具参数、工具结果和响应正文。
 - 每个非 prewarm `response.create` 独立记录请求生命周期；复用连接中的 `request_kind = "compaction"` 记录为 `compact`。握手和连接关闭属于连接级诊断，不参与 API 可用性。
 - 客户端早于上游连接就绪的消息进入**有界缓冲区**（`MAX_PENDING_FRAMES` / `MAX_PENDING_BYTES`），上游 `open` 后按序补发。
 - ping / pong 双向转发；close code / reason 按合法范围桥接（非法码直接 `terminate`）。

@@ -85,12 +85,17 @@ export interface CodexStatusView {
 
 export type WebSocketConnectionState =
   "connecting" | "idle" | "transmitting" | "retiring"
+export type WebSocketActivityKind = "response" | "compaction" | "prewarm"
 
 export interface WebSocketConnectionView {
   connectionId: string
   state: WebSocketConnectionState
   connectedAt: number
   activeRequestId?: string
+  sessionId?: string
+  threadId?: string
+  turnId?: string
+  activityKind?: WebSocketActivityKind
 }
 
 export interface GatewaySnapshot {
