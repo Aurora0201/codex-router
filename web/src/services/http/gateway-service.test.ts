@@ -217,17 +217,92 @@ describe("HTTP GatewayService", () => {
   it("maps request-log filters and preserves timeline metadata", async () => {
     const payload = {
       items: [],
-      summary: { requests: 1, errors: 1, rejected: 0, cancelled: 0, availabilityRequests: 1, availabilityErrors: 1, averageDurationMs: 42 },
-      timeline: [{ id: "log-1", createdAt: 1000, durationMs: 42, statusCode: 500, outcome: "upstream_error" }],
+      summary: {
+        requests: 1,
+        errors: 1,
+        rejected: 0,
+        cancelled: 0,
+        availabilityRequests: 1,
+        availabilityErrors: 1,
+        averageDurationMs: 42,
+      },
+      timeline: [
+        {
+          id: "log-1",
+          createdAt: 1000,
+          durationMs: 42,
+          statusCode: 500,
+          outcome: "upstream_error",
+        },
+      ],
       nextCursor: null,
       pagination: { page: 3, pageSize: 50, totalItems: 121, totalPages: 3 },
     }
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse(payload))
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(jsonResponse(payload))
     vi.stubGlobal("fetch", fetchMock)
-    await expect(createHttpGatewayService().getRequestLogs({ range: "24h", status: "error", transport: "http", accountId: "account/one", query: "upstream error", page: 3, limit: 50 })).resolves.toEqual(payload)
+    await expect(
+      createHttpGatewayService().getRequestLogs({
+        range: "24h",
+        status: "error",
+        transport: "http",
+        accountId: "account/one",
+        query: "upstream error",
+        page: 3,
+        limit: 50,
+      })
+    ).resolves.toEqual(payload)
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/request-logs?range=24h&status=error&transport=http&accountId=account%2Fone&q=upstream+error&page=3&limit=50",
       expect.objectContaining({ credentials: "same-origin" })
+    )
+  })
+
+  it("maps separated request evidence and connection diagnostic filters", async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockImplementation(async () =>
+        jsonResponse({
+          items: [],
+          summary: { connections: 0, failures: 0, retired: 0 },
+          nextCursor: null,
+          pagination: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0 },
+        })
+      )
+    vi.stubGlobal("fetch", fetchMock)
+    const service = createHttpGatewayService()
+    await service.getRequestLogs({
+      range: "24h",
+      from: 100,
+      to: 200,
+      state: "failed",
+      outcome: "upstream_error",
+      failureSource: "transport",
+      failureStage: "streaming",
+      httpStatus: 502,
+      protocolErrorCode: "server_error",
+      diagnosticCode: "stream_closed",
+      page: 1,
+      limit: 20,
+    })
+    expect(String(fetchMock.mock.calls[0][0])).toContain(
+      "from=100&to=200&state=failed&outcome=upstream_error&failureSource=transport&failureStage=streaming&httpStatus=502&protocolErrorCode=server_error&diagnosticCode=stream_closed"
+    )
+    await service.getWebSocketConnectionLogs({
+      range: "7d",
+      from: 300,
+      to: 400,
+      outcome: "failed",
+      closeInitiator: "upstream",
+      handshakeHttpStatus: 101,
+      clientCloseCode: 1000,
+      upstreamCloseCode: 1011,
+      page: 2,
+      limit: 20,
+    })
+    expect(String(fetchMock.mock.calls[1][0])).toContain(
+      "from=300&to=400&outcome=failed&closeInitiator=upstream&handshakeHttpStatus=101&clientCloseCode=1000&upstreamCloseCode=1011&page=2&limit=20"
     )
   })
 })

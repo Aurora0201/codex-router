@@ -84,10 +84,7 @@ export interface CodexStatusView {
 }
 
 export type WebSocketConnectionState =
-  | "connecting"
-  | "idle"
-  | "transmitting"
-  | "retiring"
+  "connecting" | "idle" | "transmitting" | "retiring"
 
 export interface WebSocketConnectionView {
   connectionId: string
@@ -105,17 +102,40 @@ export interface GatewaySnapshot {
   websocketConnections: WebSocketConnectionView[]
 }
 
-export type GatewayResource = "accounts" | "stats" | "settings" | "codex" | "logs" | "websocketConnections"
+export type GatewayResource =
+  "accounts" | "stats" | "settings" | "codex" | "logs" | "websocketConnections"
 
 export type RequestLogRange = "1h" | "24h" | "7d"
-export type RequestOutcome = "success" | "rejected" | "upstream_error" | "gateway_error" | "client_cancelled"
-export type RequestState = "running" | "completed" | "failed" | "rejected" | "cancelled" | "interrupted"
-export type FailureSource = "gateway" | "upstream_http" | "upstream_protocol" | "transport" | "client"
-export type FailureStage = "routing" | "authentication" | "handshake" | "sending" | "streaming" | "terminal"
+export type RequestOutcome =
+  | "success"
+  | "rejected"
+  | "upstream_error"
+  | "gateway_error"
+  | "client_cancelled"
+export type RequestState =
+  "running" | "completed" | "failed" | "rejected" | "cancelled" | "interrupted"
+export type FailureSource =
+  "gateway" | "upstream_http" | "upstream_protocol" | "transport" | "client"
+export type FailureStage =
+  | "routing"
+  | "authentication"
+  | "handshake"
+  | "sending"
+  | "streaming"
+  | "terminal"
 export type IdentityMode = "managed_account" | "client_passthrough"
 export interface RequestLogFilters {
   range: RequestLogRange
+  from?: number
+  to?: number
   status?: "success" | "rejected" | "error" | "cancelled" | "running"
+  state?: RequestState
+  outcome?: RequestOutcome
+  failureSource?: FailureSource
+  failureStage?: FailureStage
+  httpStatus?: number
+  protocolErrorCode?: string
+  diagnosticCode?: string
   transport?: "http" | "ws" | "compact" | "models" | "search"
   accountId?: string
   query?: string
@@ -139,6 +159,7 @@ export interface RequestLogView {
   diagnosticCode?: string
   upstreamRequestId?: string
   diagnosticHeaders?: Record<string, string>
+  transportErrorChain?: Array<{ name?: string; code?: string }>
   /** @deprecated */ statusCode?: number
   durationMs?: number
   bytesIn?: number
@@ -151,7 +172,15 @@ export interface RequestLogView {
 }
 export interface RequestLogsResponse {
   items: RequestLogView[]
-  summary: { requests: number; errors: number; rejected: number; cancelled: number; availabilityRequests: number; availabilityErrors: number; averageDurationMs: number | null }
+  summary: {
+    requests: number
+    errors: number
+    rejected: number
+    cancelled: number
+    availabilityRequests: number
+    availabilityErrors: number
+    averageDurationMs: number | null
+  }
   timeline: Array<{
     id: string
     createdAt: number
@@ -168,7 +197,8 @@ export interface RequestLogsResponse {
   }
 }
 
-export type WebSocketConnectionOutcome = "connected" | "rejected" | "failed" | "retired" | "closed"
+export type WebSocketConnectionOutcome =
+  "connected" | "rejected" | "failed" | "retired" | "closed"
 export interface WebSocketConnectionLogView {
   id: string
   connectionId: string
@@ -184,9 +214,35 @@ export interface WebSocketConnectionLogView {
   closeReasonCode?: string
   outcome: WebSocketConnectionOutcome
 }
-export interface WebSocketConnectionLogFilters { range: RequestLogRange; outcome?: WebSocketConnectionOutcome; accountId?: string; query?: string; cursor?: string; page?: number; limit?: number }
-export interface WebSocketConnectionLogsResponse { items: WebSocketConnectionLogView[]; nextCursor: string | null; pagination: { page:number; pageSize:number; totalItems:number; totalPages:number } }
-export type GatewayActivityEvent = { type:"request_started"|"request_finished"; id:string } | { type:"connection_updated"; connectionId:string }
+export interface WebSocketConnectionLogFilters {
+  range: RequestLogRange
+  from?: number
+  to?: number
+  outcome?: WebSocketConnectionOutcome
+  accountId?: string
+  query?: string
+  closeInitiator?: "client" | "upstream" | "gateway"
+  handshakeHttpStatus?: number
+  clientCloseCode?: number
+  upstreamCloseCode?: number
+  cursor?: string
+  page?: number
+  limit?: number
+}
+export interface WebSocketConnectionLogsResponse {
+  items: WebSocketConnectionLogView[]
+  summary: { connections: number; failures: number; retired: number }
+  nextCursor: string | null
+  pagination: {
+    page: number
+    pageSize: number
+    totalItems: number
+    totalPages: number
+  }
+}
+export type GatewayActivityEvent =
+  | { type: "request_started" | "request_finished"; id: string }
+  | { type: "connection_updated"; connectionId: string }
 
 export interface GatewayService {
   subscribe(
@@ -198,7 +254,9 @@ export interface GatewayService {
   getAccounts(): Promise<AccountsResponse>
   getWebSocketConnections(): Promise<WebSocketConnectionView[]>
   getRequestLogs(filters: RequestLogFilters): Promise<RequestLogsResponse>
-  getWebSocketConnectionLogs(filters: WebSocketConnectionLogFilters): Promise<WebSocketConnectionLogsResponse>
+  getWebSocketConnectionLogs(
+    filters: WebSocketConnectionLogFilters
+  ): Promise<WebSocketConnectionLogsResponse>
   setActiveAccount(id: string): Promise<AccountView>
   clearActiveAccount(): Promise<void>
   updateAccount(id: string, values: { enabled: boolean }): Promise<AccountView>
@@ -209,7 +267,9 @@ export interface GatewayService {
   getLoginStatus(loginId: string): Promise<LoginSessionView>
   cancelLogin(loginId: string): Promise<void>
   saveSettings(
-    values: Partial<Pick<SettingsView, "requestMetadataLogging" | "theme" | "logLevel">>
+    values: Partial<
+      Pick<SettingsView, "requestMetadataLogging" | "theme" | "logLevel">
+    >
   ): Promise<SettingsView>
   applyCodexConfig(): Promise<CodexStatusView>
   restoreCodexConfig(): Promise<CodexStatusView>

@@ -2,7 +2,7 @@ import type Database from "better-sqlite3";
 
 type SqliteDatabase = Database.Database;
 
-export const SCHEMA_VERSION = 9;
+export const SCHEMA_VERSION = 11;
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -72,33 +72,47 @@ ON accounts(chatgpt_account_id) WHERE chatgpt_account_id IS NOT NULL;
 `;
 
 function tableColumns(db: SqliteDatabase, table: string): Set<string> {
-  const rows = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  const rows = db.prepare(`PRAGMA table_info(${table})`).all() as {
+    name: string;
+  }[];
   return new Set(rows.map((row) => row.name));
 }
 
 function currentVersion(db: SqliteDatabase): number {
-  const row = db.prepare("SELECT MAX(version) AS version FROM schema_migrations").get() as { version: number | null };
+  const row = db
+    .prepare("SELECT MAX(version) AS version FROM schema_migrations")
+    .get() as { version: number | null };
   return row.version ?? 0;
 }
 
 export function migrate(db: SqliteDatabase): void {
   db.exec(SCHEMA);
-  db.prepare("INSERT OR IGNORE INTO settings(key, value_json) VALUES ('requestMetadataLogging', 'true')").run();
-  db.prepare("INSERT OR IGNORE INTO settings(key, value_json) VALUES ('theme', '\"system\"')").run();
-  db.prepare("INSERT OR IGNORE INTO settings(key, value_json) VALUES ('logLevel', '\"info\"')").run();
+  db.prepare(
+    "INSERT OR IGNORE INTO settings(key, value_json) VALUES ('requestMetadataLogging', 'true')",
+  ).run();
+  db.prepare(
+    "INSERT OR IGNORE INTO settings(key, value_json) VALUES ('theme', '\"system\"')",
+  ).run();
+  db.prepare(
+    "INSERT OR IGNORE INTO settings(key, value_json) VALUES ('logLevel', '\"info\"')",
+  ).run();
 
   const version = currentVersion(db);
   if (version < 2) {
     const accountColumns = tableColumns(db, "accounts");
     const adds: string[] = [];
-    if (!accountColumns.has("chatgpt_account_id")) adds.push("chatgpt_account_id TEXT");
-    if (!accountColumns.has("rate_limit_reached_type")) adds.push("rate_limit_reached_type TEXT");
-    for (const column of adds) db.exec(`ALTER TABLE accounts ADD COLUMN ${column}`);
+    if (!accountColumns.has("chatgpt_account_id"))
+      adds.push("chatgpt_account_id TEXT");
+    if (!accountColumns.has("rate_limit_reached_type"))
+      adds.push("rate_limit_reached_type TEXT");
+    for (const column of adds)
+      db.exec(`ALTER TABLE accounts ADD COLUMN ${column}`);
     db.exec(V2_STATEMENTS);
   }
   if (version < 3) {
     const logColumns = tableColumns(db, "request_log");
-    if (logColumns.has("routing_key_hash")) db.exec("ALTER TABLE request_log DROP COLUMN routing_key_hash");
+    if (logColumns.has("routing_key_hash"))
+      db.exec("ALTER TABLE request_log DROP COLUMN routing_key_hash");
     db.exec("DROP TABLE IF EXISTS session_bindings");
   }
   if (version < 4) {
@@ -111,8 +125,14 @@ export function migrate(db: SqliteDatabase): void {
   }
   if (version < 5) {
     const logColumns = tableColumns(db, "request_log");
-    if (!logColumns.has("outcome")) db.exec("ALTER TABLE request_log ADD COLUMN outcome TEXT NOT NULL DEFAULT 'upstream_error'");
-    if (!logColumns.has("scope")) db.exec("ALTER TABLE request_log ADD COLUMN scope TEXT NOT NULL DEFAULT 'request'");
+    if (!logColumns.has("outcome"))
+      db.exec(
+        "ALTER TABLE request_log ADD COLUMN outcome TEXT NOT NULL DEFAULT 'upstream_error'",
+      );
+    if (!logColumns.has("scope"))
+      db.exec(
+        "ALTER TABLE request_log ADD COLUMN scope TEXT NOT NULL DEFAULT 'request'",
+      );
     db.exec(`
       UPDATE request_log SET scope = 'connection'
       WHERE transport = 'ws'
@@ -155,7 +175,9 @@ export function migrate(db: SqliteDatabase): void {
   if (version < 8) {
     const logColumns = tableColumns(db, "request_log");
     if (!logColumns.has("identity_mode")) {
-      db.exec("ALTER TABLE request_log ADD COLUMN identity_mode TEXT NOT NULL DEFAULT 'managed_account'");
+      db.exec(
+        "ALTER TABLE request_log ADD COLUMN identity_mode TEXT NOT NULL DEFAULT 'managed_account'",
+      );
     }
   }
   if (version < 9) {
@@ -235,10 +257,28 @@ export function migrate(db: SqliteDatabase): void {
         DROP TABLE request_log;
         ALTER TABLE request_log_v9 RENAME TO request_log;
         CREATE INDEX idx_request_log_started ON request_log(started_at DESC);
+        CREATE INDEX idx_request_log_state_started ON request_log(state, started_at DESC);
+        CREATE INDEX idx_request_log_outcome_started ON request_log(outcome, started_at DESC);
         CREATE INDEX idx_websocket_connection_started ON websocket_connection_log(started_at DESC);
+        CREATE INDEX idx_websocket_connection_outcome_started ON websocket_connection_log(outcome, started_at DESC);
       `);
     })();
   }
+  if (version < 10) {
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_request_log_state_started ON request_log(state, started_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_request_log_outcome_started ON request_log(outcome, started_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_websocket_connection_outcome_started ON websocket_connection_log(outcome, started_at DESC);
+    `);
+  }
+  if (version < 11) {
+    const logColumns = tableColumns(db, "request_log");
+    if (!logColumns.has("transport_error_json")) {
+      db.exec("ALTER TABLE request_log ADD COLUMN transport_error_json TEXT");
+    }
+  }
 
-  db.prepare("INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (?, ?)").run(SCHEMA_VERSION, Date.now());
+  db.prepare(
+    "INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (?, ?)",
+  ).run(SCHEMA_VERSION, Date.now());
 }

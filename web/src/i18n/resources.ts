@@ -167,6 +167,7 @@ export const en = {
   "流量": "Traffic",
   "已删除或未路由": "Deleted or not routed",
   "请求详情": "Request details",
+  "传输错误链": "Transport error chain",
   "仅包含允许记录的诊断元数据。": "Contains only permitted diagnostic metadata.",
   "结果": "Outcome",
   "时间": "Time",

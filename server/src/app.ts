@@ -149,6 +149,7 @@ export async function buildGateway(overrides: Partial<GatewayConfig> = {}): Prom
     codexProcess.close();
     events.close();
     await logins.close();
+    await proxy.close();
     database.close();
   });
 

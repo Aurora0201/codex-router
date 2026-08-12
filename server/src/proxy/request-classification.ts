@@ -10,6 +10,7 @@ export interface RequestEvidence {
   diagnosticCode?: string;
   upstreamRequestId?: string;
   diagnosticHeaders?: Record<string, string>;
+  transportErrorChain?: Array<{ name?: string; code?: string }>;
 }
 
 const REJECTED_PROTOCOL_CODES = new Set([

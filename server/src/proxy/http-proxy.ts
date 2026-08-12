@@ -1,7 +1,7 @@
 import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type { FastifyReply, FastifyRequest } from "fastify";
-import { request as undiciRequest, type Dispatcher } from "undici";
+import { Agent, request as undiciRequest, type Dispatcher } from "undici";
 import type { AccountRecord, IdentityMode, Transport } from "../types.js";
 import { AccountAuthService } from "../accounts/account-auth-service.js";
 import { AccountUsageService } from "../accounts/account-usage-service.js";
@@ -11,6 +11,7 @@ import { hasBrowserOrigin } from "../security/origin-guard.js";
 import { buildClientPassthroughHeaders, buildUpstreamHeaders, copyResponseHeaders, isCompactionRequest } from "./headers.js";
 import { classifyHttpStatus, classifyProtocolTerminal, clientCancellation, gatewayFailure, transportFailure } from "./request-classification.js";
 import { ResponsesSseInspector } from "./responses-sse-inspector.js";
+import { transportErrorEvidence } from "./transport-error.js";
 
 export type ProxyPath = "/responses" | "/responses/compact" | "/models" | "/alpha/search";
 interface HttpProxyOptions { upstreamBaseUrl:string; activeAccounts:ActiveAccountService; auth:AccountAuthService; usage:AccountUsageService; database:GatewayDatabase; }
@@ -27,13 +28,19 @@ function safeResponseMetadata(headers: Record<string,string|string[]|undefined>)
 }
 
 export class HttpProxy {
+  private readonly dispatcher = new Agent({
+    connectTimeout: 30_000,
+    autoSelectFamily: true,
+  });
+
   constructor(private readonly options: HttpProxyOptions) {}
+  async close(): Promise<void> { await this.dispatcher.close(); }
   async handle(request:FastifyRequest,reply:FastifyReply,path:ProxyPath):Promise<void>{
     const startedAt=Date.now();
     const transport:Transport=path==="/models"?"models":path==="/responses/compact"||(path==="/responses"&&isCompactionRequest(request.headers))?"compact":path==="/alpha/search"?"search":"http";
     const logId=this.options.database.requestLog.startRequest({requestId:request.id,route:path,transport,startedAt});
     if(hasBrowserOrigin(request)){this.options.database.requestLog.finishRequest(logId,gatewayFailure("browser_origin_not_allowed",403,"routing"));await reply.code(403).send({error:"browser_origin_not_allowed"});return;}
-    let rawBody:Buffer<ArrayBufferLike>=Buffer.alloc(0); let selectedAccount:AccountRecord|null=null; let identityMode:IdentityMode="managed_account"; let clientCancelled=false;
+    let rawBody:Buffer<ArrayBufferLike>=Buffer.alloc(0); let selectedAccount:AccountRecord|null=null; let identityMode:IdentityMode="managed_account"; let clientCancelled=false; let failureStage:"sending"|"streaming"="sending";
     try{
       rawBody=request.method==="GET"?Buffer.alloc(0):this.rawBody(request.body);
       const identity=this.options.activeAccounts.resolveIdentity(); if(identity.mode==="unavailable")throw new Error("no_active_account_selected");
@@ -43,11 +50,11 @@ export class HttpProxy {
       let credential=selectedAccount?await this.options.auth.getCredential(selectedAccount.id):null;
       const controller=new AbortController(); const abort=()=>{if(!reply.raw.writableEnded){clientCancelled=true;controller.abort();}};
       request.raw.once("aborted",abort);reply.raw.once("close",abort);
-      const send=()=>undiciRequest(this.upstreamUrl(request,path),{method:request.method as Dispatcher.HttpMethod,headers:credential?buildUpstreamHeaders(request.headers,credential,request.method==="GET"?undefined:rawBody.length):buildClientPassthroughHeaders(request.headers,request.method==="GET"?undefined:rawBody.length),body:request.method==="GET"?undefined:rawBody,signal:controller.signal,headersTimeout:120_000,bodyTimeout:0});
+      const send=()=>undiciRequest(this.upstreamUrl(request,path),{method:request.method as Dispatcher.HttpMethod,headers:credential?buildUpstreamHeaders(request.headers,credential,request.method==="GET"?undefined:rawBody.length):buildClientPassthroughHeaders(request.headers,request.method==="GET"?undefined:rawBody.length),body:request.method==="GET"?undefined:rawBody,signal:controller.signal,headersTimeout:120_000,bodyTimeout:0,dispatcher:this.dispatcher});
       let upstream=await send(); if(upstream.statusCode===401&&selectedAccount&&credential){await upstream.body.dump();credential=await this.options.auth.refresh(selectedAccount.id);upstream=await send();}
       if(upstream.statusCode===429&&selectedAccount){this.options.database.accounts.update(selectedAccount.id,{authStatus:"rate_limited"});void this.options.usage.refresh(selectedAccount.id).catch(()=>undefined);}
       const headers=upstream.headers as Record<string,string|string[]|undefined>; const safe=safeResponseMetadata(headers);
-      copyResponseHeaders(headers,reply.raw);reply.hijack();reply.raw.writeHead(upstream.statusCode);
+      failureStage="streaming";copyResponseHeaders(headers,reply.raw);reply.hijack();reply.raw.writeHead(upstream.statusCode);
       let bytesOut=0;const counter=new Transform({transform(chunk:Buffer,_e,cb){bytesOut+=chunk.length;cb(null,chunk);}});
       const inspectResponses=path==="/responses"&&upstream.statusCode>=200&&upstream.statusCode<300;
       const inspector=inspectResponses?new ResponsesSseInspector():null;
@@ -60,7 +67,8 @@ export class HttpProxy {
     }catch(error){
       const rawCode=(error as Error).message; const status=errorStatus(error); const gateway=["no_active_account_selected","account_disabled","account_not_ready","fedramp_accounts_not_supported","raw_request_body_unavailable"].includes(rawCode);
       this.options.database.requestLog.setContext(logId,{accountId:selectedAccount?.id,identityMode,bytesIn:rawBody.length});
-      this.options.database.requestLog.finishRequest(logId,clientCancelled?clientCancellation():gateway?gatewayFailure(rawCode,status,rawCode.includes("account")?"routing":"sending"):transportFailure("upstream_request_failed","sending"));
+      const transportError=transportErrorEvidence(error);
+      this.options.database.requestLog.finishRequest(logId,clientCancelled?clientCancellation():gateway?gatewayFailure(rawCode,status,rawCode.includes("account")?"routing":"sending"):{...transportFailure(transportError.diagnosticCode,failureStage),transportErrorChain:transportError.transportErrorChain});
       if(clientCancelled)return;if(!reply.raw.headersSent)await reply.code(status).send({error:gateway?rawCode:"upstream_request_failed"});else reply.raw.destroy(error as Error);
     }
   }

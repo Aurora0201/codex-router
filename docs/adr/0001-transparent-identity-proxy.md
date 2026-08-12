@@ -60,7 +60,8 @@
 - 网关启动时将遗留 `running` 原位标记为 `interrupted/gateway_error`，诊断码为 `gateway_process_interrupted`；未知失败阶段保持 null。
 - `websocket_connection_log` 独立保存握手和关闭证据。Upgrade 101 只保存为 `handshake_http_status=101`；客户端/上游关闭码、关闭发起方、退役及关闭原因不进入请求状态和成功率。
 - 汇总、故障率、可用性、时间线和平均耗时只统计已终结请求；运行中请求和全部连接记录均排除。
-- 仅允许保存响应头白名单 `x-request-id`、`openai-request-id`、`retry-after`，其中前两者用于上游请求 ID。禁止保存 Authorization、Cookie、Set-Cookie、正文、错误 message、Prompt、工具参数或工具结果。
+- 仅允许保存响应头白名单 `x-request-id`、`openai-request-id`、`retry-after`，其中前两者用于上游请求 ID。传输异常仅保存经过长度和字符集约束的 `name` / `code` 因果链；禁止保存 Authorization、Cookie、Set-Cookie、正文、错误 message / stack、Prompt、工具参数或工具结果。
+- HTTP 上游连接使用共享 Undici Agent，连接超时为 30 秒，并启用 `autoSelectFamily` 在 IPv4 / IPv6 地址之间自动选择；响应头超时和无限流式 body timeout 保持不变。
 
 ## Consequences
 
