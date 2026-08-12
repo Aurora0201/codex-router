@@ -93,7 +93,12 @@ export function App({
           window.clearTimeout(debounce)
           debounce = window.setTimeout(refresh, 100)
         },
-        () => undefined
+        () => undefined,
+        (event) => {
+          if (event.type === "request_started" || event.type === "request_finished" || event.type === "connection_updated") {
+            setLogsRevision((value) => value + 1)
+          }
+        },
       )
     }
     const initial = window.setTimeout(() => {

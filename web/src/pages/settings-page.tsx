@@ -80,7 +80,7 @@ export function SettingsPage({
         </CardContent>
       </Card>
 
-      <WebSocketActivityCard />
+      <WebSocketActivityCard connections={snapshot.websocketConnections} />
 
       <RequestAvailabilityCard
         service={service}

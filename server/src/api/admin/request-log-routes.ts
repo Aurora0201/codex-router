@@ -28,12 +28,12 @@ export function registerRequestLogRoutes(app: FastifyInstance, ctx: AdminContext
       if (!RANGES[range] || !Number.isInteger(limit) || limit < 1 || limit > 100) throw new Error();
       if (page !== undefined && (!Number.isInteger(page) || page < 1)) throw new Error();
       if (page !== undefined && query.cursor !== undefined) throw new Error();
-      if (status && !["success", "rejected", "error", "cancelled"].includes(status)) throw new Error();
+      if (status && !["success", "rejected", "error", "cancelled", "running"].includes(status)) throw new Error();
       if (transport && !TRANSPORTS.has(transport as Transport)) throw new Error();
       if ((query.q?.length ?? 0) > 100) throw new Error();
       const result = ctx.database.requestLog.query({
         since: Date.now() - RANGES[range],
-        status: status as "success" | "rejected" | "error" | "cancelled" | undefined,
+        status: status as "success" | "rejected" | "error" | "cancelled" | "running" | undefined,
         transport: transport as Transport | undefined,
         accountId: query.accountId,
         query: query.q?.trim() || undefined,

@@ -8,6 +8,7 @@ import { ActiveAccountService } from "../../routing/active-account-service.js";
 import type { CsrfGuard } from "../../security/csrf.js";
 import type { AdminEventHub } from "./admin-events.js";
 import type { CodexProcessMonitor } from "../../codex/codex-process.js";
+import type { WebSocketConnectionRegistry } from "../../proxy/websocket-connection-registry.js";
 
 export interface AdminContext {
   config: import("../../types.js").GatewayConfig;
@@ -21,6 +22,7 @@ export interface AdminContext {
   startedAt: number;
   events: AdminEventHub;
   codexProcess: CodexProcessMonitor;
+  websocketConnections: WebSocketConnectionRegistry;
 }
 
 export interface UsageWindowView {

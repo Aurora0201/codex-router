@@ -145,7 +145,26 @@ DeepSeek officially supports the Responses API format (no translation proxy need
 - Currently only `deepseek-v4-flash` supports Codex integration; `deepseek-v4-pro` expected early Aug 2026.
 - Compatibility table: `model`, `input`, `instructions`, `stream`, `temperature`, `top_p`, `max_output_tokens`, `tools` (function/web_search partial), `tool_choice`, `reasoning.effort` supported; `service_tier`, `context_management`, `stream_options` not supported; context caching automatic.
 
-### 2.3 Relevance to our gateway
+### 2.3 DeepSeek official Codex transport: HTTP/SSE, not WebSocket
+
+DeepSeek's official "Integrate with Codex" tutorial makes the transport choice explicit in the generated `models.json`:
+
+- Both `deepseek-v4-flash` and `deepseek-v4-pro` set `"prefer_websockets": false`.
+- The provider config declares `base_url = "https://api.deepseek.com/"` and `wire_api = "responses"`; it does not declare WebSocket support or a WebSocket endpoint.
+- DeepSeek's streaming API documentation describes HTTP `text/event-stream` / server-sent events (SSE), including `: keep-alive` comments while a request is queued. The official Codex tutorial does not document a Responses WebSocket transport.
+
+Therefore the official integration path is **Codex -> HTTPS Responses request -> SSE response stream**. `wire_api = "responses"` identifies the application protocol; it does not imply WebSocket transport.
+
+This materially simplifies the gateway design for DeepSeek:
+
+1. Generated routed-model catalog entries should preserve `prefer_websockets: false`.
+2. Codex should issue `/responses` over HTTP for those selected model entries, so the gateway can route from the request body's namespaced `model` before opening the upstream request.
+3. The gateway can forward DeepSeek's native Responses SSE stream (with parameter/event normalization only where compatibility requires it); it does not need to create a DeepSeek upstream WebSocket.
+4. The existing OpenAI WebSocket path remains relevant for OpenAI catalog entries. A generic provider adapter should not assume that every Responses-compatible provider supports WebSocket.
+
+Open question to verify in integration tests: when the built-in `openai` provider is repointed at the gateway but a custom merged catalog marks a routed model `prefer_websockets: false`, confirm Codex 0.147.0 selects HTTP/SSE per model even when another model in the same provider prefers WebSocket. This behavior is strongly indicated by the catalog field and DeepSeek's official setup, but must remain a compatibility test because it is central to avoiding a shared-connection cross-provider WS router.
+
+### 2.4 Relevance to our gateway
 
 Our gateway already injects `openai_base_url` via `CodexConfigService.applyGatewayConfig` (`server/src/codex/codex-config.ts:97-122`) — the same primitive opencodex uses. The gap is:
 

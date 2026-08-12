@@ -34,6 +34,9 @@ const codex = {
   configExists: true,
   codexRunning: false,
 }
+const websocketConnections = [
+  { connectionId: "connection-1", state: "idle", connectedAt: 1000 },
+]
 const account = {
   id: "account/one",
   chatgptAccountId: "chatgpt-account",
@@ -66,6 +69,7 @@ describe("HTTP GatewayService", () => {
       .mockResolvedValueOnce(jsonResponse(accounts))
       .mockResolvedValueOnce(jsonResponse(settings))
       .mockResolvedValueOnce(jsonResponse(codex))
+      .mockResolvedValueOnce(jsonResponse(websocketConnections))
     vi.stubGlobal("fetch", fetchMock)
 
     await expect(createHttpGatewayService().getSnapshot()).resolves.toEqual({
@@ -74,6 +78,7 @@ describe("HTTP GatewayService", () => {
       accounts,
       settings,
       codex,
+      websocketConnections,
     })
     expect(fetchMock.mock.calls.map(([path]) => path)).toEqual([
       "/api/health",
@@ -81,6 +86,7 @@ describe("HTTP GatewayService", () => {
       "/api/accounts",
       "/api/settings",
       "/api/codex/status",
+      "/api/websocket-connections",
     ])
     expect(fetchMock.mock.calls[0][1]).toMatchObject({
       credentials: "same-origin",

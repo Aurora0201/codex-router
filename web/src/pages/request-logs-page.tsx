@@ -15,8 +15,10 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { toast } from "@/components/ui/toast"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { WebSocketConnectionLogsPanel } from "@/components/request/websocket-connection-logs-panel"
 import { cn } from "@/lib/utils"
-import type { AccountView, GatewayService, RequestLogFilters, RequestLogsResponse, RequestLogView, RequestOutcome } from "@/services/contracts"
+import type { AccountView, GatewayService, RequestLogFilters, RequestLogsResponse, RequestLogView, RequestOutcome, RequestState } from "@/services/contracts"
 
 type TimelinePoint = RequestLogsResponse["timeline"][number]
 type SelectedRequest = RequestLogView | TimelinePoint
@@ -41,9 +43,11 @@ const OUTCOME_LABELS: Record<RequestOutcome, string> = {
   gateway_error: "网关故障",
   client_cancelled: "已取消",
 }
+const STATE_LABELS:Record<RequestState,string>={running:"运行中",completed:"已完成",failed:"失败",rejected:"已拒绝",cancelled:"已取消",interrupted:"进程中断"}
 
-function OutcomeBadge({ outcome }: { outcome: RequestOutcome }) {
+function OutcomeBadge({ outcome, state }: { outcome: RequestOutcome|null; state?:RequestState }) {
   const { t } = useTranslation()
+  if(!outcome)return <Badge variant="outline" className="text-warning">{t(STATE_LABELS[state??"running"])}</Badge>
   const Icon = outcome === "success" ? CheckCircle2Icon : outcome === "client_cancelled" ? BanIcon : outcome === "rejected" ? CircleMinusIcon : TriangleAlertIcon
   return <Badge variant="outline" className={cn(outcome === "success" && "text-success", outcome === "rejected" && "text-warning", (outcome === "upstream_error" || outcome === "gateway_error") && "text-destructive", outcome === "client_cancelled" && "text-muted-foreground")}><Icon data-icon="inline-start" />{t(OUTCOME_LABELS[outcome])}</Badge>
 }
@@ -94,7 +98,7 @@ function RequestDataTable({ items, newIds, page, onSelect }: { items: RequestLog
     else viewport.scrollTop = 0
   }, [page])
   const columns = useMemo<ColumnDef<RequestLogView>[]>(() => [
-    { id: "status", size: 250, header: t("时间与状态"), cell: ({ row }) => { const item = row.original; return <div className="flex items-center gap-2"><span className="w-20 tabular-nums">{new Date(item.createdAt).toLocaleTimeString(locale)}</span><OutcomeBadge outcome={item.outcome} /><span className="tabular-nums text-muted-foreground">{item.statusCode ?? "—"}</span></div> } },
+    { id: "status", size: 280, header: t("时间与状态"), cell: ({ row }) => { const item = row.original; return <div className="flex items-center gap-2"><span className="w-20 tabular-nums">{new Date(item.startedAt).toLocaleTimeString(locale)}</span><OutcomeBadge outcome={item.outcome} state={item.state}/><span className="tabular-nums text-muted-foreground">{item.httpStatus??(item.transport==="ws"&&item.state==="completed"?200:"—")}</span></div> } },
     { accessorKey: "route", size: 310, header: t("路由"), cell: ({ row }) => <span className="block truncate font-mono text-xs" title={row.original.route}>{row.original.route}</span> },
     { id: "account", size: 250, header: t("账号"), cell: ({ row }) => { const label = row.original.identityMode === "client_passthrough" ? t("Codex 默认账号") : row.original.accountLabel ?? t("已删除或未路由"); return <span className="block truncate" title={label}>{label}</span> } },
     { accessorKey: "durationMs", size: 110, header: t("耗时"), cell: ({ row }) => <span className="block tabular-nums">{row.original.durationMs == null ? "—" : `${row.original.durationMs} ms`}</span> },
@@ -131,9 +135,11 @@ function RequestDetailSheet({ selected, onClose }: { selected: SelectedRequest |
   if (!selected) return <Sheet open={false} />
   const full = isFullRequest(selected)
   const requestId = full ? selected.requestId : undefined
+  const selectedTime=full?selected.startedAt:selected.createdAt
+  const resultLabel=full&&selected.outcome===null?t(STATE_LABELS[selected.state]):t(OUTCOME_LABELS[selected.outcome!])
   const groups = [
-    { title: t("结果"), values: [[t("时间"), new Date(selected.createdAt).toLocaleString(locale)], [t("结果"), t(OUTCOME_LABELS[selected.outcome])], [t("状态码"), selected.statusCode ?? "—"], [t("错误码"), full ? selected.errorCode ?? "—" : t("请在请求列表中查看")]] },
-    ...(full ? [{ title: t("路由"), values: [[t("路径"), selected.route], [t("传输类型"), selected.transport], [t("记录范围"), selected.scope === "request" ? t("请求") : t("连接")], [t("账号"), selected.identityMode === "client_passthrough" ? t("Codex 默认账号") : selected.accountLabel ?? t("已删除或未路由")]] }] : []),
+    { title: t("结果"), values: [[t("时间"), new Date(selectedTime).toLocaleString(locale)], [t("生命周期"),full?t(STATE_LABELS[selected.state]):"—"], [t("请求结果"),resultLabel], [t("失败来源"),full?selected.failureSource??"—":"—"], [t("失败阶段"),full?selected.failureStage??"—":"—"], [t("HTTP 状态"),full?selected.httpStatus??"—":selected.statusCode??"—"], [t("协议错误码"),full?selected.protocolErrorCode??"—":"—"], [t("诊断码"),full?selected.diagnosticCode??"—":"—"], [t("上游请求 ID"),full?selected.upstreamRequestId??"—":"—"]] },
+    ...(full ? [{ title: t("路由"), values: [[t("路径"), selected.route], [t("传输类型"), selected.transport], [t("账号"), selected.identityMode === "client_passthrough" ? t("Codex 默认账号") : selected.accountLabel ?? t("已删除或未路由")]] }] : []),
     { title: t("性能"), values: [[t("耗时"), `${selected.durationMs?.toLocaleString(locale) ?? "—"} ms`], ...(full ? [[t("输入 / 输出"), `${formatBytes(selected.bytesIn)} / ${formatBytes(selected.bytesOut)}`]] : [])] },
     ...(full ? [{ title: t("请求标识"), values: [[t("请求 ID"), requestId ?? t("未提供")]] }] : []),
   ]
@@ -159,6 +165,7 @@ export function RequestLogsPage({ service, accounts, enabled, initialErrorsOnly,
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<SelectedRequest | null>(null)
   const [newIds, setNewIds] = useState<Set<string>>(new Set())
+  const [view, setView] = useState<"requests"|"connections">("requests")
   const knownIds = useRef(new Set<string>())
   const requestSequence = useRef(0)
 
@@ -191,6 +198,8 @@ export function RequestLogsPage({ service, accounts, enabled, initialErrorsOnly,
   return (
     <section className="flex w-full flex-col gap-5">
       <div><h1 className="text-2xl font-semibold tracking-tight">{t("请求日志")}</h1><p className="mt-1 text-sm text-muted-foreground">{t("使用安全的结构化元数据定位失败请求，不读取请求或响应正文。")}</p></div>
+      <Tabs value={view} onValueChange={(next)=>setView(next as "requests"|"connections")}><TabsList><TabsTrigger value="requests">{t("请求")}</TabsTrigger><TabsTrigger value="connections">{t("连接诊断")}</TabsTrigger></TabsList></Tabs>
+      {view==="connections"?<WebSocketConnectionLogsPanel service={service} revision={revision}/>:<>
       <Card><CardHeader><CardTitle>{t("筛选请求")}</CardTitle><CardDescription>{t("摘要和请求列表使用相同筛选范围。")}</CardDescription></CardHeader><CardContent className="flex flex-wrap items-center gap-2">
         <FilterSelect label={t("时间范围")} value={filters.range} onChange={(range) => update({ range: range as RequestLogFilters["range"] })} items={[{ value: "1h", label: t("最近 1 小时") }, { value: "24h", label: t("最近 24 小时") }, { value: "7d", label: t("最近 7 天") }]} />
         <FilterSelect label={t("结果状态")} value={filters.status ?? "all"} onChange={(status) => update({ status: status === "all" ? undefined : status as RequestLogFilters["status"] })} items={[{ value: "all", label: t("全部结果") }, { value: "success", label: t("仅成功") }, { value: "rejected", label: t("仅拒绝") }, { value: "error", label: t("仅故障") }, { value: "cancelled", label: t("仅取消") }]} />
@@ -203,6 +212,7 @@ export function RequestLogsPage({ service, accounts, enabled, initialErrorsOnly,
         {!enabled || (!loading && result.items.length === 0) ? <Empty className="min-h-80 border-0"><EmptyHeader><EmptyMedia variant="icon"><FileClockIcon /></EmptyMedia><EmptyTitle>{enabled ? t("没有匹配的请求记录") : t("请求元数据记录已关闭")}</EmptyTitle><EmptyDescription>{enabled ? t("调整筛选条件后重试。") : t("启用后只记录状态、耗时和路由等安全元数据。")}</EmptyDescription></EmptyHeader>{!enabled && <EmptyContent><Button variant="outline" onClick={onShowPreferences}>{t("前往偏好设置")}</Button></EmptyContent>}</Empty> : <RequestDataTable items={result.items} newIds={newIds} page={result.pagination.page} onSelect={setSelected} />}
       </CardContent>{result.pagination.totalPages > 0 && <CardFooter className="justify-between py-3"><span className="text-sm text-muted-foreground tabular-nums">{t("共 {{total}} 条 · 每页 {{size}} 条", { total: result.pagination.totalItems, size: result.pagination.pageSize })}</span><Pagination className="mx-0 w-auto" aria-label={t("请求日志分页")}><PaginationContent><PaginationItem><PaginationPrevious href="#" text={t("上一页")} aria-label={t("上一页")} aria-disabled={loading || result.pagination.page === 1} className={cn((loading || result.pagination.page === 1) && "pointer-events-none opacity-50")} onClick={(event) => { event.preventDefault(); goToPage(result.pagination.page - 1) }} /></PaginationItem>{paginationTokens(result.pagination.page, result.pagination.totalPages).map((token) => typeof token === "number" ? <PaginationItem key={token}><PaginationLink href="#" isActive={token === result.pagination.page} aria-label={t("第 {{page}} 页", { page: token })} onClick={(event) => { event.preventDefault(); goToPage(token) }}>{token}</PaginationLink></PaginationItem> : <PaginationItem key={token}><PaginationEllipsis /></PaginationItem>)}<PaginationItem><PaginationNext href="#" text={t("下一页")} aria-label={t("下一页")} aria-disabled={loading || result.pagination.page === result.pagination.totalPages} className={cn((loading || result.pagination.page === result.pagination.totalPages) && "pointer-events-none opacity-50")} onClick={(event) => { event.preventDefault(); goToPage(result.pagination.page + 1) }} /></PaginationItem></PaginationContent></Pagination></CardFooter>}</Card>
       <RequestDetailSheet selected={selected} onClose={() => setSelected(null)} />
+      </>}
     </section>
   )
 }

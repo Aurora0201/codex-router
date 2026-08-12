@@ -71,9 +71,10 @@ beforeAll(async () => {
       else {
         socket.send(data, { binary: isBinary });
         try {
-          const metadata = JSON.parse(data.toString()) as { type?: string; generate?: boolean; delayComplete?: boolean };
+          const metadata = JSON.parse(data.toString()) as { type?: string; generate?: boolean; delayComplete?: boolean; failCode?:string; topError?:boolean; incomplete?:boolean };
           if (metadata.type === "response.create") {
-            setTimeout(() => socket.send('{"type":"response.completed","response":{"status":"completed"}}'), metadata.delayComplete ? 80 : 10);
+            const terminal=metadata.topError?'{"type":"error","status":429,"error":{"code":"usage_limit_reached"}}':metadata.incomplete?'{"type":"response.incomplete","response":{"incomplete_details":{"reason":"max_output_tokens"}}}':metadata.failCode?JSON.stringify({type:"response.failed",response:{error:{code:metadata.failCode}}}):'{"type":"response.completed","response":{"status":"completed"}}';
+            setTimeout(() => socket.send(terminal), metadata.delayComplete ? 80 : 10);
           }
         } catch {
           // Opaque non-JSON frames are echoed unchanged.
@@ -98,9 +99,11 @@ beforeAll(async () => {
     }
     if (body.includes(Buffer.from('"partialAuthError":true'))) {
       response.writeHead(200, { "content-type": "text/event-stream" });
-      response.end('data: {"type":"error","code":"unauthorized_after_stream"}\n\n');
+      response.end('data: {"type":"error","status":401,"error":{"code":"unauthorized_after_stream"}}\n\n');
       return;
     }
+    if (body.includes(Buffer.from('"sseIncomplete":true'))) { response.writeHead(200,{"content-type":"text/event-stream"});response.end('data: {"type":"response.incomplete","response":{"incomplete_details":{"reason":"max_output_tokens"}}}\n\n');return; }
+    if (body.includes(Buffer.from('"sseFailed":true'))) { response.writeHead(200,{"content-type":"text/event-stream"});response.end('data: {"type":"response.failed","response":{"error":{"code":"future_private_code"}}}\n\n');return; }
     if (body.includes(Buffer.from('"rate429":true'))) {
       response.writeHead(429, { "content-type": "application/json", "retry-after": "30" });
       response.end('{"error":"rate_limited"}');
@@ -130,7 +133,7 @@ beforeAll(async () => {
     }
     response.writeHead(200, { "content-type": "text/event-stream", "x-request-id": "stream-1" });
     response.write("data: first\n\n");
-    setTimeout(() => response.end("data: second\n\n"), 60);
+    setTimeout(() => response.end('data: {"type":"response.completed","response":{"status":"completed"}}\n\n'), 60);
   });
   upstream.on("upgrade", (request, socket, head) => {
     if (request.url !== "/backend-api/codex/responses") { socket.destroy(); return; }
@@ -243,7 +246,7 @@ describe("empty account pool passthrough", () => {
     await once(socket, "close");
 
     const logs = emptyGateway.database.requestLog.query({ since: 0, accountId: "__client_passthrough__", transport: "ws", limit: 100 });
-    expect(logs.items.some((entry) => entry.scope === "request" && entry.outcome === "success")).toBe(true);
+    expect(logs.items.some((entry) => entry.state === "completed" && entry.outcome === "success")).toBe(true);
     expect(logs.items.every((entry) => entry.identityMode === "client_passthrough")).toBe(true);
   });
 });
@@ -253,7 +256,7 @@ describe("HTTP, SSE, compact and models", () => {
     const raw = Buffer.from('{ "client_metadata": { "thread_id": "http-thread" }, "input": [{"type":"future_tool_item","raw":true}] }');
     const result = await streamRequest(`${gatewayUrl}/backend-api/codex/responses`, raw, { authorization: "Bearer client-secret", "chatgpt-account-id": "client-account", "x-codex-feature": "opaque" });
     expect(result.status).toBe(200);
-    expect(Buffer.concat(result.chunks).toString()).toBe("data: first\n\ndata: second\n\n");
+    expect(Buffer.concat(result.chunks).toString()).toBe('data: first\n\ndata: {"type":"response.completed","response":{"status":"completed"}}\n\n');
     expect(result.chunks.length).toBeGreaterThanOrEqual(2);
     expect(result.endedAt - result.firstAt).toBeGreaterThanOrEqual(40);
     const request = received.findLast((entry) => entry.url.endsWith("/responses"))!;
@@ -328,6 +331,8 @@ describe("HTTP, SSE, compact and models", () => {
     const partial = await streamRequest(`${gatewayUrl}/backend-api/codex/responses`, Buffer.from('{"partialAuthError":true,"client_metadata":{"thread_id":"partial-thread"}}'));
     expect(partial.status).toBe(200);
     expect(refresh).not.toHaveBeenCalled();
+    const protocolFailure = gateway.database.requestLog.query({ since: 0, query: "unauthorized_after_stream", limit: 100 }).items[0];
+    expect(protocolFailure).toMatchObject({ state: "rejected", outcome: "rejected", failureSource: "upstream_protocol", failureStage: "terminal", httpStatus: 401, protocolErrorCode: "unauthorized_after_stream" });
     const limited = await streamRequest(`${gatewayUrl}/backend-api/codex/responses`, Buffer.from('{"rate429":true,"client_metadata":{"thread_id":"rate-thread"}}'));
     expect(limited.status).toBe(429);
     expect(limited.headers["retry-after"]).toBe("30");
@@ -337,6 +342,14 @@ describe("HTTP, SSE, compact and models", () => {
     expect(Buffer.concat(compact.chunks).toString()).toBe('{"error":"compact_invalid"}');
     refresh.mockRestore();
     gateway.database.accounts.update("local", { authStatus: "ready" });
+  });
+
+  it("uses Responses SSE protocol terminals instead of the 200 envelope", async () => {
+    await streamRequest(`${gatewayUrl}/backend-api/codex/responses`,Buffer.from('{"sseIncomplete":true}'));
+    await streamRequest(`${gatewayUrl}/backend-api/codex/responses`,Buffer.from('{"sseFailed":true}'));
+    const logs=gateway.database.requestLog.query({since:0,transport:"http",limit:100}).items;
+    expect(logs.find((item)=>item.protocolErrorCode==="max_output_tokens")).toMatchObject({state:"rejected",outcome:"rejected",httpStatus:undefined});
+    expect(logs.find((item)=>item.protocolErrorCode==="future_private_code")).toMatchObject({state:"failed",outcome:"upstream_error"});
   });
 
   it("carries an opaque multi-turn shell and file tool loop", async () => {
@@ -372,6 +385,50 @@ describe("HTTP, SSE, compact and models", () => {
 });
 
 describe("WebSocket transport", () => {
+  it("classifies protocol failures and excludes prewarm from requests",async()=>{
+    const socket=new WebSocket(gatewayUrl.replace("http:","ws:")+"/backend-api/codex/responses");await once(socket,"open");
+    const before=gateway.database.requestLog.query({since:0,transport:"ws",limit:100}).pagination.totalItems;
+    for(const frame of ['{"type":"response.create","generate":false}','{"type":"response.create","incomplete":true}','{"type":"response.create","failCode":"future_private_code"}','{"type":"response.create","topError":true}']){socket.send(frame);await once(socket,"message");await once(socket,"message");}
+    const result=gateway.database.requestLog.query({since:0,transport:"ws",limit:100});
+    expect(result.pagination.totalItems-before).toBe(3);
+    expect(result.items.slice(0,3).map((item)=>item.protocolErrorCode)).toEqual(expect.arrayContaining(["max_output_tokens","future_private_code","usage_limit_reached"]));
+    socket.close(1000,"done");await once(socket,"close");
+  });
+  it("exposes only live connection metadata through the admin API", async () => {
+    const socket = new WebSocket(gatewayUrl.replace("http:", "ws:") + "/backend-api/codex/responses");
+    await once(socket, "open");
+
+    const idle = await fetch(`${gatewayUrl}/api/websocket-connections`).then((response) => response.json()) as Array<{
+      connectionId: string;
+      state: string;
+      connectedAt: number;
+      activeRequestId?: string;
+    }>;
+    expect(idle).toHaveLength(1);
+    expect(idle[0]).toMatchObject({ state: "idle", connectedAt: expect.any(Number) });
+    expect(Object.keys(idle[0]).sort()).toEqual(["connectedAt", "connectionId", "state"]);
+
+    socket.send('{"type":"response.create","delayComplete":true}');
+    await once(socket, "message");
+    const transmitting = await fetch(`${gatewayUrl}/api/websocket-connections`).then((response) => response.json()) as typeof idle;
+    expect(transmitting[0]).toMatchObject({
+      connectionId: idle[0].connectionId,
+      state: "transmitting",
+      activeRequestId: `${idle[0].connectionId}:1`,
+    });
+
+    await once(socket, "message");
+    await vi.waitFor(async () => {
+      const connections = await fetch(`${gatewayUrl}/api/websocket-connections`).then((response) => response.json()) as typeof idle;
+      expect(connections[0]).toMatchObject({ connectionId: idle[0].connectionId, state: "idle" });
+    });
+    socket.close(1000, "done");
+    await once(socket, "close");
+    await vi.waitFor(async () => {
+      await expect(fetch(`${gatewayUrl}/api/websocket-connections`).then((response) => response.json())).resolves.toEqual([]);
+    });
+  });
+
   it("preserves upgrade metadata, immediate frames, ping/pong and close reason", async () => {
     const socket = new WebSocket(gatewayUrl.replace("http:", "ws:") + "/backend-api/codex/responses", { headers: { "thread-id": "ws-thread" } });
     let upgradeHeaders: IncomingHttpHeaders = {};
@@ -394,7 +451,7 @@ describe("WebSocket transport", () => {
     expect((await once(socket, "message"))[0].toString()).toBe(compactFrame);
     await once(socket, "message");
     const compactLogs = gateway.database.requestLog.query({ since: 0, transport: "compact", limit: 100 });
-    expect(compactLogs.items.some((entry) => entry.scope === "request" && entry.outcome === "success" && entry.bytesIn === Buffer.byteLength(compactFrame))).toBe(true);
+    expect(compactLogs.items.some((entry) => entry.state === "completed" && entry.outcome === "success" && entry.bytesIn === Buffer.byteLength(compactFrame))).toBe(true);
     const pong = once(socket, "pong"); socket.ping("health"); await pong;
     socket.send("close-me");
     const [code, reason] = await once(socket, "close");
@@ -447,8 +504,8 @@ describe("WebSocket transport", () => {
     await once(reconnect, "close");
     gateway.activeAccounts.select("local");
 
-    const retired = gateway.database.requestLog.query({ since: 0, transport: "ws", limit: 100 });
-    expect(retired.items.some((entry) => entry.scope === "connection" && entry.errorCode === "account_switch_connection_retired" && entry.outcome === "success")).toBe(true);
+    const retired = gateway.database.websocketConnectionLog.query({ since: 0, outcome: "retired", limit: 100 });
+    expect(retired.items.some((entry) => entry.closeReasonCode === "account_switch_connection_retired")).toBe(true);
   });
 
   it("retires the active account connection when that account is disabled", async () => {

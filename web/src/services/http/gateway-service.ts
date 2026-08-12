@@ -4,12 +4,16 @@ import type {
   CodexStatusView,
   GatewayService,
   GatewayResource,
+  GatewayActivityEvent,
   HealthView,
   LoginSessionView,
   RequestLogFilters,
   RequestLogsResponse,
   SettingsView,
   StatsView,
+  WebSocketConnectionView,
+  WebSocketConnectionLogFilters,
+  WebSocketConnectionLogsResponse,
 } from "@/services/contracts"
 
 type ErrorPayload = { error?: string }
@@ -75,7 +79,7 @@ export function createHttpGatewayService(): GatewayService {
   const accountPath = (id: string) => `/api/accounts/${encodeURIComponent(id)}`
 
   return {
-    subscribe(onInvalidate, onConnectionChange) {
+    subscribe(onInvalidate, onConnectionChange, onActivity) {
       const source = new EventSource("/api/events")
       source.onopen = () => onConnectionChange(true)
       source.onerror = () => onConnectionChange(false)
@@ -89,19 +93,24 @@ export function createHttpGatewayService(): GatewayService {
           // Ignore malformed notifications; the fallback snapshot will recover.
         }
       })
+      for (const type of ["request_started", "request_finished", "connection_updated"] as const) source.addEventListener(type, (event) => {
+        try { onActivity?.(JSON.parse((event as MessageEvent<string>).data) as GatewayActivityEvent) } catch { /* Fallback invalidations recover malformed events. */ }
+      })
       return () => source.close()
     },
     async getSnapshot() {
       const health = await fetchHealth()
-      const [stats, accounts, settings, codex] = await Promise.all([
+      const [stats, accounts, settings, codex, websocketConnections] = await Promise.all([
         request<StatsView>("/api/stats"),
         request<AccountsResponse>("/api/accounts"),
         request<SettingsView>("/api/settings"),
         request<CodexStatusView>("/api/codex/status"),
+        request<WebSocketConnectionView[]>("/api/websocket-connections"),
       ])
-      return { health, stats, accounts, settings, codex }
+      return { health, stats, accounts, settings, codex, websocketConnections }
     },
     getAccounts: () => request<AccountsResponse>("/api/accounts"),
+    getWebSocketConnections: () => request<WebSocketConnectionView[]>("/api/websocket-connections"),
     getRequestLogs: (filters: RequestLogFilters) => {
       const query = new URLSearchParams({ range: filters.range })
       if (filters.status) query.set("status", filters.status)
@@ -112,6 +121,15 @@ export function createHttpGatewayService(): GatewayService {
       if (filters.page) query.set("page", String(filters.page))
       if (filters.limit) query.set("limit", String(filters.limit))
       return request<RequestLogsResponse>(`/api/request-logs?${query}`)
+    },
+    getWebSocketConnectionLogs: (filters: WebSocketConnectionLogFilters) => {
+      const query=new URLSearchParams({range:filters.range})
+      if(filters.outcome)query.set("outcome",filters.outcome)
+      if(filters.accountId)query.set("accountId",filters.accountId)
+      if(filters.query)query.set("q",filters.query)
+      if(filters.page)query.set("page",String(filters.page))
+      if(filters.limit)query.set("limit",String(filters.limit))
+      return request<WebSocketConnectionLogsResponse>(`/api/websocket-connection-logs?${query}`)
     },
     setActiveAccount: (id) =>
       request<AccountView>("/api/active-account", json("PUT", { id })),

@@ -30,7 +30,7 @@ describe("application shell", () => {
     expect(container.querySelector('[data-slot="sidebar-rail"]')).toBeNull()
     expect(screen.getByText("Codex Router")).toHaveClass("font-brand")
     const brandMark = container.querySelector('[data-slot="brand-mark"]')
-    expect(brandMark).toHaveClass("bg-sidebar-foreground")
+    expect(brandMark).toHaveClass("bg-current", "text-sidebar-foreground")
     expect(brandMark).toHaveClass("size-6")
     expect(brandMark).not.toHaveClass("bg-primary")
     expect(brandMark).toHaveAttribute("style", expect.stringContaining("codex-router-icon.png"))

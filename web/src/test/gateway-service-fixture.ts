@@ -78,6 +78,7 @@ export function createGatewayServiceFixture({
       configExists: true,
       codexRunning: !degraded,
     },
+    websocketConnections: [],
   }
 
   const service: GatewayService & { snapshot: GatewaySnapshot } = {
@@ -91,9 +92,13 @@ export function createGatewayServiceFixture({
     async getAccounts() {
       return structuredClone(snapshot.accounts)
     },
+    async getWebSocketConnections() {
+      return structuredClone(snapshot.websocketConnections)
+    },
     async getRequestLogs() {
       return { items: [], summary: { requests: 0, errors: 0, rejected: 0, cancelled: 0, availabilityRequests: 0, availabilityErrors: 0, averageDurationMs: null }, timeline: [], nextCursor: null, pagination: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0 } }
     },
+    async getWebSocketConnectionLogs() { return { items: [], nextCursor: null, pagination: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0 } } },
     async setActiveAccount(id) {
       snapshot.accounts.activeAccountId = id
       snapshot.accounts.accounts.forEach((item) => {

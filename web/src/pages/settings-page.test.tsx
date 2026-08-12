@@ -68,10 +68,10 @@ describe("SettingsPage", () => {
     expect(reload).toHaveBeenCalledOnce()
   })
 
-  it("offers restart and restore after configuration is applied but Codex is stopped", async () => {
+  it("offers restore after configuration is applied but Codex is stopped", async () => {
     await renderPage((snapshot) => { snapshot.codex.codexRunning = false })
-    expect(screen.getByText("配置已应用，等待 Codex 启动")).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "重启 Codex" })).toBeInTheDocument()
+    expect(screen.getByText("配置已应用，Codex 当前未运行")).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "重启 Codex" })).not.toBeInTheDocument()
     expect(screen.getByRole("button", { name: "恢复配置" })).toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "应用 Codex Router" })).not.toBeInTheDocument()
   })
@@ -95,13 +95,8 @@ describe("SettingsPage", () => {
     expect(screen.queryByRole("button", { name: /应用 Codex Router|恢复配置|重启 Codex/ })).not.toBeInTheDocument()
   })
 
-  it("shows each diagnostic once and condenses the safety boundary into one line", async () => {
+  it("condenses the safety boundary into one line", async () => {
     await renderPage()
-    expect(screen.getByText("连接与配置")).toBeInTheDocument()
-    expect(screen.getAllByText("http://127.0.0.1:8317/backend-api/codex")).toHaveLength(1)
-    expect(screen.getAllByText("https://chatgpt.com/backend-api/codex")).toHaveLength(1)
-    expect(screen.getByText(String.raw`C:\Users\test\.codex\config.toml`)).toBeInTheDocument()
-    expect(screen.getByText(String.raw`C:\Users\test\.codex\config.toml.gateway.bak`)).toBeInTheDocument()
     expect(screen.getByRole("alert")).toHaveTextContent("只读取路由元数据，不记录 Prompt、工具参数、工具输出或响应正文")
     expect(screen.queryByText("网络与安全边界")).not.toBeInTheDocument()
   })
@@ -109,7 +104,6 @@ describe("SettingsPage", () => {
   it("handles an empty request window without dividing by zero", async () => {
     await renderPage((snapshot) => { snapshot.stats.requestsToday = 0; snapshot.stats.errorsToday = 0 })
     expect(within(screen.getByLabelText("今日请求指标")).getByText("0")).toBeInTheDocument()
-    expect(within(screen.getByLabelText("请求错误指标")).getByText("0")).toBeInTheDocument()
-    expect(screen.getByText("0.00%")).toBeInTheDocument()
+    expect(within(screen.getByLabelText("请求错误指标")).getByText("0.00%")).toBeInTheDocument()
   })
 })

@@ -19,6 +19,7 @@ import { CodexConfigService } from "./codex/codex-config.js";
 import { CodexProcessMonitor } from "./codex/codex-process.js";
 import { AdminEventHub } from "./api/admin/admin-events.js";
 import { LOG_LEVELS } from "./db/repositories/settings-repository.js";
+import { WebSocketConnectionRegistry } from "./proxy/websocket-connection-registry.js";
 
 export interface GatewayApp {
   app: FastifyInstance;
@@ -105,13 +106,19 @@ export async function buildGateway(overrides: Partial<GatewayConfig> = {}): Prom
   const proxy = new HttpProxy({ upstreamBaseUrl: config.upstreamBaseUrl, activeAccounts, auth, usage, database });
   const codexConfig = new CodexConfigService();
   const events = new AdminEventHub();
+  const websocketConnections = new WebSocketConnectionRegistry((connectionId) => {
+    events.emitActivity({ type: "connection_updated", connectionId });
+    events.invalidate("websocketConnections");
+  });
   const rateLimitTimer = startUsageRefreshScheduler(accounts, usage, () => events.invalidate("accounts"));
   const codexProcess = new CodexProcessMonitor(() => events.invalidate("codex"));
   await codexProcess.start();
-  database.requestLog.onLogged = () => events.invalidate("stats", "logs");
+  database.requestLog.onStarted = (id) => { events.emitActivity({ type: "request_started", id }); events.invalidate("logs"); };
+  database.requestLog.onFinished = (id) => { events.emitActivity({ type: "request_finished", id }); events.invalidate("stats", "logs"); };
+  database.websocketConnectionLog.onUpdated = (connectionId) => { events.emitActivity({ type: "connection_updated", connectionId }); events.invalidate("logs"); };
 
-  await registerAdminApi(app, { config, database, accounts, auth, usage, logins, activeAccounts, csrf, startedAt, events, codexProcess }, codexConfig);
-  await registerWebSocketProxy(app, { upstreamBaseUrl: config.upstreamBaseUrl, activeAccounts, auth, database });
+  await registerAdminApi(app, { config, database, accounts, auth, usage, logins, activeAccounts, csrf, startedAt, events, codexProcess, websocketConnections }, codexConfig);
+  await registerWebSocketProxy(app, { upstreamBaseUrl: config.upstreamBaseUrl, activeAccounts, auth, database, websocketConnections });
 
   app.post("/backend-api/codex/responses", (request, reply) => proxy.handle(request, reply, "/responses"));
   app.post("/backend-api/codex/responses/compact", (request, reply) => proxy.handle(request, reply, "/responses/compact"));
