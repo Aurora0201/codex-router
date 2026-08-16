@@ -44,7 +44,15 @@ describe("AccountList", () => {
     )
 
     const status = screen.getByText("认证就绪")
-    expect(status.parentElement).toHaveTextContent("认证就绪到期 2026/08/31")
+    const expiration = screen.getByText("到期 2026/08/31")
+
+    expect(status.closest('[data-slot="account-status"]')).toContainElement(
+      expiration
+    )
+    expect(expiration.closest('[data-slot="badge"]')).toHaveAttribute(
+      "data-variant",
+      "outline"
+    )
   })
 
   it("fills its desktop parent without a viewport height cap", () => {

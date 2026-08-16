@@ -270,11 +270,11 @@ export function AccountList({
                             </Tooltip>
                             <span
                               data-slot="account-status"
-                              className="inline-flex shrink-0 items-center self-center whitespace-nowrap"
+                              className="inline-flex shrink-0 items-center gap-2 self-center whitespace-nowrap"
                             >
                               <AccountStatus account={account} />
                               {account.subscriptionExpiresAt !== null ? (
-                                <span className="ml-2 text-xs font-normal text-muted-foreground">
+                                <Badge variant="outline">
                                   {t("到期 {{date}}", {
                                     date: new Intl.DateTimeFormat(undefined, {
                                       year: "numeric",
@@ -283,7 +283,7 @@ export function AccountList({
                                       timeZone: "UTC",
                                     }).format(account.subscriptionExpiresAt),
                                   })}
-                                </span>
+                                </Badge>
                               ) : null}
                             </span>
                           </ItemTitle>
