@@ -15,12 +15,22 @@ export function registerAccountRoutes(app: FastifyInstance, ctx: AdminContext): 
   app.patch<{ Params: { id: string } }>("/api/accounts/:id", { preHandler: protect }, async (request, reply) => {
     const body = jsonBody(request);
     const enabled = body.enabled;
-    if (typeof enabled !== "boolean") {
+    const subscriptionStartedAt = body.subscriptionStartedAt;
+    const hasEnabled = typeof enabled === "boolean";
+    const hasSubscriptionDate = subscriptionStartedAt === null
+      || (typeof subscriptionStartedAt === "number"
+        && Number.isSafeInteger(subscriptionStartedAt)
+        && subscriptionStartedAt >= 0);
+    if (!hasEnabled && !hasSubscriptionDate) {
       await reply.code(400).send({ error: "invalid_account_patch" });
       return;
     }
     await apiAction(reply, () => {
-      const result = toAccountView(ctx.accounts.setEnabled(request.params.id, enabled), ctx.database.getActiveAccountId());
+      if (hasEnabled) ctx.accounts.setEnabled(request.params.id, enabled);
+      if (hasSubscriptionDate) {
+        ctx.database.accounts.update(request.params.id, { subscriptionStartedAt });
+      }
+      const result = toAccountView(ctx.accounts.get(request.params.id), ctx.database.getActiveAccountId());
       ctx.events.invalidate("accounts", "stats");
       return result;
     });

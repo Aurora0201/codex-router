@@ -1,12 +1,9 @@
 import { useCallback, useState } from "react"
-import {
-  PlusIcon,
-  TriangleAlertIcon,
-  UsersRoundIcon,
-} from "lucide-react"
+import { PlusIcon, TriangleAlertIcon, UsersRoundIcon } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
 import { AccountList } from "@/components/account/account-list"
+import { SubscriptionDateDialog } from "@/components/account/subscription-date-dialog"
 import { OAuthDialog } from "@/components/account/oauth-dialog"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
@@ -37,7 +34,8 @@ import type {
   GatewaySnapshot,
 } from "@/services/contracts"
 
-type AccountAction = "copy" | "limits" | "auth" | "toggle" | "remove"
+type AccountAction =
+  "copy" | "limits" | "auth" | "subscription" | "toggle" | "remove"
 
 export function AccountsPage({
   snapshot,
@@ -51,6 +49,8 @@ export function AccountsPage({
   const { t } = useTranslation()
   const [busyId, setBusyId] = useState<string | null>(null)
   const [removing, setRemoving] = useState<AccountView | null>(null)
+  const [editingSubscription, setEditingSubscription] =
+    useState<AccountView | null>(null)
   const [loginOpen, setLoginOpen] = useState(false)
   const { accounts, activeAccountId } = snapshot.accounts
   const active =
@@ -102,6 +102,8 @@ export function AccountsPage({
         () => service.refreshAccountAuth(account.id),
         t("认证状态已刷新")
       )
+    } else if (action === "subscription") {
+      setEditingSubscription(account)
     } else {
       void run(
         account.id,
@@ -118,9 +120,13 @@ export function AccountsPage({
     <section className="flex flex-col gap-5 lg:h-full lg:min-h-0">
       <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{t("账号与路由")}</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            {t("账号与路由")}
+          </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {t("所有请求只会进入你手动选定的认证账号，不自动轮换，不绑定会话。")}
+            {t(
+              "所有请求只会进入你手动选定的认证账号，不自动轮换，不绑定会话。"
+            )}
           </p>
         </div>
         <Button onClick={() => setLoginOpen(true)}>
@@ -134,7 +140,13 @@ export function AccountsPage({
           <TriangleAlertIcon />
           <AlertTitle>{t("当前路由账号不可用")}</AlertTitle>
           <AlertDescription>
-            {t("{{account}} 当前为 {{status}} 状态，后续请求可能失败。请处理该账号状态，或手动选择其他可路由账号。", { account: shortAccountId(active.chatgptAccountId), status: authStatusLabel(active.authStatus) })}
+            {t(
+              "{{account}} 当前为 {{status}} 状态，后续请求可能失败。请处理该账号状态，或手动选择其他可路由账号。",
+              {
+                account: shortAccountId(active.chatgptAccountId),
+                status: authStatusLabel(active.authStatus),
+              }
+            )}
           </AlertDescription>
         </Alert>
       ) : null}
@@ -158,7 +170,9 @@ export function AccountsPage({
                 </EmptyMedia>
                 <EmptyTitle>{t("尚未添加账号")}</EmptyTitle>
                 <EmptyDescription>
-                  {t("账号池为空时，请求会使用 Codex 当前登录账号透传；添加账号后可手动指定路由账号。")}
+                  {t(
+                    "账号池为空时，请求会使用 Codex 当前登录账号透传；添加账号后可手动指定路由账号。"
+                  )}
                 </EmptyDescription>
               </EmptyHeader>
               <EmptyContent>
@@ -171,7 +185,31 @@ export function AccountsPage({
           </CardContent>
         </Card>
       )}
-      <OAuthDialog open={loginOpen} onOpenChange={setLoginOpen} service={service} onComplete={reload} />
+      <OAuthDialog
+        open={loginOpen}
+        onOpenChange={setLoginOpen}
+        service={service}
+        onComplete={reload}
+      />
+      {editingSubscription ? (
+        <SubscriptionDateDialog
+          key={editingSubscription.id}
+          account={editingSubscription}
+          busy={busyId === editingSubscription.id}
+          onOpenChange={(open) => {
+            if (!open) setEditingSubscription(null)
+          }}
+          onSave={(subscriptionStartedAt) => {
+            const account = editingSubscription
+            void run(
+              account.id,
+              () =>
+                service.updateAccount(account.id, { subscriptionStartedAt }),
+              t("订阅日期已更新")
+            ).then(() => setEditingSubscription(null))
+          }}
+        />
+      ) : null}
       <AlertDialog
         open={removing !== null}
         onOpenChange={(open) => {
@@ -182,7 +220,9 @@ export function AccountsPage({
           <AlertDialogHeader>
             <AlertDialogTitle>{t("移除这个账号？")}</AlertDialogTitle>
             <AlertDialogDescription>
-              {t("将移除 {{account}} 及其隔离登录数据。此操作不可撤销。", { account: shortAccountId(removing?.chatgptAccountId ?? null) })}
+              {t("将移除 {{account}} 及其隔离登录数据。此操作不可撤销。", {
+                account: shortAccountId(removing?.chatgptAccountId ?? null),
+              })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -14,6 +14,7 @@ import { GatewayDatabase } from "../src/db/database.js";
 import { buildUpstreamHeaders, isCompactionRequest } from "../src/proxy/headers.js";
 import { ActiveAccountService } from "../src/routing/active-account-service.js";
 import { parseRateLimitResponse } from "../src/accounts/rate-limit-parser.js";
+import { toAccountView } from "../src/api/admin/context.js";
 import Database from "better-sqlite3";
 
 const temporary: string[] = [];
@@ -145,13 +146,44 @@ describe("security and routing core", () => {
   });
 
   it("parses rate limit responses in both case conventions", () => {
-    const camel = parseRateLimitResponse({ rateLimits: { primary: { usedPercent: 63, resetsAt: 1, windowDurationMins: 300 }, secondary: null }, rateLimitReachedType: "unlimited" });
+    const camel = parseRateLimitResponse({ rateLimits: { primary: { usedPercent: 63, resetsAt: 1, windowDurationMins: 300 }, secondary: null, planType: "free" }, rateLimitReachedType: "unlimited" });
     expect(camel.primary).toMatchObject({ usedPercent: 63, resetsAt: 1000, windowDurationMins: 300 });
     expect(camel.secondary).toBeNull();
     expect(camel.rateLimitReachedType).toBe("unlimited");
+    expect(camel.planType).toBe("free");
     const snake = parseRateLimitResponse({ rate_limits: { primary: { used_percent: 10, resets_at: 2, window_duration_mins: 60 }, secondary: { used_percent: 5 } } });
     expect(snake.primary).toMatchObject({ usedPercent: 10, resetsAt: 2000, windowDurationMins: 60 });
     expect(snake.secondary).toMatchObject({ usedPercent: 5 });
+    expect(snake.planType).toBeNull();
+  });
+
+  it("persists subscription dates and updates plans from complete usage snapshots", async () => {
+    const root = await tempDir();
+    const database = new GatewayDatabase(path.join(root, "account-metadata.db"));
+    database.accounts.insert({ id: "account", codexHome: path.join(root, "account") });
+    database.accounts.update("account", { planType: "plus", subscriptionStartedAt: 1_786_089_600_000 });
+    database.accounts.updateRateLimits("account", {
+      primary: null,
+      secondary: null,
+      rateLimitReachedType: null,
+      planType: "free",
+      loadedAt: 1_786_089_601_000,
+    });
+    expect(database.accounts.get("account")).toMatchObject({
+      planType: "free",
+      subscriptionStartedAt: 1_786_089_600_000,
+    });
+    expect(toAccountView(database.accounts.get("account")!, null).subscriptionExpiresAt)
+      .toBe(1_786_089_600_000 + 30 * 24 * 60 * 60_000);
+    database.accounts.updateRateLimits("account", {
+      primary: null,
+      secondary: null,
+      rateLimitReachedType: null,
+      planType: null,
+      loadedAt: 1_786_089_602_000,
+    });
+    expect(database.accounts.get("account")?.planType).toBe("free");
+    database.close();
   });
 });
 
@@ -187,6 +219,7 @@ describe("database migration v2", () => {
     const account = database.accounts.get("legacy-1")!;
     expect(account).toBeTruthy();
     expect(account.chatgptAccountId).toBeNull();
+    expect(account.subscriptionStartedAt).toBeNull();
     expect(database.getActiveAccountId()).toBeNull();
     expect(database.settings.get().requestMetadataLogging).toBe(true);
     const tables = database.raw.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as { name: string }[];

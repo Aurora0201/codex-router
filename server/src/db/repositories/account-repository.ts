@@ -8,7 +8,7 @@ export interface NewAccount {
   codexHome: string;
 }
 
-export type AccountPatch = Partial<Pick<AccountRecord, "chatgptAccountId" | "email" | "planType" | "enabled" | "authStatus" | "fedRamp">>;
+export type AccountPatch = Partial<Pick<AccountRecord, "chatgptAccountId" | "email" | "planType" | "subscriptionStartedAt" | "enabled" | "authStatus" | "fedRamp">>;
 
 function asAccount(row: Record<string, unknown>): AccountRecord {
   return {
@@ -16,6 +16,7 @@ function asAccount(row: Record<string, unknown>): AccountRecord {
     chatgptAccountId: row.chatgpt_account_id == null ? null : String(row.chatgpt_account_id),
     email: row.email == null ? null : String(row.email),
     planType: row.plan_type == null ? null : String(row.plan_type),
+    subscriptionStartedAt: row.subscription_started_at == null ? null : Number(row.subscription_started_at),
     codexHome: String(row.codex_home),
     enabled: Boolean(row.enabled),
     authStatus: String(row.auth_status) as AuthStatus,
@@ -67,9 +68,9 @@ export class AccountRepository {
     const next = { ...current, ...patch };
     this.db.prepare(`
       UPDATE accounts SET
-        chatgpt_account_id=?, email=?, plan_type=?, enabled=?, auth_status=?, fedramp=?, updated_at=?
+        chatgpt_account_id=?, email=?, plan_type=?, subscription_started_at=?, enabled=?, auth_status=?, fedramp=?, updated_at=?
       WHERE id=?
-    `).run(next.chatgptAccountId, next.email, next.planType, next.enabled ? 1 : 0, next.authStatus, next.fedRamp ? 1 : 0, Date.now(), id);
+    `).run(next.chatgptAccountId, next.email, next.planType, next.subscriptionStartedAt, next.enabled ? 1 : 0, next.authStatus, next.fedRamp ? 1 : 0, Date.now(), id);
     return this.get(id)!;
   }
 
@@ -83,6 +84,7 @@ export class AccountRepository {
         primary_used_percent=?, primary_resets_at=?, primary_window_minutes=?,
         secondary_used_percent=?, secondary_resets_at=?, secondary_window_minutes=?,
         rate_limit_reached_type=?,
+        plan_type=COALESCE(?, plan_type),
         auth_status=CASE WHEN auth_status='rate_limited' AND ? IS NULL THEN 'ready' ELSE auth_status END,
         last_limits_refresh_at=?, updated_at=?
       WHERE id=?
@@ -94,6 +96,7 @@ export class AccountRepository {
       limits.secondary?.resetsAt ?? null,
       limits.secondary?.windowDurationMins ?? null,
       limits.rateLimitReachedType ?? null,
+      limits.planType,
       limits.rateLimitReachedType ?? null,
       limits.loadedAt,
       Date.now(),

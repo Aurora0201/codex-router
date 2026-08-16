@@ -19,6 +19,8 @@ export interface AccountView {
   chatgptAccountId: string | null
   email: string | null
   planType: string | null
+  subscriptionStartedAt: number | null
+  subscriptionExpiresAt: number | null
   enabled: boolean
   isActive: boolean
   authStatus: AuthStatus
@@ -264,7 +266,10 @@ export interface GatewayService {
   ): Promise<WebSocketConnectionLogsResponse>
   setActiveAccount(id: string): Promise<AccountView>
   clearActiveAccount(): Promise<void>
-  updateAccount(id: string, values: { enabled: boolean }): Promise<AccountView>
+  updateAccount(
+    id: string,
+    values: { enabled?: boolean; subscriptionStartedAt?: number | null }
+  ): Promise<AccountView>
   removeAccount(id: string): Promise<void>
   refreshAccountAuth(id: string): Promise<AccountView>
   refreshAccountLimits(id: string): Promise<AccountView>

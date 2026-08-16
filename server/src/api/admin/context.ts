@@ -36,6 +36,8 @@ export interface AccountView {
   chatgptAccountId: string | null;
   email: string | null;
   planType: string | null;
+  subscriptionStartedAt: number | null;
+  subscriptionExpiresAt: number | null;
   enabled: boolean;
   isActive: boolean;
   authStatus: AccountRecord["authStatus"];
@@ -51,6 +53,10 @@ export function toAccountView(account: AccountRecord, activeAccountId: string | 
     chatgptAccountId: account.chatgptAccountId,
     email: account.email,
     planType: account.planType,
+    subscriptionStartedAt: account.subscriptionStartedAt,
+    subscriptionExpiresAt: account.subscriptionStartedAt === null
+      ? null
+      : account.subscriptionStartedAt + 30 * 24 * 60 * 60_000,
     enabled: account.enabled,
     isActive: account.id === activeAccountId,
     authStatus: account.authStatus,

@@ -20,6 +20,7 @@ export interface AccountRecord {
   chatgptAccountId: string | null;
   email: string | null;
   planType: string | null;
+  subscriptionStartedAt: number | null;
   codexHome: string;
   enabled: boolean;
   authStatus: AuthStatus;
@@ -57,6 +58,7 @@ export interface RateLimitSnapshot {
   primary: RateLimitWindow | null;
   secondary: RateLimitWindow | null;
   rateLimitReachedType: string | null;
+  planType: string | null;
   loadedAt: number;
 }
 

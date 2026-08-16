@@ -10,6 +10,8 @@ const account = (id: string, isActive = false): AccountView => ({
   chatgptAccountId: `chatgpt-${id}`,
   email: `${id}@example.com`,
   planType: "Plus",
+  subscriptionStartedAt: null,
+  subscriptionExpiresAt: null,
   enabled: true,
   isActive,
   authStatus: "ready",
@@ -137,8 +139,17 @@ export function createGatewayServiceFixture({
       const selected = snapshot.accounts.accounts.find(
         (item) => item.id === id
       )!
-      selected.enabled = values.enabled
-      selected.authStatus = values.enabled ? "ready" : "disabled"
+      if (values.enabled !== undefined) {
+        selected.enabled = values.enabled
+        selected.authStatus = values.enabled ? "ready" : "disabled"
+      }
+      if (values.subscriptionStartedAt !== undefined) {
+        selected.subscriptionStartedAt = values.subscriptionStartedAt
+        selected.subscriptionExpiresAt =
+          values.subscriptionStartedAt === null
+            ? null
+            : values.subscriptionStartedAt + 30 * 24 * 60 * 60_000
+      }
       return structuredClone(selected)
     },
     async removeAccount(id) {

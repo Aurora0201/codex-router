@@ -40,6 +40,7 @@ export function parseRateLimitResponse(result: unknown): RateLimitSnapshot {
     primary: windowFrom(limits.primary),
     secondary: windowFrom(limits.secondary),
     rateLimitReachedType: stringAt(root, "rateLimitReachedType", "rate_limit_reached_type") ?? stringAt(limits, "rateLimitReachedType", "rate_limit_reached_type"),
+    planType: stringAt(limits, "planType", "plan_type"),
     loadedAt: Date.now(),
   };
 }

@@ -10,6 +10,8 @@ function accountWithStatus(authStatus: AuthStatus): AccountView {
     chatgptAccountId: `account-${authStatus}`,
     email: null,
     planType: null,
+    subscriptionStartedAt: null,
+    subscriptionExpiresAt: null,
     enabled: authStatus !== "disabled",
     isActive: false,
     authStatus,

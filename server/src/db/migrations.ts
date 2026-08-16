@@ -2,7 +2,7 @@ import type Database from "better-sqlite3";
 
 type SqliteDatabase = Database.Database;
 
-export const SCHEMA_VERSION = 11;
+export const SCHEMA_VERSION = 12;
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS accounts (
   label TEXT NOT NULL,
   email TEXT,
   plan_type TEXT,
+  subscription_started_at INTEGER,
   codex_home TEXT NOT NULL UNIQUE,
   enabled INTEGER NOT NULL DEFAULT 1,
   is_default INTEGER NOT NULL DEFAULT 0,
@@ -275,6 +276,12 @@ export function migrate(db: SqliteDatabase): void {
     const logColumns = tableColumns(db, "request_log");
     if (!logColumns.has("transport_error_json")) {
       db.exec("ALTER TABLE request_log ADD COLUMN transport_error_json TEXT");
+    }
+  }
+  if (version < 12) {
+    const accountColumns = tableColumns(db, "accounts");
+    if (!accountColumns.has("subscription_started_at")) {
+      db.exec("ALTER TABLE accounts ADD COLUMN subscription_started_at INTEGER");
     }
   }
 

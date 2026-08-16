@@ -1,5 +1,10 @@
 import { useMemo, useState } from "react"
-import { CircleAlertIcon, CircleCheckIcon, Clock3Icon, SearchXIcon } from "lucide-react"
+import {
+  CircleAlertIcon,
+  CircleCheckIcon,
+  Clock3Icon,
+  SearchXIcon,
+} from "lucide-react"
 import { useTranslation } from "react-i18next"
 
 import { Button } from "@/components/ui/button"
@@ -54,7 +59,8 @@ import { AccountActions } from "./account-actions"
 import { AccountStatus } from "./account-status-badge"
 import { AccountUsage } from "./account-usage"
 
-type AccountAction = "copy" | "limits" | "auth" | "toggle" | "remove"
+type AccountAction =
+  "copy" | "limits" | "auth" | "subscription" | "toggle" | "remove"
 type AccountFilter = "all" | "routable" | "attention" | "disabled"
 
 function isDisabled(account: AccountView) {
@@ -92,10 +98,22 @@ export function AccountList({
   )
   const filterItems = useMemo(
     () => [
-      { value: "all" as const, label: t("全部（{{count}}）", { count: accounts.length }) },
-      { value: "routable" as const, label: t("可路由（{{count}}）", { count: counts.routable }) },
-      { value: "attention" as const, label: t("需处理（{{count}}）", { count: counts.attention }) },
-      { value: "disabled" as const, label: t("已停用（{{count}}）", { count: counts.disabled }) },
+      {
+        value: "all" as const,
+        label: t("全部（{{count}}）", { count: accounts.length }),
+      },
+      {
+        value: "routable" as const,
+        label: t("可路由（{{count}}）", { count: counts.routable }),
+      },
+      {
+        value: "attention" as const,
+        label: t("需处理（{{count}}）", { count: counts.attention }),
+      },
+      {
+        value: "disabled" as const,
+        label: t("已停用（{{count}}）", { count: counts.disabled }),
+      },
     ],
     [accounts.length, counts, t]
   )
@@ -132,8 +150,15 @@ export function AccountList({
           {t("搜索授权身份，并手动选择后续请求使用的路由账号。")}
         </CardDescription>
         <CardAction>
-          <Badge variant="outline" className={cn(activeAccountId ? "text-success" : "text-warning")}>
-            {activeAccountId ? <CircleCheckIcon data-icon="inline-start" /> : <CircleAlertIcon data-icon="inline-start" />}
+          <Badge
+            variant="outline"
+            className={cn(activeAccountId ? "text-success" : "text-warning")}
+          >
+            {activeAccountId ? (
+              <CircleCheckIcon data-icon="inline-start" />
+            ) : (
+              <CircleAlertIcon data-icon="inline-start" />
+            )}
             {activeAccountId ? t("已选择路由") : t("未选择路由")}
           </Badge>
         </CardAction>
@@ -152,7 +177,10 @@ export function AccountList({
               if (value) setFilter(value)
             }}
           >
-            <SelectTrigger aria-label={t("筛选账号状态")} className="w-full sm:w-40">
+            <SelectTrigger
+              aria-label={t("筛选账号状态")}
+              className="w-full sm:w-40"
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent align="start" alignItemWithTrigger={false}>
@@ -166,7 +194,10 @@ export function AccountList({
             </SelectContent>
           </Select>
           <span className="shrink-0 text-xs text-muted-foreground sm:ml-auto">
-            {t("显示 {{shown}} / 共 {{total}}", { shown: filteredAccounts.length, total: accounts.length })}
+            {t("显示 {{shown}} / 共 {{total}}", {
+              shown: filteredAccounts.length,
+              total: accounts.length,
+            })}
           </span>
         </div>
       </CardHeader>
@@ -204,7 +235,7 @@ export function AccountList({
                       {index > 0 ? <ItemSeparator /> : null}
                       <Item
                         variant={account.isActive ? "muted" : "default"}
-                      className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-3 py-3 xl:grid-cols-[auto_minmax(13rem,1.2fr)_minmax(0,2fr)_auto] xl:gap-x-5"
+                        className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-3 py-3 xl:grid-cols-[auto_minmax(13rem,1.2fr)_minmax(0,2fr)_auto] xl:gap-x-5"
                       >
                         <ItemMedia className="col-start-1 row-start-1 group-has-data-[slot=item-description]/item:translate-y-0 group-has-data-[slot=item-description]/item:self-center">
                           {busyId === account.id ? (
@@ -213,7 +244,11 @@ export function AccountList({
                             <RadioGroupItem
                               value={account.id}
                               disabled={busyId !== null || !canSelect}
-                              aria-label={t("将 {{account}} 设为当前路由", { account: shortAccountId(account.chatgptAccountId) })}
+                              aria-label={t("将 {{account}} 设为当前路由", {
+                                account: shortAccountId(
+                                  account.chatgptAccountId
+                                ),
+                              })}
                             />
                           )}
                         </ItemMedia>
@@ -238,6 +273,18 @@ export function AccountList({
                               className="inline-flex shrink-0 items-center self-center whitespace-nowrap"
                             >
                               <AccountStatus account={account} />
+                              {account.subscriptionExpiresAt !== null ? (
+                                <span className="ml-2 text-xs font-normal text-muted-foreground">
+                                  {t("到期 {{date}}", {
+                                    date: new Intl.DateTimeFormat(undefined, {
+                                      year: "numeric",
+                                      month: "2-digit",
+                                      day: "2-digit",
+                                      timeZone: "UTC",
+                                    }).format(account.subscriptionExpiresAt),
+                                  })}
+                                </span>
+                              ) : null}
                             </span>
                           </ItemTitle>
                           <ItemDescription className="flex min-w-0 items-center gap-1.5 text-xs">
@@ -265,10 +312,10 @@ export function AccountList({
 
                         <AccountUsage
                           usage={account.usage}
-                        className="col-start-2 col-end-3 row-start-2 xl:col-start-3 xl:col-end-4 xl:row-start-1"
+                          className="col-start-2 col-end-3 row-start-2 xl:col-start-3 xl:col-end-4 xl:row-start-1"
                         />
 
-                      <ItemActions className="col-start-3 row-start-1 row-end-3 justify-end self-center xl:col-start-4 xl:row-end-2">
+                        <ItemActions className="col-start-3 row-start-1 row-end-3 justify-end self-center xl:col-start-4 xl:row-end-2">
                           <AccountActions
                             account={account}
                             disabled={busyId === account.id}

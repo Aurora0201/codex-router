@@ -18,6 +18,38 @@ function renderPage(snapshot: GatewaySnapshot, service: GatewayService) {
 }
 
 describe("AccountsPage", () => {
+  it("edits a subscription date with the shadcn date picker dialog", async () => {
+    const service = createGatewayServiceFixture()
+    service.snapshot.accounts.accounts[0].subscriptionStartedAt = Date.UTC(
+      2026,
+      7,
+      1
+    )
+    service.snapshot.accounts.accounts[0].subscriptionExpiresAt = Date.UTC(
+      2026,
+      7,
+      31
+    )
+    const updateAccount = vi.spyOn(service, "updateAccount")
+
+    renderPage(await service.getSnapshot(), service)
+    await userEvent.click(
+      screen.getAllByRole("button", { name: "账号操作" })[0]
+    )
+    await userEvent.click(await screen.findByText("设置订阅日期"))
+
+    expect(screen.getByRole("dialog")).toHaveTextContent(
+      "预计到期日期：2026-08-31"
+    )
+    expect(
+      screen.getByRole("button", { name: /2026-08-01/ })
+    ).toBeInTheDocument()
+    await userEvent.click(screen.getByRole("button", { name: "保存" }))
+    expect(updateAccount).toHaveBeenCalledWith("account-1", {
+      subscriptionStartedAt: Date.UTC(2026, 7, 1),
+    })
+  })
+
   it("focuses the healthy page on the searchable account pool", async () => {
     const service = createGatewayServiceFixture()
     const snapshot = await service.getSnapshot()
@@ -39,7 +71,9 @@ describe("AccountsPage", () => {
     renderPage(snapshot, service)
 
     expect(screen.queryByRole("alert")).not.toBeInTheDocument()
-    expect(screen.getByText("未选择路由").closest('[data-slot="badge"]')).toHaveClass("text-warning")
+    expect(
+      screen.getByText("未选择路由").closest('[data-slot="badge"]')
+    ).toHaveClass("text-warning")
   })
 
   it("warns when the active route account is unavailable", async () => {
@@ -70,7 +104,9 @@ describe("AccountsPage", () => {
     const service = createGatewayServiceFixture({ activeAccountId: null })
     service.snapshot.accounts.accounts = []
     renderPage(await service.getSnapshot(), service)
-    expect(screen.getByText(/账号池为空时，请求会使用 Codex 当前登录账号透传/)).toBeInTheDocument()
+    expect(
+      screen.getByText(/账号池为空时，请求会使用 Codex 当前登录账号透传/)
+    ).toBeInTheDocument()
   })
 
   it("uses one shared dialog from both empty-state triggers and keeps it mounted after completion", async () => {
@@ -80,24 +116,44 @@ describe("AccountsPage", () => {
     service.snapshot.accounts.accounts = []
     service.getLoginStatus = vi.fn(async () => {
       service.snapshot.accounts.accounts = [addedAccount]
-      return { loginId: "login-1", status: "complete" as const, authUrl: "https://auth.openai.test/codex" }
+      return {
+        loginId: "login-1",
+        status: "complete" as const,
+        authUrl: "https://auth.openai.test/codex",
+      }
     })
     const initial = await service.getSnapshot()
 
     function Harness() {
       const [snapshot, setSnapshot] = useState(initial)
-      return <AccountsPage snapshot={snapshot} service={service} reload={async () => setSnapshot(await service.getSnapshot())} />
+      return (
+        <AccountsPage
+          snapshot={snapshot}
+          service={service}
+          reload={async () => setSnapshot(await service.getSnapshot())}
+        />
+      )
     }
 
-    render(<TooltipProvider><Harness /></TooltipProvider>)
+    render(
+      <TooltipProvider>
+        <Harness />
+      </TooltipProvider>
+    )
     const triggers = screen.getAllByRole("button", { name: "添加账号" })
     expect(triggers).toHaveLength(2)
     await userEvent.click(triggers[1])
     expect(screen.getAllByRole("dialog")).toHaveLength(1)
     await userEvent.click(screen.getByRole("button", { name: "启动登录" }))
 
-    expect(await screen.findByText("授权完成", {}, { timeout: 2_000 })).toBeInTheDocument()
-    await waitFor(() => expect(document.querySelector('[aria-label="搜索授权账号"]')).toBeInTheDocument())
+    expect(
+      await screen.findByText("授权完成", {}, { timeout: 2_000 })
+    ).toBeInTheDocument()
+    await waitFor(() =>
+      expect(
+        document.querySelector('[aria-label="搜索授权账号"]')
+      ).toBeInTheDocument()
+    )
     expect(screen.getByRole("dialog")).toBeInTheDocument()
     open.mockRestore()
   })

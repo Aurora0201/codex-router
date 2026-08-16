@@ -12,6 +12,8 @@ function account(values: Partial<AccountView>): AccountView {
     chatgptAccountId: "account-1234567890",
     email: "user@example.com",
     planType: "Plus",
+    subscriptionStartedAt: null,
+    subscriptionExpiresAt: null,
     enabled: true,
     isActive: false,
     authStatus: "ready",
@@ -24,10 +26,36 @@ function account(values: Partial<AccountView>): AccountView {
 }
 
 describe("AccountList", () => {
+  it("shows the calculated expiration immediately after ready status", () => {
+    render(
+      <TooltipProvider>
+        <AccountList
+          accounts={[
+            account({
+              subscriptionStartedAt: Date.UTC(2026, 7, 1),
+              subscriptionExpiresAt: Date.UTC(2026, 7, 31),
+            }),
+          ]}
+          busyId={null}
+          onSelect={vi.fn()}
+          onAction={vi.fn()}
+        />
+      </TooltipProvider>
+    )
+
+    const status = screen.getByText("认证就绪")
+    expect(status.parentElement).toHaveTextContent("认证就绪到期 2026/08/31")
+  })
+
   it("fills its desktop parent without a viewport height cap", () => {
     const { container } = render(
       <TooltipProvider>
-        <AccountList accounts={[account({})]} busyId={null} onSelect={vi.fn()} onAction={vi.fn()} />
+        <AccountList
+          accounts={[account({})]}
+          busyId={null}
+          onSelect={vi.fn()}
+          onAction={vi.fn()}
+        />
       </TooltipProvider>
     )
 
@@ -68,7 +96,9 @@ describe("AccountList", () => {
     expect(screen.queryByText("当前路由")).not.toBeInTheDocument()
     expect(screen.queryByText("设为当前")).not.toBeInTheDocument()
     expect(screen.getAllByRole("button", { name: "账号操作" })).toHaveLength(2)
-    expect(screen.getByText("已选择路由").closest('[data-slot="badge"]')).toHaveClass("text-success")
+    expect(
+      screen.getByText("已选择路由").closest('[data-slot="badge"]')
+    ).toHaveClass("text-success")
   })
 
   it("orders route selection, identity, usage, and secondary actions by priority", () => {

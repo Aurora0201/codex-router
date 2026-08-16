@@ -3,6 +3,7 @@ import {
   EllipsisIcon,
   RefreshCwIcon,
   RotateCcwKeyIcon,
+  CalendarDaysIcon,
   Trash2Icon,
 } from "lucide-react"
 import { useTranslation } from "react-i18next"
@@ -30,7 +31,9 @@ export function AccountActions({
 }: {
   account: AccountView
   disabled?: boolean
-  onAction(action: "copy" | "limits" | "auth" | "toggle" | "remove"): void
+  onAction(
+    action: "copy" | "limits" | "auth" | "subscription" | "toggle" | "remove"
+  ): void
 }) {
   const { t } = useTranslation()
   return (
@@ -69,6 +72,13 @@ export function AccountActions({
             >
               <RotateCcwKeyIcon />
               {t("刷新认证")}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              disabled={disabled}
+              onClick={() => onAction("subscription")}
+            >
+              <CalendarDaysIcon />
+              {t("设置订阅日期")}
             </DropdownMenuItem>
             <DropdownMenuItem
               disabled={disabled}
