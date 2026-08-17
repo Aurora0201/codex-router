@@ -89,7 +89,13 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { toast } from "@/components/ui/toast"
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import {
+  Tabs,
+  TabsList,
+  TabsPanel,
+  TabsPanels,
+  TabsTab,
+} from "@/components/animate-ui/components/base/tabs"
 import { WebSocketConnectionLogsPanel } from "@/components/request/websocket-connection-logs-panel"
 import { Field, FieldGroup } from "@/components/ui/field"
 import { cn } from "@/lib/utils"
@@ -431,10 +437,7 @@ function RequestDataTable({
               )}
             >
               {row.getVisibleCells().map((cell) => (
-                <TableCell
-                  className="px-4"
-                  key={cell.id}
-                >
+                <TableCell className="px-4" key={cell.id}>
                   {flexRender(cell.column.columnDef.cell, cell.getContext())}
                 </TableCell>
               ))}
@@ -764,474 +767,495 @@ export function RequestLogsPage({
         </p>
       </div>
       <Tabs
+        className="min-h-0 flex-1 gap-4"
         value={view}
         onValueChange={(next) => setView(next as "requests" | "connections")}
       >
         <TabsList>
-          <TabsTrigger value="requests">{t("请求")}</TabsTrigger>
-          <TabsTrigger value="connections">{t("连接诊断")}</TabsTrigger>
+          <TabsTab value="requests">{t("请求")}</TabsTab>
+          <TabsTab value="connections">{t("连接诊断")}</TabsTab>
         </TabsList>
-      </Tabs>
-      {view === "connections" ? (
-        <WebSocketConnectionLogsPanel
-          service={service}
-          revision={revision}
-          accounts={accounts}
-        />
-      ) : (
-        <>
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            {[
-              [t("请求数量"), result.summary.requests.toLocaleString(locale)],
-              [t("故障数量"), result.summary.errors.toLocaleString(locale)],
-              [t("取消数量"), result.summary.cancelled.toLocaleString(locale)],
-              [
-                t("平均耗时"),
-                result.summary.averageDurationMs == null
-                  ? "—"
-                  : `${Math.round(result.summary.averageDurationMs).toLocaleString(locale)} ms`,
-              ],
-            ].map(([label, value], index) => (
-              <Card key={String(label)} size="sm">
-                <CardHeader>
-                  <CardDescription>{label}</CardDescription>
-                  <CardTitle
-                    className={cn(
-                      "text-2xl tabular-nums",
-                      index === 1 && Number(value) > 0 && "text-destructive",
-                      index === 2 &&
-                        Number(value) > 0 &&
-                        "text-muted-foreground"
-                    )}
-                  >
-                    {value}
-                  </CardTitle>
-                </CardHeader>
-              </Card>
-            ))}
-          </div>
-          <Card className="gap-3 rounded-b-none pb-3 lg:shrink-0">
-            <CardHeader>
-              <CardTitle>{t("请求记录")}</CardTitle>
-              <CardDescription>
-                {t("按时间倒序显示，选择一行查看允许记录的完整元数据。")}
-              </CardDescription>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <FilterSelect
-                  label={t("时间范围")}
-                  value={filters.from !== undefined ? "custom" : filters.range}
-                  onChange={(range) =>
-                    update(
-                      range === "custom"
-                        ? { from: Date.now() - 3_600_000, to: Date.now() }
-                        : {
-                            range: range as RequestLogFilters["range"],
-                            from: undefined,
-                            to: undefined,
-                          }
-                    )
-                  }
-                  items={[
-                    { value: "1h", label: t("最近 1 小时") },
-                    { value: "24h", label: t("最近 24 小时") },
-                    { value: "7d", label: t("最近 7 天") },
-                    { value: "custom", label: t("自定义时间") },
-                  ]}
-                />
-                <FilterSelect
-                  label={t("请求结果")}
-                  value={
-                    filters.status === "error"
-                      ? "error"
-                      : (filters.outcome ?? "all")
-                  }
-                  onChange={(outcome) =>
-                    update(
-                      outcome === "error"
-                        ? { status: "error", outcome: undefined }
-                        : {
-                            status: undefined,
-                            outcome:
-                              outcome === "all"
-                                ? undefined
-                                : (outcome as RequestLogFilters["outcome"]),
-                          }
-                    )
-                  }
-                  items={[
-                    { value: "all", label: t("全部结果") },
-                    { value: "error", label: t("全部故障") },
-                    ...Object.entries(OUTCOME_LABELS).map(([value, label]) => ({
-                      value,
-                      label: t(label),
-                    })),
-                  ]}
-                />
-                <FilterSelect
-                  label={t("传输类型")}
-                  className="w-40"
-                  value={filters.transport ?? "all"}
-                  onChange={(transport) =>
-                    update({
-                      transport:
-                        transport === "all"
-                          ? undefined
-                          : (transport as RequestLogFilters["transport"]),
-                    })
-                  }
-                  items={[
-                    { value: "all", label: t("全部传输") },
-                    { value: "http", label: "HTTP" },
-                    { value: "ws", label: "WebSocket" },
-                    { value: "compact", label: t("压缩") },
-                    { value: "models", label: t("模型") },
-                    { value: "search", label: t("搜索") },
-                  ]}
-                />
-                <div className="relative min-w-64 flex-1">
-                  <SearchIcon className="pointer-events-none absolute top-2 left-2.5 size-4 text-muted-foreground" />
-                  <Input
-                    className="pl-8"
-                    value={queryDraft}
-                    onChange={(event) => setQueryDraft(event.target.value)}
-                    placeholder={t("搜索路由、请求 ID、账号或错误码")}
+        <TabsPanels
+          mode="layout"
+          className="min-h-0 flex-1"
+          style={{ overflow: "visible" }}
+        >
+          <TabsPanel
+            value="connections"
+            className="flex h-full min-h-0 flex-col gap-4"
+          >
+            <WebSocketConnectionLogsPanel
+              service={service}
+              revision={revision}
+              accounts={accounts}
+            />
+          </TabsPanel>
+          <TabsPanel
+            value="requests"
+            className="flex h-full min-h-0 flex-col gap-4"
+          >
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              {[
+                [t("请求数量"), result.summary.requests.toLocaleString(locale)],
+                [t("故障数量"), result.summary.errors.toLocaleString(locale)],
+                [
+                  t("取消数量"),
+                  result.summary.cancelled.toLocaleString(locale),
+                ],
+                [
+                  t("平均耗时"),
+                  result.summary.averageDurationMs == null
+                    ? "—"
+                    : `${Math.round(result.summary.averageDurationMs).toLocaleString(locale)} ms`,
+                ],
+              ].map(([label, value], index) => (
+                <Card key={String(label)} size="sm">
+                  <CardHeader>
+                    <CardDescription>{label}</CardDescription>
+                    <CardTitle
+                      className={cn(
+                        "text-2xl tabular-nums",
+                        index === 1 && Number(value) > 0 && "text-destructive",
+                        index === 2 &&
+                          Number(value) > 0 &&
+                          "text-muted-foreground"
+                      )}
+                    >
+                      {value}
+                    </CardTitle>
+                  </CardHeader>
+                </Card>
+              ))}
+            </div>
+            <Card className="gap-3 rounded-b-none pb-3 lg:shrink-0">
+              <CardHeader>
+                <CardTitle>{t("请求记录")}</CardTitle>
+                <CardDescription>
+                  {t("按时间倒序显示，选择一行查看允许记录的完整元数据。")}
+                </CardDescription>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <FilterSelect
+                    label={t("时间范围")}
+                    value={
+                      filters.from !== undefined ? "custom" : filters.range
+                    }
+                    onChange={(range) =>
+                      update(
+                        range === "custom"
+                          ? { from: Date.now() - 3_600_000, to: Date.now() }
+                          : {
+                              range: range as RequestLogFilters["range"],
+                              from: undefined,
+                              to: undefined,
+                            }
+                      )
+                    }
+                    items={[
+                      { value: "1h", label: t("最近 1 小时") },
+                      { value: "24h", label: t("最近 24 小时") },
+                      { value: "7d", label: t("最近 7 天") },
+                      { value: "custom", label: t("自定义时间") },
+                    ]}
                   />
-                </div>
-                <Popover>
-                  <PopoverTrigger render={<Button variant="outline" />}>
-                    <SlidersHorizontalIcon data-icon="inline-start" />
-                    {t("更多筛选")}
-                    {advancedEntries.length > 0 && (
-                      <Badge variant="secondary">
-                        {advancedEntries.length}
-                      </Badge>
-                    )}
-                  </PopoverTrigger>
-                  <PopoverContent
-                    align="end"
-                    className="w-[min(34rem,calc(100vw-2rem))]"
-                  >
-                    <PopoverHeader>
-                      <PopoverTitle>{t("更多筛选")}</PopoverTitle>
-                      <PopoverDescription>
-                        {t("摘要和请求列表使用相同筛选范围。")}
-                      </PopoverDescription>
-                    </PopoverHeader>
-                    {filters.from !== undefined && (
+                  <FilterSelect
+                    label={t("请求结果")}
+                    value={
+                      filters.status === "error"
+                        ? "error"
+                        : (filters.outcome ?? "all")
+                    }
+                    onChange={(outcome) =>
+                      update(
+                        outcome === "error"
+                          ? { status: "error", outcome: undefined }
+                          : {
+                              status: undefined,
+                              outcome:
+                                outcome === "all"
+                                  ? undefined
+                                  : (outcome as RequestLogFilters["outcome"]),
+                            }
+                      )
+                    }
+                    items={[
+                      { value: "all", label: t("全部结果") },
+                      { value: "error", label: t("全部故障") },
+                      ...Object.entries(OUTCOME_LABELS).map(
+                        ([value, label]) => ({
+                          value,
+                          label: t(label),
+                        })
+                      ),
+                    ]}
+                  />
+                  <FilterSelect
+                    label={t("传输类型")}
+                    className="w-40"
+                    value={filters.transport ?? "all"}
+                    onChange={(transport) =>
+                      update({
+                        transport:
+                          transport === "all"
+                            ? undefined
+                            : (transport as RequestLogFilters["transport"]),
+                      })
+                    }
+                    items={[
+                      { value: "all", label: t("全部传输") },
+                      { value: "http", label: "HTTP" },
+                      { value: "ws", label: "WebSocket" },
+                      { value: "compact", label: t("压缩") },
+                      { value: "models", label: t("模型") },
+                      { value: "search", label: t("搜索") },
+                    ]}
+                  />
+                  <div className="relative min-w-64 flex-1">
+                    <SearchIcon className="pointer-events-none absolute top-2 left-2.5 size-4 text-muted-foreground" />
+                    <Input
+                      className="pl-8"
+                      value={queryDraft}
+                      onChange={(event) => setQueryDraft(event.target.value)}
+                      placeholder={t("搜索路由、请求 ID、账号或错误码")}
+                    />
+                  </div>
+                  <Popover>
+                    <PopoverTrigger render={<Button variant="outline" />}>
+                      <SlidersHorizontalIcon data-icon="inline-start" />
+                      {t("更多筛选")}
+                      {advancedEntries.length > 0 && (
+                        <Badge variant="secondary">
+                          {advancedEntries.length}
+                        </Badge>
+                      )}
+                    </PopoverTrigger>
+                    <PopoverContent
+                      align="end"
+                      className="w-[min(34rem,calc(100vw-2rem))]"
+                    >
+                      <PopoverHeader>
+                        <PopoverTitle>{t("更多筛选")}</PopoverTitle>
+                        <PopoverDescription>
+                          {t("摘要和请求列表使用相同筛选范围。")}
+                        </PopoverDescription>
+                      </PopoverHeader>
+                      {filters.from !== undefined && (
+                        <FieldGroup className="grid gap-3 sm:grid-cols-2">
+                          <Field>
+                            <Input
+                              aria-label={t("开始时间")}
+                              type="datetime-local"
+                              className="w-full"
+                              value={toLocalDateTime(filters.from)}
+                              onChange={(event) =>
+                                event.target.value &&
+                                update({
+                                  from: new Date(event.target.value).getTime(),
+                                })
+                              }
+                            />
+                          </Field>
+                          <Field>
+                            <Input
+                              aria-label={t("结束时间")}
+                              type="datetime-local"
+                              className="w-full"
+                              value={toLocalDateTime(filters.to)}
+                              onChange={(event) =>
+                                event.target.value &&
+                                update({
+                                  to: new Date(event.target.value).getTime(),
+                                })
+                              }
+                            />
+                          </Field>
+                        </FieldGroup>
+                      )}
                       <FieldGroup className="grid gap-3 sm:grid-cols-2">
                         <Field>
-                          <Input
-                            aria-label={t("开始时间")}
-                            type="datetime-local"
+                          <FilterSelect
                             className="w-full"
-                            value={toLocalDateTime(filters.from)}
-                            onChange={(event) =>
-                              event.target.value &&
+                            label={t("生命周期")}
+                            value={filters.state ?? "all"}
+                            onChange={(value) =>
                               update({
-                                from: new Date(event.target.value).getTime(),
+                                state:
+                                  value === "all"
+                                    ? undefined
+                                    : (value as RequestLogFilters["state"]),
+                              })
+                            }
+                            items={[
+                              { value: "all", label: t("全部生命周期") },
+                              ...Object.entries(STATE_LABELS).map(
+                                ([value, label]) => ({
+                                  value,
+                                  label: t(label),
+                                })
+                              ),
+                            ]}
+                          />
+                        </Field>
+                        <Field>
+                          <AccountCombobox
+                            accounts={accounts}
+                            value={filters.accountId}
+                            onChange={(accountId) => update({ accountId })}
+                          />
+                        </Field>
+                        <Field>
+                          <FilterSelect
+                            className="w-full"
+                            label={t("失败来源")}
+                            value={filters.failureSource ?? "all"}
+                            onChange={(value) =>
+                              update({
+                                failureSource:
+                                  value === "all"
+                                    ? undefined
+                                    : (value as RequestLogFilters["failureSource"]),
+                              })
+                            }
+                            items={[
+                              { value: "all", label: t("全部来源") },
+                              ...(
+                                [
+                                  "gateway",
+                                  "upstream_http",
+                                  "upstream_protocol",
+                                  "transport",
+                                  "client",
+                                ] as const
+                              ).map((value) => ({ value, label: value })),
+                            ]}
+                          />
+                        </Field>
+                        <Field>
+                          <FilterSelect
+                            className="w-full"
+                            label={t("失败阶段")}
+                            value={filters.failureStage ?? "all"}
+                            onChange={(value) =>
+                              update({
+                                failureStage:
+                                  value === "all"
+                                    ? undefined
+                                    : (value as RequestLogFilters["failureStage"]),
+                              })
+                            }
+                            items={[
+                              { value: "all", label: t("全部阶段") },
+                              ...(
+                                [
+                                  "routing",
+                                  "authentication",
+                                  "handshake",
+                                  "sending",
+                                  "streaming",
+                                  "terminal",
+                                ] as const
+                              ).map((value) => ({ value, label: value })),
+                            ]}
+                          />
+                        </Field>
+                        <Field>
+                          <Input
+                            aria-label={t("HTTP 状态")}
+                            className="w-full"
+                            inputMode="numeric"
+                            placeholder={t("HTTP 状态")}
+                            value={filters.httpStatus ?? ""}
+                            onChange={(event) =>
+                              update({
+                                httpStatus: event.target.value
+                                  ? Number(event.target.value)
+                                  : undefined,
                               })
                             }
                           />
                         </Field>
                         <Field>
                           <Input
-                            aria-label={t("结束时间")}
-                            type="datetime-local"
+                            aria-label={t("协议错误码")}
                             className="w-full"
-                            value={toLocalDateTime(filters.to)}
+                            placeholder={t("协议错误码")}
+                            value={filters.protocolErrorCode ?? ""}
                             onChange={(event) =>
-                              event.target.value &&
                               update({
-                                to: new Date(event.target.value).getTime(),
+                                protocolErrorCode:
+                                  event.target.value || undefined,
+                              })
+                            }
+                          />
+                        </Field>
+                        <Field>
+                          <Input
+                            aria-label={t("诊断码")}
+                            className="w-full"
+                            placeholder={t("诊断码")}
+                            value={filters.diagnosticCode ?? ""}
+                            onChange={(event) =>
+                              update({
+                                diagnosticCode: event.target.value || undefined,
                               })
                             }
                           />
                         </Field>
                       </FieldGroup>
-                    )}
-                    <FieldGroup className="grid gap-3 sm:grid-cols-2">
-                      <Field>
-                        <FilterSelect
-                          className="w-full"
-                          label={t("生命周期")}
-                          value={filters.state ?? "all"}
-                          onChange={(value) =>
-                            update({
-                              state:
-                                value === "all"
-                                  ? undefined
-                                  : (value as RequestLogFilters["state"]),
-                            })
-                          }
-                          items={[
-                            { value: "all", label: t("全部生命周期") },
-                            ...Object.entries(STATE_LABELS).map(
-                              ([value, label]) => ({
-                                value,
-                                label: t(label),
-                              })
-                            ),
-                          ]}
-                        />
-                      </Field>
-                      <Field>
-                        <AccountCombobox
-                          accounts={accounts}
-                          value={filters.accountId}
-                          onChange={(accountId) => update({ accountId })}
-                        />
-                      </Field>
-                      <Field>
-                        <FilterSelect
-                          className="w-full"
-                          label={t("失败来源")}
-                          value={filters.failureSource ?? "all"}
-                          onChange={(value) =>
-                            update({
-                              failureSource:
-                                value === "all"
-                                  ? undefined
-                                  : (value as RequestLogFilters["failureSource"]),
-                            })
-                          }
-                          items={[
-                            { value: "all", label: t("全部来源") },
-                            ...(
-                              [
-                                "gateway",
-                                "upstream_http",
-                                "upstream_protocol",
-                                "transport",
-                                "client",
-                              ] as const
-                            ).map((value) => ({ value, label: value })),
-                          ]}
-                        />
-                      </Field>
-                      <Field>
-                        <FilterSelect
-                          className="w-full"
-                          label={t("失败阶段")}
-                          value={filters.failureStage ?? "all"}
-                          onChange={(value) =>
-                            update({
-                              failureStage:
-                                value === "all"
-                                  ? undefined
-                                  : (value as RequestLogFilters["failureStage"]),
-                            })
-                          }
-                          items={[
-                            { value: "all", label: t("全部阶段") },
-                            ...(
-                              [
-                                "routing",
-                                "authentication",
-                                "handshake",
-                                "sending",
-                                "streaming",
-                                "terminal",
-                              ] as const
-                            ).map((value) => ({ value, label: value })),
-                          ]}
-                        />
-                      </Field>
-                      <Field>
-                        <Input
-                          aria-label={t("HTTP 状态")}
-                          className="w-full"
-                          inputMode="numeric"
-                          placeholder={t("HTTP 状态")}
-                          value={filters.httpStatus ?? ""}
-                          onChange={(event) =>
-                            update({
-                              httpStatus: event.target.value
-                                ? Number(event.target.value)
-                                : undefined,
-                            })
-                          }
-                        />
-                      </Field>
-                      <Field>
-                        <Input
-                          aria-label={t("协议错误码")}
-                          className="w-full"
-                          placeholder={t("协议错误码")}
-                          value={filters.protocolErrorCode ?? ""}
-                          onChange={(event) =>
-                            update({
-                              protocolErrorCode:
-                                event.target.value || undefined,
-                            })
-                          }
-                        />
-                      </Field>
-                      <Field>
-                        <Input
-                          aria-label={t("诊断码")}
-                          className="w-full"
-                          placeholder={t("诊断码")}
-                          value={filters.diagnosticCode ?? ""}
-                          onChange={(event) =>
-                            update({
-                              diagnosticCode: event.target.value || undefined,
-                            })
-                          }
-                        />
-                      </Field>
-                    </FieldGroup>
-                    {advancedEntries.length > 0 && (
-                      <div className="flex flex-wrap items-center gap-2">
-                        {advancedEntries.map(([key, label]) => (
-                          <Badge key={key} variant="secondary">
-                            {String(label)}
-                            <button
-                              type="button"
-                              aria-label={t("移除筛选 {{filter}}", {
-                                filter: String(label),
-                              })}
-                              onClick={() => clearAdvanced(key)}
-                            >
-                              <XIcon />
-                            </button>
-                          </Badge>
-                        ))}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => clearAdvanced()}
-                        >
-                          {t("清除全部")}
-                        </Button>
-                      </div>
-                    )}
-                  </PopoverContent>
-                </Popover>
-              </div>
-            </CardHeader>
-          </Card>
-          <Card className="-mt-4 min-h-0 gap-0 overflow-hidden rounded-t-none py-0 lg:flex-1">
-            <CardContent className="flex min-h-0 flex-1 flex-col p-0">
-              {!enabled || (!loading && result.items.length === 0) ? (
-                <Empty className="h-full min-h-80 border-0 lg:min-h-0">
-                  <EmptyHeader>
-                    <EmptyMedia variant="icon">
-                      <FileClockIcon />
-                    </EmptyMedia>
-                    <EmptyTitle>
-                      {enabled
-                        ? t("没有匹配的请求记录")
-                        : t("请求元数据记录已关闭")}
-                    </EmptyTitle>
-                    <EmptyDescription>
-                      {enabled
-                        ? t("调整筛选条件后重试。")
-                        : t("启用后只记录状态、耗时和路由等安全元数据。")}
-                    </EmptyDescription>
-                  </EmptyHeader>
-                  {!enabled && (
-                    <EmptyContent>
-                      <Button variant="outline" onClick={onShowPreferences}>
-                        {t("前往偏好设置")}
-                      </Button>
-                    </EmptyContent>
-                  )}
-                </Empty>
-              ) : (
-                <RequestDataTable
-                  items={result.items}
-                  newIds={newIds}
-                  page={result.pagination.page}
-                  onSelect={setSelected}
-                />
-              )}
-            </CardContent>
-            {result.pagination.totalPages > 0 && (
-              <CardFooter className="justify-between py-3">
-                <span className="text-sm text-muted-foreground tabular-nums">
-                  {t("共 {{total}} 条 · 每页 {{size}} 条", {
-                    total: result.pagination.totalItems,
-                    size: result.pagination.pageSize,
-                  })}
-                </span>
-                <Pagination
-                  className="mx-0 w-auto"
-                  aria-label={t("请求日志分页")}
-                >
-                  <PaginationContent>
-                    <PaginationItem>
-                      <PaginationPrevious
-                        href="#"
-                        text={t("上一页")}
-                        aria-label={t("上一页")}
-                        aria-disabled={loading || result.pagination.page === 1}
-                        className={cn(
-                          (loading || result.pagination.page === 1) &&
-                            "pointer-events-none opacity-50"
-                        )}
-                        onClick={(event) => {
-                          event.preventDefault()
-                          goToPage(result.pagination.page - 1)
-                        }}
-                      />
-                    </PaginationItem>
-                    {paginationTokens(
-                      result.pagination.page,
-                      result.pagination.totalPages
-                    ).map((token) =>
-                      typeof token === "number" ? (
-                        <PaginationItem key={token}>
-                          <PaginationLink
-                            href="#"
-                            isActive={token === result.pagination.page}
-                            aria-label={t("第 {{page}} 页", { page: token })}
-                            onClick={(event) => {
-                              event.preventDefault()
-                              goToPage(token)
-                            }}
+                      {advancedEntries.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-2">
+                          {advancedEntries.map(([key, label]) => (
+                            <Badge key={key} variant="secondary">
+                              {String(label)}
+                              <button
+                                type="button"
+                                aria-label={t("移除筛选 {{filter}}", {
+                                  filter: String(label),
+                                })}
+                                onClick={() => clearAdvanced(key)}
+                              >
+                                <XIcon />
+                              </button>
+                            </Badge>
+                          ))}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => clearAdvanced()}
                           >
-                            {token}
-                          </PaginationLink>
-                        </PaginationItem>
-                      ) : (
-                        <PaginationItem key={token}>
-                          <PaginationEllipsis />
-                        </PaginationItem>
-                      )
+                            {t("清除全部")}
+                          </Button>
+                        </div>
+                      )}
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              </CardHeader>
+            </Card>
+            <Card className="-mt-4 min-h-0 gap-0 overflow-hidden rounded-t-none py-0 lg:flex-1">
+              <CardContent className="flex min-h-0 flex-1 flex-col p-0">
+                {!enabled || (!loading && result.items.length === 0) ? (
+                  <Empty className="h-full min-h-80 border-0 lg:min-h-0">
+                    <EmptyHeader>
+                      <EmptyMedia variant="icon">
+                        <FileClockIcon />
+                      </EmptyMedia>
+                      <EmptyTitle>
+                        {enabled
+                          ? t("没有匹配的请求记录")
+                          : t("请求元数据记录已关闭")}
+                      </EmptyTitle>
+                      <EmptyDescription>
+                        {enabled
+                          ? t("调整筛选条件后重试。")
+                          : t("启用后只记录状态、耗时和路由等安全元数据。")}
+                      </EmptyDescription>
+                    </EmptyHeader>
+                    {!enabled && (
+                      <EmptyContent>
+                        <Button variant="outline" onClick={onShowPreferences}>
+                          {t("前往偏好设置")}
+                        </Button>
+                      </EmptyContent>
                     )}
-                    <PaginationItem>
-                      <PaginationNext
-                        href="#"
-                        text={t("下一页")}
-                        aria-label={t("下一页")}
-                        aria-disabled={
-                          loading ||
-                          result.pagination.page ===
-                            result.pagination.totalPages
-                        }
-                        className={cn(
-                          (loading ||
+                  </Empty>
+                ) : (
+                  <RequestDataTable
+                    items={result.items}
+                    newIds={newIds}
+                    page={result.pagination.page}
+                    onSelect={setSelected}
+                  />
+                )}
+              </CardContent>
+              {result.pagination.totalPages > 0 && (
+                <CardFooter className="justify-between py-3">
+                  <span className="text-sm text-muted-foreground tabular-nums">
+                    {t("共 {{total}} 条 · 每页 {{size}} 条", {
+                      total: result.pagination.totalItems,
+                      size: result.pagination.pageSize,
+                    })}
+                  </span>
+                  <Pagination
+                    className="mx-0 w-auto"
+                    aria-label={t("请求日志分页")}
+                  >
+                    <PaginationContent>
+                      <PaginationItem>
+                        <PaginationPrevious
+                          href="#"
+                          text={t("上一页")}
+                          aria-label={t("上一页")}
+                          aria-disabled={
+                            loading || result.pagination.page === 1
+                          }
+                          className={cn(
+                            (loading || result.pagination.page === 1) &&
+                              "pointer-events-none opacity-50"
+                          )}
+                          onClick={(event) => {
+                            event.preventDefault()
+                            goToPage(result.pagination.page - 1)
+                          }}
+                        />
+                      </PaginationItem>
+                      {paginationTokens(
+                        result.pagination.page,
+                        result.pagination.totalPages
+                      ).map((token) =>
+                        typeof token === "number" ? (
+                          <PaginationItem key={token}>
+                            <PaginationLink
+                              href="#"
+                              isActive={token === result.pagination.page}
+                              aria-label={t("第 {{page}} 页", { page: token })}
+                              onClick={(event) => {
+                                event.preventDefault()
+                                goToPage(token)
+                              }}
+                            >
+                              {token}
+                            </PaginationLink>
+                          </PaginationItem>
+                        ) : (
+                          <PaginationItem key={token}>
+                            <PaginationEllipsis />
+                          </PaginationItem>
+                        )
+                      )}
+                      <PaginationItem>
+                        <PaginationNext
+                          href="#"
+                          text={t("下一页")}
+                          aria-label={t("下一页")}
+                          aria-disabled={
+                            loading ||
                             result.pagination.page ===
-                              result.pagination.totalPages) &&
-                            "pointer-events-none opacity-50"
-                        )}
-                        onClick={(event) => {
-                          event.preventDefault()
-                          goToPage(result.pagination.page + 1)
-                        }}
-                      />
-                    </PaginationItem>
-                  </PaginationContent>
-                </Pagination>
-              </CardFooter>
-            )}
-          </Card>
-          <RequestDetailSheet
-            selected={selected}
-            onClose={() => setSelected(null)}
-          />
-        </>
-      )}
+                              result.pagination.totalPages
+                          }
+                          className={cn(
+                            (loading ||
+                              result.pagination.page ===
+                                result.pagination.totalPages) &&
+                              "pointer-events-none opacity-50"
+                          )}
+                          onClick={(event) => {
+                            event.preventDefault()
+                            goToPage(result.pagination.page + 1)
+                          }}
+                        />
+                      </PaginationItem>
+                    </PaginationContent>
+                  </Pagination>
+                </CardFooter>
+              )}
+            </Card>
+            <RequestDetailSheet
+              selected={selected}
+              onClose={() => setSelected(null)}
+            />
+          </TabsPanel>
+        </TabsPanels>
+      </Tabs>
     </section>
   )
 }
