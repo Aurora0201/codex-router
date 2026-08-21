@@ -2,7 +2,7 @@ import type Database from "better-sqlite3";
 
 type SqliteDatabase = Database.Database;
 
-export const SCHEMA_VERSION = 15;
+export const SCHEMA_VERSION = 16;
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -16,6 +16,8 @@ CREATE TABLE IF NOT EXISTS accounts (
   email TEXT,
   plan_type TEXT,
   subscription_started_at INTEGER,
+  subscription_expires_at INTEGER,
+  subscription_expiry_source TEXT,
   codex_home TEXT NOT NULL UNIQUE,
   enabled INTEGER NOT NULL DEFAULT 1,
   is_default INTEGER NOT NULL DEFAULT 0,
@@ -29,6 +31,11 @@ CREATE TABLE IF NOT EXISTS accounts (
   secondary_resets_at INTEGER,
   secondary_window_minutes INTEGER,
   rate_limit_reached_type TEXT,
+  auth_mode TEXT,
+  auth_checked_at INTEGER,
+  auth_last_successful_at INTEGER,
+  auth_error_code TEXT,
+  limits_snapshot_json TEXT,
   last_auth_refresh_at INTEGER,
   last_limits_refresh_at INTEGER,
   last_used_at INTEGER,
@@ -370,6 +377,32 @@ export function migrate(db: SqliteDatabase): void {
       CREATE INDEX IF NOT EXISTS idx_codex_usage_retained_event_source_time ON codex_usage_retained_event(source_hash, occurred_at);
       CREATE INDEX IF NOT EXISTS idx_codex_usage_retained_event_source_model_time ON codex_usage_retained_event(source_hash, model, occurred_at);
       CREATE INDEX IF NOT EXISTS idx_codex_usage_retained_event_source_project_time ON codex_usage_retained_event(source_hash, project_key, occurred_at);
+    `);
+  }
+  if (version < 16) {
+    const accountColumns = tableColumns(db, "accounts");
+    const additions = [
+      ["subscription_expires_at", "INTEGER"],
+      ["subscription_expiry_source", "TEXT"],
+      ["auth_mode", "TEXT"],
+      ["auth_checked_at", "INTEGER"],
+      ["auth_last_successful_at", "INTEGER"],
+      ["auth_error_code", "TEXT"],
+      ["limits_snapshot_json", "TEXT"],
+    ] as const;
+    for (const [column, type] of additions) {
+      if (!accountColumns.has(column)) db.exec(`ALTER TABLE accounts ADD COLUMN ${column} ${type}`);
+    }
+    db.exec(`
+      UPDATE accounts
+      SET subscription_expires_at = subscription_started_at + 2592000000,
+          subscription_expiry_source = 'legacy_estimate'
+      WHERE subscription_started_at IS NOT NULL
+        AND subscription_expires_at IS NULL;
+      UPDATE accounts
+      SET auth_last_successful_at = last_auth_refresh_at
+      WHERE auth_last_successful_at IS NULL
+        AND last_auth_refresh_at IS NOT NULL;
     `);
   }
 

@@ -193,6 +193,19 @@ export function createHttpGatewayService(): GatewayService {
         `${accountPath(id)}/refresh-limits`,
         json("POST", {})
       ),
+    refreshAllAccountStatus: () =>
+      request<{ started: boolean }>(
+        "/api/accounts/refresh-status",
+        json("POST", {})
+      ),
+    consumeAccountResetCredit: (id, input) =>
+      request<{
+        outcome: "reset" | "alreadyRedeemed" | "nothingToReset" | "noCredit"
+        account: AccountView
+      }>(
+        `${accountPath(id)}/rate-limit-reset-credits/consume`,
+        json("POST", input)
+      ),
     startLogin: () =>
       request<LoginSessionView>("/api/account-logins", json("POST", {})),
     getLoginStatus: (loginId) =>

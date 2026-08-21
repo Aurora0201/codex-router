@@ -127,7 +127,7 @@ describe("HTTP GatewayService", () => {
     await service.clearActiveAccount()
     await service.updateAccount("account/one", { enabled: false })
     await service.updateAccount("account/one", {
-      subscriptionStartedAt: 1_786_089_600_000,
+      subscriptionExpiresAt: 1_786_089_600_000,
     })
     await service.removeAccount("account/one")
     await service.refreshAccountAuth("account/one")
@@ -157,7 +157,7 @@ describe("HTTP GatewayService", () => {
       "/api/accounts/account%2Fone",
       expect.objectContaining({
         method: "PATCH",
-        body: '{"subscriptionStartedAt":1786089600000}',
+        body: '{"subscriptionExpiresAt":1786089600000}',
       })
     )
   })

@@ -19,6 +19,21 @@ const account = (id: string, isActive = false): AccountView => ({
   usage: { primary: null, secondary: null },
   lastAuthRefreshAt: null,
   lastLimitsRefreshAt: null,
+  auth: {
+    status: "ready",
+    mode: "chatgpt",
+    checkedAt: Date.now(),
+    lastSuccessfulAt: Date.now(),
+    stale: false,
+    errorCode: null,
+  },
+  subscription: { expiresAt: null, source: null },
+  limits: {
+    buckets: [],
+    defaultBucketKey: null,
+    resetCredits: null,
+    checkedAt: null,
+  },
 })
 
 export function createGatewayServiceFixture({
@@ -149,12 +164,12 @@ export function createGatewayServiceFixture({
         selected.enabled = values.enabled
         selected.authStatus = values.enabled ? "ready" : "disabled"
       }
-      if (values.subscriptionStartedAt !== undefined) {
-        selected.subscriptionStartedAt = values.subscriptionStartedAt
-        selected.subscriptionExpiresAt =
-          values.subscriptionStartedAt === null
-            ? null
-            : values.subscriptionStartedAt + 30 * 24 * 60 * 60_000
+      if (values.subscriptionExpiresAt !== undefined) {
+        selected.subscriptionExpiresAt = values.subscriptionExpiresAt
+        selected.subscription = {
+          expiresAt: values.subscriptionExpiresAt,
+          source: values.subscriptionExpiresAt === null ? null : "manual",
+        }
       }
       return structuredClone(selected)
     },
@@ -172,6 +187,17 @@ export function createGatewayServiceFixture({
       return structuredClone(
         snapshot.accounts.accounts.find((item) => item.id === id)!
       )
+    },
+    async refreshAllAccountStatus() {
+      return { started: true }
+    },
+    async consumeAccountResetCredit(id) {
+      return {
+        outcome: "reset" as const,
+        account: structuredClone(
+          snapshot.accounts.accounts.find((item) => item.id === id)!
+        ),
+      }
     },
     async startLogin() {
       return structuredClone(login)

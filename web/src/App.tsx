@@ -145,7 +145,6 @@ export function App({
   }
   const fixedLogsLayout = page === "logs" && Boolean(snapshot) && !error
   const gatewayLayout = page === "gateway" && Boolean(snapshot) && !error
-  const accountsLayout = page === "accounts" && Boolean(snapshot) && !error
 
   return (
     <SidebarProvider className="h-dvh min-h-0 overflow-hidden">
@@ -172,8 +171,7 @@ export function App({
             className={cn(
               "mx-auto w-full max-w-[88rem] px-4 py-6 sm:px-6 lg:px-8 lg:py-4",
               fixedLogsLayout && "lg:h-full",
-              gatewayLayout && "lg:h-full",
-              accountsLayout && "lg:h-full"
+              gatewayLayout && "lg:h-full"
             )}
           >
             {error ? (

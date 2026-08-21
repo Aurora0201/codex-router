@@ -8,6 +8,7 @@ import { AccountService } from "./accounts/account-service.js";
 import { AccountLoginService } from "./accounts/account-login-service.js";
 import { AccountAuthService } from "./accounts/account-auth-service.js";
 import { AccountUsageService } from "./accounts/account-usage-service.js";
+import { AccountStatusService } from "./accounts/account-status-service.js";
 import { CredentialReader } from "./accounts/credential-reader.js";
 import { GatewayDatabase } from "./db/database.js";
 import { HttpProxy } from "./proxy/http-proxy.js";
@@ -31,16 +32,13 @@ export interface GatewayApp {
   activeAccounts: ActiveAccountService;
   auth: AccountAuthService;
   usage: AccountUsageService;
+  accountStatus: AccountStatusService;
   codexUsage: CodexUsageService;
 }
 
-function startUsageRefreshScheduler(accounts: AccountService, usage: AccountUsageService, onRefresh: () => void): NodeJS.Timeout {
+function startUsageRefreshScheduler(status: AccountStatusService, onRefresh: () => void): NodeJS.Timeout {
   const refreshAccounts = () => {
-    for (const account of accounts.list().filter((item) => item.enabled && (item.authStatus === "ready" || item.authStatus === "rate_limited"))) {
-      void usage.refreshInBackground(account.id).then((refreshed) => {
-        if (refreshed) onRefresh();
-      });
-    }
+    void status.refreshAll(onRefresh);
   };
   refreshAccounts();
   const timer = setInterval(refreshAccounts, 5 * 60_000);
@@ -106,8 +104,9 @@ export async function buildGateway(overrides: Partial<GatewayConfig> = {}): Prom
   const accounts = new AccountService(config, database, activeAccounts);
   const logins = new AccountLoginService(config, database);
   await logins.cleanupStaleStaging();
-  const auth = new AccountAuthService(config, database);
-  const usage = new AccountUsageService(config, database);
+  const accountStatus = new AccountStatusService(config, database);
+  const auth = new AccountAuthService(config, database, accountStatus);
+  const usage = new AccountUsageService(config, database, accountStatus);
   const csrf = new CsrfGuard();
   const proxy = new HttpProxy({ upstreamBaseUrl: config.upstreamBaseUrl, activeAccounts, auth, usage, database });
   const codexConfig = new CodexConfigService();
@@ -118,14 +117,14 @@ export async function buildGateway(overrides: Partial<GatewayConfig> = {}): Prom
     events.emitActivity({ type: "connection_updated", connectionId });
     events.invalidate("websocketConnections");
   });
-  const rateLimitTimer = startUsageRefreshScheduler(accounts, usage, () => events.invalidate("accounts"));
+  const rateLimitTimer = startUsageRefreshScheduler(accountStatus, () => events.invalidate("accounts"));
   const codexProcess = new CodexProcessMonitor(() => events.invalidate("codex"));
   await codexProcess.start();
   database.requestLog.onStarted = (id) => { events.emitActivity({ type: "request_started", id }); events.invalidate("logs"); };
   database.requestLog.onFinished = (id) => { events.emitActivity({ type: "request_finished", id }); events.invalidate("stats", "logs"); };
   database.websocketConnectionLog.onUpdated = (connectionId) => { events.emitActivity({ type: "connection_updated", connectionId }); events.invalidate("logs"); };
 
-  await registerAdminApi(app, { config, database, accounts, auth, usage, logins, activeAccounts, csrf, startedAt, events, codexProcess, websocketConnections, codexUsage }, codexConfig);
+  await registerAdminApi(app, { config, database, accounts, auth, usage, accountStatus, logins, activeAccounts, csrf, startedAt, events, codexProcess, websocketConnections, codexUsage }, codexConfig);
   await registerWebSocketProxy(app, { upstreamBaseUrl: config.upstreamBaseUrl, activeAccounts, auth, database, websocketConnections });
 
   app.post("/backend-api/codex/responses", (request, reply) => proxy.handle(request, reply, "/responses"));
@@ -159,8 +158,9 @@ export async function buildGateway(overrides: Partial<GatewayConfig> = {}): Prom
     events.close();
     await logins.close();
     await proxy.close();
+    await accountStatus.close();
     database.close();
   });
 
-  return { app, config, database, accounts, logins, activeAccounts, auth, usage, codexUsage };
+  return { app, config, database, accounts, logins, activeAccounts, auth, usage, accountStatus, codexUsage };
 }

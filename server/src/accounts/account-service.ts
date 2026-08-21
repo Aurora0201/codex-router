@@ -23,7 +23,7 @@ export class AccountService {
   setEnabled(id: string, enabled: boolean): AccountRecord {
     const account = this.database.accounts.get(id);
     if (!account) throw new Error("account_not_found");
-    const updated = this.database.accounts.update(id, { enabled, authStatus: enabled ? "ready" : "disabled" });
+    const updated = this.database.accounts.update(id, { enabled, authStatus: enabled ? "checking" : "disabled", authErrorCode: null });
     if (!enabled && this.database.getActiveAccountId() === id) {
       this.clearActiveAccount();
     }

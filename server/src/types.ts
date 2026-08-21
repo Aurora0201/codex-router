@@ -1,5 +1,6 @@
 export type AuthStatus =
   | "login_pending"
+  | "checking"
   | "ready"
   | "refreshing"
   | "rate_limited"
@@ -21,6 +22,8 @@ export interface AccountRecord {
   email: string | null;
   planType: string | null;
   subscriptionStartedAt: number | null;
+  subscriptionExpiresAt: number | null;
+  subscriptionExpirySource: "manual" | "legacy_estimate" | null;
   codexHome: string;
   enabled: boolean;
   authStatus: AuthStatus;
@@ -32,6 +35,11 @@ export interface AccountRecord {
   secondaryResetsAt: number | null;
   secondaryWindowMinutes: number | null;
   rateLimitReachedType: string | null;
+  authMode: string | null;
+  authCheckedAt: number | null;
+  authLastSuccessfulAt: number | null;
+  authErrorCode: string | null;
+  limitsSnapshotJson: string | null;
   lastAuthRefreshAt: number | null;
   lastLimitsRefreshAt: number | null;
   lastUsedAt: number | null;
@@ -54,11 +62,55 @@ export interface RateLimitWindow {
   windowDurationMins: number | null;
 }
 
+export interface CreditsSnapshot {
+  hasCredits: boolean;
+  unlimited: boolean;
+  balance: string | null;
+}
+
+export interface SpendControlLimitSnapshot {
+  limit: string;
+  used: string;
+  remainingPercent: number;
+  resetsAt: number;
+}
+
+export interface RateLimitBucket {
+  key: string;
+  limitId: string | null;
+  limitName: string | null;
+  primary: RateLimitWindow | null;
+  secondary: RateLimitWindow | null;
+  credits: CreditsSnapshot | null;
+  individualLimit: SpendControlLimitSnapshot | null;
+  spendControlReached: boolean | null;
+  planType: string | null;
+  rateLimitReachedType: string | null;
+}
+
+export interface RateLimitResetCredit {
+  id: string;
+  resetType: string;
+  status: string;
+  grantedAt: number;
+  expiresAt: number | null;
+  title: string | null;
+  description: string | null;
+}
+
+export interface RateLimitResetCreditsSummary {
+  availableCount: number;
+  credits: RateLimitResetCredit[] | null;
+}
+
 export interface RateLimitSnapshot {
   primary: RateLimitWindow | null;
   secondary: RateLimitWindow | null;
   rateLimitReachedType: string | null;
   planType: string | null;
+  buckets: RateLimitBucket[];
+  defaultBucketKey: string | null;
+  resetCredits: RateLimitResetCreditsSummary | null;
   loadedAt: number;
 }
 

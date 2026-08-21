@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react"
+import { render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { describe, expect, it, vi } from "vitest"
 
@@ -6,7 +6,8 @@ import { TooltipProvider } from "@/components/ui/tooltip"
 import type { AccountView } from "@/services/contracts"
 import { AccountList } from "./account-list"
 
-function account(values: Partial<AccountView>): AccountView {
+function account(values: Partial<AccountView> = {}): AccountView {
+  const authStatus = values.authStatus ?? values.auth?.status ?? "ready"
   return {
     id: "account-1",
     chatgptAccountId: "account-1234567890",
@@ -16,393 +17,100 @@ function account(values: Partial<AccountView>): AccountView {
     subscriptionExpiresAt: null,
     enabled: true,
     isActive: false,
-    authStatus: "ready",
+    authStatus,
     rateLimitReachedType: null,
     usage: { primary: null, secondary: null },
     lastAuthRefreshAt: null,
     lastLimitsRefreshAt: null,
+    auth: { status: authStatus, mode: "chatgpt", checkedAt: Date.now(), lastSuccessfulAt: Date.now(), stale: false, errorCode: null },
+    subscription: { expiresAt: null, source: null },
+    limits: { buckets: [], defaultBucketKey: null, resetCredits: null, checkedAt: null },
     ...values,
   }
 }
+const renderList = (accounts: AccountView[], props: Partial<Parameters<typeof AccountList>[0]> = {}) => render(
+  <TooltipProvider><AccountList accounts={accounts} busyId={null} onSelect={vi.fn()} onAction={vi.fn()} onConsumeReset={vi.fn(async () => undefined)} {...props} /></TooltipProvider>
+)
 
 describe("AccountList", () => {
-  it("shows the calculated expiration immediately after ready status", () => {
-    render(
-      <TooltipProvider>
-        <AccountList
-          accounts={[
-            account({
-              subscriptionStartedAt: Date.UTC(2026, 7, 1),
-              subscriptionExpiresAt: Date.UTC(2026, 7, 31),
-            }),
-          ]}
-          busyId={null}
-          onSelect={vi.fn()}
-          onAction={vi.fn()}
-        />
-      </TooltipProvider>
-    )
-
-    const status = screen.getByText("认证就绪")
-    const expiration = screen.getByText("到期 2026/08/31")
-
-    expect(status.closest('[data-slot="account-status"]')).toContainElement(
-      expiration
-    )
-    expect(expiration.closest('[data-slot="badge"]')).toHaveAttribute(
-      "data-variant",
-      "outline"
-    )
+  it("uses a responsive equal-height card grid and sorts active and attention accounts first", () => {
+    const { container } = renderList([
+      account({ id: "ready", email: "ready@example.com" }),
+      account({ id: "disabled", email: "disabled@example.com", enabled: false, authStatus: "disabled", auth: { status: "disabled", mode: "chatgpt", checkedAt: null, lastSuccessfulAt: null, stale: false, errorCode: null } }),
+      account({ id: "attention", email: "attention@example.com", authStatus: "error", auth: { status: "error", mode: "chatgpt", checkedAt: null, lastSuccessfulAt: null, stale: false, errorCode: "temporary" } }),
+      account({ id: "active", email: "active@example.com", isActive: true }),
+    ])
+    const grid = container.querySelector(".md\\:grid-cols-2")
+    expect(grid).toHaveClass("2xl:grid-cols-3", "items-stretch")
+    const cards = Array.from(grid?.children ?? [])
+    expect(cards[0]).toHaveTextContent("active@example.com")
+    expect(cards[1]).toHaveTextContent("attention@example.com")
+    expect(cards[0]).toHaveClass("h-full", "min-h-0")
+    expect(screen.getByText("账号总数").parentElement).toHaveTextContent("4")
   })
 
-  it("fills its desktop parent without a viewport height cap", () => {
-    const { container } = render(
-      <TooltipProvider>
-        <AccountList
-          accounts={[account({})]}
-          busyId={null}
-          onSelect={vi.fn()}
-          onAction={vi.fn()}
-        />
-      </TooltipProvider>
-    )
-
-    const card = container.querySelector('[data-slot="card"]')
-    expect(card).toHaveClass("h-[30rem]", "lg:h-full")
-    expect(card?.className).not.toContain("100dvh")
-    expect(card?.className).not.toContain("48rem")
+  it("shows weekly before shorter dynamic windows", () => {
+    renderList([account({ limits: {
+      defaultBucketKey: "codex",
+      checkedAt: Date.now(),
+      resetCredits: null,
+      buckets: [{
+        key: "codex", limitId: null, limitName: "Codex", credits: null, individualLimit: null,
+        spendControlReached: false, planType: "plus", rateLimitReachedType: null,
+        primary: { usedPercent: 25, resetsAt: Date.now() + 1000, windowDurationMins: 300 },
+        secondary: { usedPercent: 50, resetsAt: Date.now() + 1000, windowDurationMins: 10080 },
+      }],
+    } })])
+    const weekly = screen.getByText("周额度")
+    const fiveHour = screen.getByText("5 小时额度")
+    expect(weekly.compareDocumentPosition(fiveHour)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
   })
 
-  it("selects a ready account and keeps row actions available", async () => {
+  it("searches and filters accounts", async () => {
+    const user = userEvent.setup()
+    renderList([
+      account({ id: "ready", email: "ready@example.com" }),
+      account({ id: "disabled", email: "disabled@example.com", enabled: false, authStatus: "disabled", auth: { status: "disabled", mode: null, checkedAt: null, lastSuccessfulAt: null, stale: false, errorCode: null } }),
+    ])
+    const search = screen.getByRole("textbox", { name: "搜索授权账号" })
+    await user.type(search, "disabled")
+    expect(screen.getByText("disabled@example.com")).toBeInTheDocument()
+    expect(screen.queryByText("ready@example.com")).not.toBeInTheDocument()
+    await user.clear(search)
+    await user.click(screen.getByRole("combobox", { name: "筛选账号状态" }))
+    await user.click(await screen.findByRole("option", { name: "已停用（1）" }))
+    expect(screen.getByText("disabled@example.com")).toBeInTheDocument()
+    expect(screen.queryByText("ready@example.com")).not.toBeInTheDocument()
+  })
+
+  it("opens the details sheet and confirms a reset credit with one idempotency key", async () => {
+    const user = userEvent.setup()
+    const onConsumeReset = vi.fn(async () => undefined)
+    const value = account({ limits: {
+      buckets: [], defaultBucketKey: null, checkedAt: Date.now(),
+      resetCredits: { availableCount: 1, credits: [{ id: "credit-1", resetType: "weekly", status: "available", grantedAt: Date.now(), expiresAt: Date.now() + 1000, title: "Weekly reset", description: null }] },
+    } })
+    renderList([value], { onConsumeReset })
+    await user.click(screen.getByRole("button", { name: "查看账号详情" }))
+    const sheet = screen.getByRole("dialog")
+    expect(within(sheet).getByText("全部额度窗口")).toBeInTheDocument()
+    await user.click(within(sheet).getByRole("button", { name: "使用重置券" }))
+    await user.click(screen.getByRole("button", { name: "确认使用" }))
+    expect(onConsumeReset).toHaveBeenCalledWith(value, { idempotencyKey: expect.any(String), creditId: "credit-1" })
+  })
+
+  it("keeps legacy subscription estimates visible as pending", () => {
+    renderList([account({ subscriptionExpiresAt: Date.UTC(2026, 7, 31), subscription: { expiresAt: Date.UTC(2026, 7, 31), source: "legacy_estimate" } })])
+    expect(screen.getByText("待确认")).toBeInTheDocument()
+    expect(screen.getByText("2026/08/31")).toBeInTheDocument()
+  })
+
+  it("only allows ready accounts to become the manual route", async () => {
     const user = userEvent.setup()
     const onSelect = vi.fn()
-    const accounts = [
-      account({ id: "active", isActive: true }),
-      account({ id: "candidate", chatgptAccountId: "account-candidate" }),
-    ]
-
-    render(
-      <TooltipProvider>
-        <AccountList
-          accounts={accounts}
-          busyId={null}
-          onSelect={onSelect}
-          onAction={vi.fn()}
-        />
-      </TooltipProvider>
-    )
-
-    const [activeRadio, candidateRadio] = screen.getAllByRole("radio", {
-      name: /设为当前路由/,
-    })
-
-    expect(activeRadio).toBeChecked()
-    await user.click(candidateRadio)
-
-    expect(onSelect).toHaveBeenCalledWith(accounts[1])
-    expect(activeRadio).toBeChecked()
-    expect(screen.queryByText("当前路由")).not.toBeInTheDocument()
-    expect(screen.queryByText("设为当前")).not.toBeInTheDocument()
-    expect(screen.getAllByRole("button", { name: "账号操作" })).toHaveLength(2)
-    expect(
-      screen.getByText("已选择路由").closest('[data-slot="badge"]')
-    ).toHaveClass("text-success")
-  })
-
-  it("orders route selection, identity, usage, and secondary actions by priority", () => {
-    const { container } = render(
-      <TooltipProvider>
-        <AccountList
-          accounts={[
-            account({
-              email: "a-very-long-account-address@example.com",
-              authStatus: "error",
-            }),
-          ]}
-          busyId={null}
-          onSelect={vi.fn()}
-          onAction={vi.fn()}
-        />
-      </TooltipProvider>
-    )
-
-    const item = container.querySelector('[data-slot="item"]')
-    const media = item?.querySelector('[data-slot="item-media"]')
-    const content = item?.querySelector('[data-slot="item-content"]')
-    const usage = item?.querySelector('[data-slot="account-usage"]')
-    const actions = item?.querySelector('[data-slot="item-actions"]')
-
-    expect(item?.querySelector('[data-slot="item-header"]')).toBeNull()
-    expect(item?.querySelector('[data-slot="item-footer"]')).toBeNull()
-    expect(media?.contains(screen.getByRole("radio"))).toBe(true)
-    expect(media?.compareDocumentPosition(content as Node)).toBe(
-      Node.DOCUMENT_POSITION_FOLLOWING
-    )
-    expect(content?.compareDocumentPosition(usage as Node)).toBe(
-      Node.DOCUMENT_POSITION_FOLLOWING
-    )
-    expect(usage?.compareDocumentPosition(actions as Node)).toBe(
-      Node.DOCUMENT_POSITION_FOLLOWING
-    )
-    expect(usage).toHaveClass("col-end-3", "xl:col-end-4")
-    expect(actions).toHaveClass("row-end-3", "xl:row-end-2")
-    expect(
-      screen.getByText("a-very-long-account-address@example.com")
-    ).toBeInTheDocument()
-    expect(screen.getByText("认证异常")).toBeInTheDocument()
-  })
-
-  it("keeps authentication status directly after the account id", () => {
-    const { container } = render(
-      <TooltipProvider>
-        <AccountList
-          accounts={[
-            account({
-              chatgptAccountId:
-                "account-with-an-intentionally-long-identifier-1234567890",
-              authStatus: "ready",
-            }),
-          ]}
-          busyId={null}
-          onSelect={vi.fn()}
-          onAction={vi.fn()}
-        />
-      </TooltipProvider>
-    )
-
-    const title = container.querySelector('[data-slot="item-title"]')
-    const status = title?.querySelector('[data-slot="account-status"]')
-
-    expect(title?.children).toHaveLength(2)
-    expect(title?.lastElementChild).toBe(status)
-    expect(title).toHaveClass(
-      "flex-nowrap",
-      "whitespace-nowrap",
-      "[display:flex]",
-      "[-webkit-line-clamp:unset]"
-    )
-    expect(title?.firstElementChild).toHaveClass("min-w-0", "truncate")
-    expect(title?.firstElementChild).not.toHaveClass("flex-1")
-    expect(status).not.toHaveClass("ml-auto")
-    expect(status).toHaveClass("shrink-0", "whitespace-nowrap")
-    expect(status).toHaveTextContent("认证就绪")
-  })
-
-  it("reveals the scrollbar on interaction and fades overflowing edges", () => {
-    const { container } = render(
-      <TooltipProvider>
-        <AccountList
-          accounts={[account({})]}
-          busyId={null}
-          onSelect={vi.fn()}
-          onAction={vi.fn()}
-        />
-      </TooltipProvider>
-    )
-
-    const scrollArea = container.querySelector('[data-slot="scroll-area"]')
-
-    expect(scrollArea).toHaveClass(
-      "[&_[data-slot=scroll-area-scrollbar]]:opacity-0",
-      "[&_[data-slot=scroll-area-scrollbar][data-hovering]]:opacity-100",
-      "[&_[data-slot=scroll-area-scrollbar][data-scrolling]]:opacity-100",
-      "focus-within:[&_[data-slot=scroll-area-scrollbar]]:opacity-100",
-      "data-[overflow-y-start]:before:opacity-100",
-      "data-[overflow-y-end]:after:opacity-100"
-    )
-    expect(scrollArea).toHaveClass("before:h-5", "after:h-5")
-    expect(scrollArea?.className).not.toContain("backdrop-blur")
-  })
-
-  it("uses a larger outlined action button and a non-wrapping menu", async () => {
-    const user = userEvent.setup()
-
-    render(
-      <TooltipProvider>
-        <AccountList
-          accounts={[account({})]}
-          busyId={null}
-          onSelect={vi.fn()}
-          onAction={vi.fn()}
-        />
-      </TooltipProvider>
-    )
-
-    const actionButton = screen.getByRole("button", { name: "账号操作" })
-    expect(actionButton).toHaveClass("size-8", "border-border")
-
-    await user.click(actionButton)
-
-    const menuItem = await screen.findByText("复制 Account ID")
-    expect(menuItem.closest('[data-slot="dropdown-menu-content"]')).toHaveClass(
-      "w-44",
-      "whitespace-nowrap"
-    )
-  })
-
-  it("searches accounts by id or email and clears an empty result", async () => {
-    const user = userEvent.setup()
-
-    render(
-      <TooltipProvider>
-        <AccountList
-          accounts={[
-            account({
-              id: "ready",
-              chatgptAccountId: "account-ready-123",
-              email: "ready@example.com",
-            }),
-            account({
-              id: "disabled",
-              chatgptAccountId: "account-disabled-456",
-              email: "operations@example.com",
-              enabled: false,
-              authStatus: "disabled",
-            }),
-          ]}
-          busyId={null}
-          onSelect={vi.fn()}
-          onAction={vi.fn()}
-        />
-      </TooltipProvider>
-    )
-
-    const search = screen.getByRole("textbox", { name: "搜索授权账号" })
-    expect(screen.getByText("显示 2 / 共 2")).toBeInTheDocument()
-
-    await user.type(search, "OPERATIONS")
-    expect(screen.getByText("operations@example.com")).toBeInTheDocument()
-    expect(screen.queryByText("ready@example.com")).not.toBeInTheDocument()
-    expect(screen.getByText("显示 1 / 共 2")).toBeInTheDocument()
-
-    await user.clear(search)
-    await user.type(search, "disabled-456")
-    expect(screen.getByText("operations@example.com")).toBeInTheDocument()
-
-    await user.clear(search)
-    await user.type(search, "missing-account")
-    expect(screen.getByText("没有匹配的账号")).toBeInTheDocument()
-
-    await user.click(screen.getByRole("button", { name: "清除筛选" }))
-    expect(screen.getAllByRole("radio")).toHaveLength(2)
-    expect(search).toHaveValue("")
-  })
-
-  it.each([
-    {
-      option: "可路由（1）",
-      visible: "ready@example.com",
-      hidden: ["attention@example.com", "disabled@example.com"],
-    },
-    {
-      option: "需处理（1）",
-      visible: "attention@example.com",
-      hidden: ["ready@example.com", "disabled@example.com"],
-    },
-    {
-      option: "已停用（1）",
-      visible: "disabled@example.com",
-      hidden: ["ready@example.com", "attention@example.com"],
-    },
-  ])("filters accounts with $option", async ({ option, visible, hidden }) => {
-    const user = userEvent.setup()
-    const accounts = [
-      account({ id: "ready", email: "ready@example.com" }),
-      account({
-        id: "attention",
-        email: "attention@example.com",
-        authStatus: "error",
-      }),
-      account({
-        id: "disabled",
-        email: "disabled@example.com",
-        enabled: false,
-        authStatus: "disabled",
-      }),
-    ]
-
-    render(
-      <TooltipProvider>
-        <AccountList
-          accounts={accounts}
-          busyId={null}
-          onSelect={vi.fn()}
-          onAction={vi.fn()}
-        />
-      </TooltipProvider>
-    )
-
-    const filter = screen.getByRole("combobox", { name: "筛选账号状态" })
-
-    await user.click(filter)
-    await user.click(await screen.findByRole("option", { name: option }))
-    expect(screen.getByText(visible)).toBeInTheDocument()
-    hidden.forEach((email) => {
-      expect(screen.queryByText(email)).not.toBeInTheDocument()
-    })
-    expect(screen.getByText("显示 1 / 共 3")).toBeInTheDocument()
-  })
-
-  it("preserves the service account order", () => {
-    const { container } = render(
-      <TooltipProvider>
-        <AccountList
-          accounts={[
-            account({ id: "first", email: "first@example.com" }),
-            account({ id: "second", email: "second@example.com" }),
-            account({ id: "third", email: "third@example.com" }),
-          ]}
-          busyId={null}
-          onSelect={vi.fn()}
-          onAction={vi.fn()}
-        />
-      </TooltipProvider>
-    )
-
-    expect(
-      Array.from(container.querySelectorAll('[role="listitem"]')).map(
-        (item) => item.textContent
-      )
-    ).toEqual([
-      expect.stringContaining("first@example.com"),
-      expect.stringContaining("second@example.com"),
-      expect.stringContaining("third@example.com"),
-    ])
-  })
-
-  it("disables route selection for unavailable accounts", () => {
-    render(
-      <TooltipProvider>
-        <AccountList
-          accounts={[account({ enabled: false, authStatus: "disabled" })]}
-          busyId={null}
-          onSelect={vi.fn()}
-          onAction={vi.fn()}
-        />
-      </TooltipProvider>
-    )
-
-    expect(screen.getByRole("radio")).toHaveAttribute("aria-disabled", "true")
-  })
-
-  it("shows a spinner and locks route selection while switching", () => {
-    render(
-      <TooltipProvider>
-        <AccountList
-          accounts={[
-            account({ id: "active", isActive: true }),
-            account({ id: "candidate" }),
-          ]}
-          busyId="candidate"
-          onSelect={vi.fn()}
-          onAction={vi.fn()}
-        />
-      </TooltipProvider>
-    )
-
-    expect(
-      screen.getByRole("status", { name: "正在切换路由账号" })
-    ).toBeInTheDocument()
-    expect(screen.getByRole("radio")).toHaveAttribute("aria-disabled", "true")
+    const value = account({ id: "candidate" })
+    renderList([value], { onSelect })
+    await user.click(screen.getByRole("button", { name: "设为当前路由" }))
+    expect(onSelect).toHaveBeenCalledWith(value)
   })
 })

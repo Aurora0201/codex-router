@@ -1,10 +1,10 @@
-import { useState } from "react"
-import { addDays, format } from "date-fns"
-import { CalendarDaysIcon } from "lucide-react"
-import { useTranslation } from "react-i18next"
+import { useState } from "react";
+import { format } from "date-fns";
+import { CalendarDaysIcon } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
-import { Button } from "@/components/ui/button"
-import { Calendar } from "@/components/ui/calendar"
+import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
 import {
   Dialog,
   DialogClose,
@@ -13,28 +13,28 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog"
+} from "@/components/ui/dialog";
 import {
   Field,
   FieldDescription,
   FieldGroup,
   FieldLabel,
-} from "@/components/ui/field"
+} from "@/components/ui/field";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "@/components/ui/popover"
-import type { AccountView } from "@/services/contracts"
+} from "@/components/ui/popover";
+import type { AccountView } from "@/services/contracts";
 
 function fromTimestamp(value: number | null): Date | undefined {
-  if (value === null) return undefined
-  const date = new Date(value)
-  return new Date(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())
+  if (value === null) return undefined;
+  const date = new Date(value);
+  return new Date(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
 }
 
 function toTimestamp(value: Date): number {
-  return Date.UTC(value.getFullYear(), value.getMonth(), value.getDate())
+  return Date.UTC(value.getFullYear(), value.getMonth(), value.getDate());
 }
 
 export function SubscriptionDateDialog({
@@ -43,29 +43,29 @@ export function SubscriptionDateDialog({
   onOpenChange,
   onSave,
 }: {
-  account: AccountView
-  busy: boolean
-  onOpenChange(open: boolean): void
-  onSave(value: number | null): void
+  account: AccountView;
+  busy: boolean;
+  onOpenChange(open: boolean): void;
+  onSave(value: number | null): void;
 }) {
-  const { t } = useTranslation()
+  const { t } = useTranslation();
   const [date, setDate] = useState<Date | undefined>(() =>
-    fromTimestamp(account.subscriptionStartedAt)
-  )
-  const [pickerOpen, setPickerOpen] = useState(false)
+    fromTimestamp(account.subscription.expiresAt ?? account.subscriptionExpiresAt)
+  );
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   return (
     <Dialog open onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{t("设置订阅日期")}</DialogTitle>
+          <DialogTitle>{t("设置订阅到期日")}</DialogTitle>
           <DialogDescription>
-            {t("到期时间按订阅日期后的 30 天自动计算。")}
+            {t("订阅到期日由你手工维护，仅用于提醒，不会自动阻断路由。")}
           </DialogDescription>
         </DialogHeader>
         <FieldGroup>
           <Field>
-            <FieldLabel>{t("订阅日期")}</FieldLabel>
+            <FieldLabel>{t("订阅到期日")}</FieldLabel>
             <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
               <PopoverTrigger
                 render={
@@ -84,43 +84,36 @@ export function SubscriptionDateDialog({
                   mode="single"
                   selected={date}
                   onSelect={(value) => {
-                    setDate(value)
-                    if (value) setPickerOpen(false)
+                    setDate(value);
+                    if (value) setPickerOpen(false);
                   }}
                   captionLayout="dropdown"
                 />
               </PopoverContent>
             </Popover>
             <FieldDescription>
-              {date
-                ? t("预计到期日期：{{date}}", {
-                    date: format(addDays(date, 30), "yyyy-MM-dd"),
-                  })
-                : t("尚未标记订阅日期")}
+              {account.subscription.source === "legacy_estimate"
+                ? t("这是由旧订阅开始日推算的日期，请确认后保存。")
+                : date
+                  ? t("到期提醒日期：{{date}}", { date: format(date, "yyyy-MM-dd") })
+                  : t("尚未设置订阅到期日")}
             </FieldDescription>
           </Field>
         </FieldGroup>
         <DialogFooter>
-          {account.subscriptionStartedAt !== null ? (
-            <Button
-              variant="ghost"
-              disabled={busy}
-              onClick={() => onSave(null)}
-            >
+          {account.subscription.expiresAt !== null || account.subscriptionExpiresAt !== null ? (
+            <Button variant="ghost" disabled={busy} onClick={() => onSave(null)}>
               {t("清除日期")}
             </Button>
           ) : null}
           <DialogClose render={<Button variant="outline" disabled={busy} />}>
             {t("取消")}
           </DialogClose>
-          <Button
-            disabled={!date || busy}
-            onClick={() => date && onSave(toTimestamp(date))}
-          >
+          <Button disabled={!date || busy} onClick={() => date && onSave(toTimestamp(date))}>
             {t("保存")}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  )
+  );
 }

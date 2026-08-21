@@ -1,5 +1,6 @@
 export type AuthStatus =
   | "login_pending"
+  | "checking"
   | "ready"
   | "refreshing"
   | "rate_limited"
@@ -12,6 +13,42 @@ export interface UsageWindowView {
   usedPercent: number | null
   resetsAt: number | null
   windowDurationMins: number | null
+}
+
+export interface CreditsView {
+  hasCredits: boolean
+  unlimited: boolean
+  balance: string | null
+}
+
+export interface SpendControlLimitView {
+  limit: string
+  used: string
+  remainingPercent: number
+  resetsAt: number
+}
+
+export interface RateLimitBucketView {
+  key: string
+  limitId: string | null
+  limitName: string | null
+  primary: UsageWindowView | null
+  secondary: UsageWindowView | null
+  credits: CreditsView | null
+  individualLimit: SpendControlLimitView | null
+  spendControlReached: boolean | null
+  planType: string | null
+  rateLimitReachedType: string | null
+}
+
+export interface RateLimitResetCreditView {
+  id: string
+  resetType: string
+  status: string
+  grantedAt: number
+  expiresAt: number | null
+  title: string | null
+  description: string | null
 }
 
 export interface AccountView {
@@ -31,6 +68,27 @@ export interface AccountView {
   }
   lastAuthRefreshAt: number | null
   lastLimitsRefreshAt: number | null
+  auth: {
+    status: AuthStatus
+    mode: string | null
+    checkedAt: number | null
+    lastSuccessfulAt: number | null
+    stale: boolean
+    errorCode: string | null
+  }
+  subscription: {
+    expiresAt: number | null
+    source: "manual" | "legacy_estimate" | null
+  }
+  limits: {
+    buckets: RateLimitBucketView[]
+    defaultBucketKey: string | null
+    resetCredits: {
+      availableCount: number
+      credits: RateLimitResetCreditView[] | null
+    } | null
+    checkedAt: number | null
+  }
 }
 
 export interface AccountsResponse {
@@ -286,11 +344,22 @@ export interface GatewayService {
   clearActiveAccount(): Promise<void>
   updateAccount(
     id: string,
-    values: { enabled?: boolean; subscriptionStartedAt?: number | null }
+    values: {
+      enabled?: boolean
+      subscriptionExpiresAt?: number | null
+    }
   ): Promise<AccountView>
   removeAccount(id: string): Promise<void>
   refreshAccountAuth(id: string): Promise<AccountView>
   refreshAccountLimits(id: string): Promise<AccountView>
+  refreshAllAccountStatus(): Promise<{ started: boolean }>
+  consumeAccountResetCredit(
+    id: string,
+    input: { idempotencyKey: string; creditId?: string }
+  ): Promise<{
+    outcome: "reset" | "alreadyRedeemed" | "nothingToReset" | "noCredit"
+    account: AccountView
+  }>
   startLogin(): Promise<LoginSessionView>
   getLoginStatus(loginId: string): Promise<LoginSessionView>
   cancelLogin(loginId: string): Promise<void>

@@ -33,7 +33,7 @@ describe("App", () => {
       await screen.findByRole("heading", { name: "账号与路由" })
     ).toBeInTheDocument()
     expect(
-      screen.getAllByRole("radio", { name: /设为当前路由/ })
+      screen.getAllByRole("button", { name: /设为当前路由/ })
     ).not.toHaveLength(0)
     expect(screen.queryByText("Manual routing")).not.toBeInTheDocument()
     expect(screen.queryByText("实时路由")).not.toBeInTheDocument()
@@ -58,7 +58,7 @@ describe("App", () => {
     const pageContent = accountHeading.closest("section")?.parentElement
 
     expect(pageContent).toHaveClass("lg:py-4")
-    expect(pageContent).toHaveClass("lg:h-full")
+    expect(pageContent).not.toHaveClass("lg:h-full")
     expect(pageContent).not.toHaveClass("lg:py-8")
 
     await user.click(screen.getByRole("button", { name: "运行状态" }))

@@ -78,7 +78,7 @@ export function AccountActions({
               onClick={() => onAction("subscription")}
             >
               <CalendarDaysIcon />
-              {t("设置订阅日期")}
+              {t("设置订阅到期日")}
             </DropdownMenuItem>
             <DropdownMenuItem
               disabled={disabled}

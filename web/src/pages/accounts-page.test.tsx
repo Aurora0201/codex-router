@@ -25,28 +25,26 @@ describe("AccountsPage", () => {
       7,
       1
     )
-    service.snapshot.accounts.accounts[0].subscriptionExpiresAt = Date.UTC(
-      2026,
-      7,
-      31
-    )
+    service.snapshot.accounts.accounts[0].subscriptionExpiresAt = Date.UTC(2026, 7, 31)
+    service.snapshot.accounts.accounts[0].subscription.expiresAt = Date.UTC(2026, 7, 31)
+    service.snapshot.accounts.accounts[0].subscription.source = "manual"
     const updateAccount = vi.spyOn(service, "updateAccount")
 
     renderPage(await service.getSnapshot(), service)
     await userEvent.click(
       screen.getAllByRole("button", { name: "账号操作" })[0]
     )
-    await userEvent.click(await screen.findByText("设置订阅日期"))
+    await userEvent.click(await screen.findByText("设置订阅到期日"))
 
     expect(screen.getByRole("dialog")).toHaveTextContent(
-      "预计到期日期：2026-08-31"
+      "到期提醒日期：2026-08-31"
     )
     expect(
-      screen.getByRole("button", { name: /2026-08-01/ })
+      screen.getByRole("button", { name: /2026-08-31/ })
     ).toBeInTheDocument()
     await userEvent.click(screen.getByRole("button", { name: "保存" }))
     expect(updateAccount).toHaveBeenCalledWith("account-1", {
-      subscriptionStartedAt: Date.UTC(2026, 7, 1),
+      subscriptionExpiresAt: Date.UTC(2026, 7, 31),
     })
   })
 
@@ -64,22 +62,21 @@ describe("AccountsPage", () => {
     ).toBeInTheDocument()
   })
 
-  it("warns when no route account is selected", async () => {
+  it("shows the unselected route summary without an alert", async () => {
     const service = createGatewayServiceFixture({ activeAccountId: null })
     const snapshot = await service.getSnapshot()
 
     renderPage(snapshot, service)
 
     expect(screen.queryByRole("alert")).not.toBeInTheDocument()
-    expect(
-      screen.getByText("未选择路由").closest('[data-slot="badge"]')
-    ).toHaveClass("text-warning")
+    expect(screen.getByText("未选择")).toBeInTheDocument()
   })
 
   it("warns when the active route account is unavailable", async () => {
     const service = createGatewayServiceFixture()
     const snapshot = await service.getSnapshot()
     snapshot.accounts.accounts[0].authStatus = "relogin_required"
+    snapshot.accounts.accounts[0].auth.status = "relogin_required"
 
     renderPage(snapshot, service)
 
@@ -95,7 +92,7 @@ describe("AccountsPage", () => {
     renderPage(snapshot, service)
 
     const add = screen.getByRole("button", { name: "添加账号" })
-    expect(add.parentElement).toHaveClass("sm:items-center")
+    expect(add.parentElement?.parentElement).toHaveClass("sm:items-center")
     await userEvent.click(add)
     expect(screen.getByRole("dialog")).toBeInTheDocument()
   })

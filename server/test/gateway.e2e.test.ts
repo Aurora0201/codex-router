@@ -950,6 +950,8 @@ describe("WebSocket transport", () => {
   });
 
   it("retires an idle connection when the active account changes", async () => {
+    gateway.database.accounts.update("second", { authStatus: "ready" });
+    gateway.database.accounts.update("local", { authStatus: "ready" });
     gateway.activeAccounts.select("local");
     const socket = new WebSocket(
       gatewayUrl.replace("http:", "ws:") + "/backend-api/codex/responses",
@@ -972,6 +974,8 @@ describe("WebSocket transport", () => {
   });
 
   it("lets an in-flight response finish before retiring the old account connection", async () => {
+    gateway.database.accounts.update("second", { authStatus: "ready" });
+    gateway.database.accounts.update("local", { authStatus: "ready" });
     gateway.activeAccounts.select("local");
     const socket = new WebSocket(
       gatewayUrl.replace("http:", "ws:") + "/backend-api/codex/responses",
@@ -1010,6 +1014,7 @@ describe("WebSocket transport", () => {
   });
 
   it("retires the active account connection when that account is disabled", async () => {
+    gateway.database.accounts.update("local", { authStatus: "ready" });
     gateway.activeAccounts.select("local");
     const socket = new WebSocket(
       gatewayUrl.replace("http:", "ws:") + "/backend-api/codex/responses",
@@ -1022,6 +1027,7 @@ describe("WebSocket transport", () => {
     expect(reason.toString()).toBe("account_changed");
 
     gateway.accounts.setEnabled("local", true);
+    gateway.database.accounts.update("local", { authStatus: "ready" });
     gateway.activeAccounts.select("local");
   });
 });
@@ -1233,6 +1239,7 @@ describe("security and admin API", () => {
       error: "no_active_account_selected",
     });
     gateway.accounts.setEnabled("local", true);
+    gateway.database.accounts.update("local", { authStatus: "ready" });
     gateway.activeAccounts.select("local");
   });
 });

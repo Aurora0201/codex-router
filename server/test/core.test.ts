@@ -161,7 +161,12 @@ describe("security and routing core", () => {
     const root = await tempDir();
     const database = new GatewayDatabase(path.join(root, "account-metadata.db"));
     database.accounts.insert({ id: "account", codexHome: path.join(root, "account") });
-    database.accounts.update("account", { planType: "plus", subscriptionStartedAt: 1_786_089_600_000 });
+    database.accounts.update("account", {
+      planType: "plus",
+      subscriptionStartedAt: 1_786_089_600_000,
+      subscriptionExpiresAt: 1_786_089_600_000 + 30 * 24 * 60 * 60_000,
+      subscriptionExpirySource: "legacy_estimate",
+    });
     database.accounts.updateRateLimits("account", {
       primary: null,
       secondary: null,
@@ -173,8 +178,10 @@ describe("security and routing core", () => {
       planType: "free",
       subscriptionStartedAt: 1_786_089_600_000,
     });
-    expect(toAccountView(database.accounts.get("account")!, null).subscriptionExpiresAt)
-      .toBe(1_786_089_600_000 + 30 * 24 * 60 * 60_000);
+    expect(toAccountView(database.accounts.get("account")!, null).subscription).toEqual({
+      expiresAt: 1_786_089_600_000 + 30 * 24 * 60 * 60_000,
+      source: "legacy_estimate",
+    });
     database.accounts.updateRateLimits("account", {
       primary: null,
       secondary: null,
@@ -229,6 +236,30 @@ describe("database migration v2", () => {
     database.setActiveAccountId("legacy-1");
     expect(database.getActiveAccountId()).toBe("legacy-1");
     database.close();
+  });
+});
+
+
+describe("database migration v16", () => {
+  it("converts legacy subscription starts into pending expiration estimates", async () => {
+    const root = await tempDir();
+    const dbPath = path.join(root, "subscription-v16.db");
+    const database = new GatewayDatabase(dbPath);
+    database.accounts.insert({ id: "legacy-subscription", codexHome: path.join(root, "legacy-account") });
+    database.accounts.update("legacy-subscription", {
+      subscriptionStartedAt: Date.UTC(2026, 7, 1),
+      subscriptionExpiresAt: null,
+      subscriptionExpirySource: null,
+    });
+    database.raw.prepare("UPDATE schema_migrations SET version = 15 WHERE version = 16").run();
+    database.close();
+
+    const migrated = new GatewayDatabase(dbPath);
+    expect(migrated.accounts.get("legacy-subscription")).toMatchObject({
+      subscriptionExpiresAt: Date.UTC(2026, 7, 31),
+      subscriptionExpirySource: "legacy_estimate",
+    });
+    migrated.close();
   });
 });
 

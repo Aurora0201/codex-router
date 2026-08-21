@@ -15,7 +15,7 @@ import type { AccountView } from "@/services/contracts"
 export function AccountStatus({ account }: { account: AccountView }) {
   const label = authStatusLabel(account.authStatus)
 
-  if (account.authStatus === "refreshing") {
+  if (account.authStatus === "refreshing" || account.authStatus === "checking") {
     return (
       <span className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
         <Spinner />

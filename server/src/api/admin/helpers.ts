@@ -25,7 +25,7 @@ export function publicAccount(account: AccountRecord) {
 export function statusForError(error: Error): number {
   if (error.message.endsWith("_not_found")) return 404;
   if (error.message.startsWith("invalid_") || error.message === "unsupported_setting") return 400;
-  if (error.message === "account_already_exists") return 409;
+  if (error.message === "account_already_exists" || error.message === "account_disabled") return 409;
   if (error.message === "no_active_account_selected") return 409;
   if (error.message.includes("active") || error.message.includes("not_ready") || error.message.includes("fedramp")) return 409;
   return 500;

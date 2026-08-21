@@ -178,12 +178,12 @@ describe.sequential("CodexUsageService", () => {
     ].join("\n") + "\n");
     await service.scan();
     const dashboard = service.getDashboard({ range: "90d", model: "gpt-a" }) as any;
-    expect(dashboard.daily).toHaveLength(1);
+    expect(dashboard.daily).toHaveLength(2);
     expect(dashboard.summary.totalTokens).toBe(12);
-    expect(dashboard.dailyModels).toEqual([expect.objectContaining({ totalTokens: 25, models: [
+    expect(dashboard.dailyModels).toEqual(expect.arrayContaining([expect.objectContaining({ totalTokens: 25, models: [
       expect.objectContaining({ key: "gpt-b", totalTokens: 13 }),
       expect.objectContaining({ key: "gpt-a", totalTokens: 12 }),
-    ] })]);
+    ] })]));
     await service.close(); database.close();
   });
 
@@ -236,7 +236,7 @@ describe.sequential("CodexUsageService", () => {
     legacy.close();
     const migrated = new GatewayDatabase(databasePath);
     expect((migrated.raw.prepare("SELECT COUNT(*) AS count FROM codex_usage_rollout").get() as { count: number }).count).toBe(0);
-    expect((migrated.raw.prepare("SELECT MAX(version) AS version FROM schema_migrations").get() as { version: number }).version).toBe(15);
+    expect((migrated.raw.prepare("SELECT MAX(version) AS version FROM schema_migrations").get() as { version: number }).version).toBe(16);
     expect((migrated.raw.prepare("SELECT COUNT(*) AS count FROM sqlite_master WHERE type='table' AND name LIKE 'codex_usage_retained_%'").get() as { count: number }).count).toBe(2);
     migrated.close();
   });

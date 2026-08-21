@@ -36,6 +36,7 @@ export function formatRelativeTime(
 export function authStatusLabel(status: AuthStatus): string {
   return i18n.t({
     login_pending: "等待登录",
+    checking: "正在检查",
     ready: "认证就绪",
     refreshing: "正在刷新",
     rate_limited: "额度受限",
