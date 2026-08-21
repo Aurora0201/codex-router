@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils"
 
 const pageTitle: Record<AppPage, string> = {
   accounts: "账号路由",
+  usage: "用量分析",
   gateway: "运行状态",
   preferences: "偏好设置",
   logs: "请求日志",

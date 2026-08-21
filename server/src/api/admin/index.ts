@@ -12,6 +12,7 @@ import { registerAdminEventRoutes } from "./admin-events.js";
 import { registerRequestLogRoutes } from "./request-log-routes.js";
 import { registerWebSocketConnectionRoutes } from "./websocket-connection-routes.js";
 import { registerWebSocketConnectionLogRoutes } from "./websocket-connection-log-routes.js";
+import { registerCodexUsageRoutes } from "./codex-usage-routes.js";
 
 export async function registerAdminApi(
   app: FastifyInstance,
@@ -29,6 +30,7 @@ export async function registerAdminApi(
   registerCodexRoutes(app, ctx, codexConfig);
   registerWebSocketConnectionRoutes(app, ctx);
   registerWebSocketConnectionLogRoutes(app, ctx);
+  registerCodexUsageRoutes(app, ctx);
 }
 
 export type { AdminContext } from "./context.js";

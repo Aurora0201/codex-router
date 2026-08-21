@@ -2,7 +2,7 @@ import type Database from "better-sqlite3";
 
 type SqliteDatabase = Database.Database;
 
-export const SCHEMA_VERSION = 12;
+export const SCHEMA_VERSION = 15;
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -283,6 +283,94 @@ export function migrate(db: SqliteDatabase): void {
     if (!accountColumns.has("subscription_started_at")) {
       db.exec("ALTER TABLE accounts ADD COLUMN subscription_started_at INTEGER");
     }
+  }
+  if (version < 13) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS codex_usage_rollout (
+        thread_id TEXT PRIMARY KEY,
+        source_hash TEXT NOT NULL,
+        relative_path TEXT NOT NULL,
+        encoding TEXT NOT NULL,
+        file_size INTEGER NOT NULL,
+        mtime_ms INTEGER NOT NULL,
+        byte_offset INTEGER NOT NULL DEFAULT 0,
+        next_ordinal INTEGER NOT NULL DEFAULT 0,
+        session_started_at INTEGER,
+        last_event_at INTEGER,
+        project_key TEXT,
+        project_label TEXT,
+        latest_model TEXT,
+        previous_input_tokens INTEGER,
+        previous_cached_input_tokens INTEGER,
+        previous_output_tokens INTEGER,
+        previous_reasoning_output_tokens INTEGER,
+        warning_count INTEGER NOT NULL DEFAULT 0,
+        last_scanned_at INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS codex_usage_event (
+        thread_id TEXT NOT NULL,
+        ordinal INTEGER NOT NULL,
+        occurred_at INTEGER NOT NULL,
+        kind TEXT NOT NULL,
+        model TEXT,
+        project_key TEXT,
+        project_label TEXT,
+        input_tokens INTEGER NOT NULL DEFAULT 0,
+        cached_input_tokens INTEGER NOT NULL DEFAULT 0,
+        output_tokens INTEGER NOT NULL DEFAULT 0,
+        reasoning_output_tokens INTEGER NOT NULL DEFAULT 0,
+        total_tokens INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY(thread_id, ordinal),
+        FOREIGN KEY(thread_id) REFERENCES codex_usage_rollout(thread_id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_codex_usage_event_time ON codex_usage_event(occurred_at);
+      CREATE INDEX IF NOT EXISTS idx_codex_usage_event_model_time ON codex_usage_event(model, occurred_at);
+      CREATE INDEX IF NOT EXISTS idx_codex_usage_event_project_time ON codex_usage_event(project_key, occurred_at);
+    `);
+  }
+  if (version < 14) {
+    // Usage rows are derived from rollout files. Rebuild them so project
+    // classification changes never leave stale date-based project buckets.
+    db.exec("DELETE FROM codex_usage_rollout");
+  }
+  if (version < 15) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS codex_usage_retained_rollout (
+        source_hash TEXT NOT NULL,
+        thread_id TEXT NOT NULL,
+        source_category TEXT NOT NULL,
+        session_started_at INTEGER,
+        last_event_at INTEGER,
+        project_key TEXT,
+        project_label TEXT,
+        latest_model TEXT,
+        warning_count INTEGER NOT NULL DEFAULT 0,
+        last_scanned_at INTEGER NOT NULL,
+        missing_at INTEGER NOT NULL,
+        restored_at INTEGER,
+        PRIMARY KEY(source_hash, thread_id)
+      );
+      CREATE TABLE IF NOT EXISTS codex_usage_retained_event (
+        source_hash TEXT NOT NULL,
+        thread_id TEXT NOT NULL,
+        ordinal INTEGER NOT NULL,
+        occurred_at INTEGER NOT NULL,
+        kind TEXT NOT NULL,
+        model TEXT,
+        project_key TEXT,
+        project_label TEXT,
+        input_tokens INTEGER NOT NULL DEFAULT 0,
+        cached_input_tokens INTEGER NOT NULL DEFAULT 0,
+        output_tokens INTEGER NOT NULL DEFAULT 0,
+        reasoning_output_tokens INTEGER NOT NULL DEFAULT 0,
+        total_tokens INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY(source_hash, thread_id, ordinal),
+        FOREIGN KEY(source_hash, thread_id) REFERENCES codex_usage_retained_rollout(source_hash, thread_id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_codex_usage_retained_event_source_time ON codex_usage_retained_event(source_hash, occurred_at);
+      CREATE INDEX IF NOT EXISTS idx_codex_usage_retained_event_source_model_time ON codex_usage_retained_event(source_hash, model, occurred_at);
+      CREATE INDEX IF NOT EXISTS idx_codex_usage_retained_event_source_project_time ON codex_usage_retained_event(source_hash, project_key, occurred_at);
+    `);
   }
 
   db.prepare(

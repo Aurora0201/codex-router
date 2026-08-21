@@ -7,7 +7,7 @@ const GATEWAY_MARKER = "# Auto-injected by codex-router";
 const LEGACY_GATEWAY_MARKER = "# Auto-injected by codex-gateway";
 const OPENCODEX_MARKER = "# Auto-injected by opencodex";
 
-function codexHomeDir(): string {
+export function codexHomeDir(): string {
   return process.env.CODEX_HOME ? path.resolve(process.env.CODEX_HOME) : path.join(os.homedir(), ".codex");
 }
 

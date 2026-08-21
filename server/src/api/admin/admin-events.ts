@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 
-export type AdminResource = "accounts" | "stats" | "settings" | "codex" | "logs" | "websocketConnections";
+export type AdminResource = "accounts" | "stats" | "settings" | "codex" | "logs" | "websocketConnections" | "usage";
 type Listener = (resources: AdminResource[]) => void;
 export type AdminActivityEvent = { type: "request_started" | "request_finished"; id: string } | { type: "connection_updated"; connectionId: string };
 type ActivityListener = (event: AdminActivityEvent) => void;

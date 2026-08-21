@@ -20,6 +20,7 @@ import { CodexProcessMonitor } from "./codex/codex-process.js";
 import { AdminEventHub } from "./api/admin/admin-events.js";
 import { LOG_LEVELS } from "./db/repositories/settings-repository.js";
 import { WebSocketConnectionRegistry } from "./proxy/websocket-connection-registry.js";
+import { CodexUsageService } from "./codex/codex-usage-service.js";
 
 export interface GatewayApp {
   app: FastifyInstance;
@@ -30,6 +31,7 @@ export interface GatewayApp {
   activeAccounts: ActiveAccountService;
   auth: AccountAuthService;
   usage: AccountUsageService;
+  codexUsage: CodexUsageService;
 }
 
 function startUsageRefreshScheduler(accounts: AccountService, usage: AccountUsageService, onRefresh: () => void): NodeJS.Timeout {
@@ -110,6 +112,8 @@ export async function buildGateway(overrides: Partial<GatewayConfig> = {}): Prom
   const proxy = new HttpProxy({ upstreamBaseUrl: config.upstreamBaseUrl, activeAccounts, auth, usage, database });
   const codexConfig = new CodexConfigService();
   const events = new AdminEventHub();
+  const codexUsage = await CodexUsageService.create({ dataDir: config.dataDir, legacyDb: database.raw, onChange: () => events.invalidate("usage"), log: app.log });
+  if (process.env.NODE_ENV !== "test") codexUsage.start();
   const websocketConnections = new WebSocketConnectionRegistry((connectionId) => {
     events.emitActivity({ type: "connection_updated", connectionId });
     events.invalidate("websocketConnections");
@@ -121,7 +125,7 @@ export async function buildGateway(overrides: Partial<GatewayConfig> = {}): Prom
   database.requestLog.onFinished = (id) => { events.emitActivity({ type: "request_finished", id }); events.invalidate("stats", "logs"); };
   database.websocketConnectionLog.onUpdated = (connectionId) => { events.emitActivity({ type: "connection_updated", connectionId }); events.invalidate("logs"); };
 
-  await registerAdminApi(app, { config, database, accounts, auth, usage, logins, activeAccounts, csrf, startedAt, events, codexProcess, websocketConnections }, codexConfig);
+  await registerAdminApi(app, { config, database, accounts, auth, usage, logins, activeAccounts, csrf, startedAt, events, codexProcess, websocketConnections, codexUsage }, codexConfig);
   await registerWebSocketProxy(app, { upstreamBaseUrl: config.upstreamBaseUrl, activeAccounts, auth, database, websocketConnections });
 
   app.post("/backend-api/codex/responses", (request, reply) => proxy.handle(request, reply, "/responses"));
@@ -151,11 +155,12 @@ export async function buildGateway(overrides: Partial<GatewayConfig> = {}): Prom
     closed = true;
     clearInterval(rateLimitTimer);
     codexProcess.close();
+    await codexUsage.close();
     events.close();
     await logins.close();
     await proxy.close();
     database.close();
   });
 
-  return { app, config, database, accounts, logins, activeAccounts, auth, usage };
+  return { app, config, database, accounts, logins, activeAccounts, auth, usage, codexUsage };
 }

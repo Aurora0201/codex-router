@@ -2,6 +2,8 @@ import type {
   AccountView,
   AccountsResponse,
   CodexStatusView,
+  CodexUsageDashboard,
+  CodexUsageFilters,
   GatewayService,
   GatewayResource,
   GatewayActivityEvent,
@@ -126,6 +128,12 @@ export function createHttpGatewayService(): GatewayService {
     getAccounts: () => request<AccountsResponse>("/api/accounts"),
     getWebSocketConnections: () =>
       request<WebSocketConnectionView[]>("/api/websocket-connections"),
+    getCodexUsage: (filters: CodexUsageFilters) => {
+      const query = new URLSearchParams({ range: filters.range })
+      if (filters.model) query.set("model", filters.model)
+      if (filters.project) query.set("project", filters.project)
+      return request<CodexUsageDashboard>(`/api/codex-usage?${query}`)
+    },
     getRequestLogs: (filters: RequestLogFilters) => {
       const query = new URLSearchParams({ range: filters.range })
       if (filters.from !== undefined) query.set("from", String(filters.from))

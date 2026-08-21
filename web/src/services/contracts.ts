@@ -110,7 +110,24 @@ export interface GatewaySnapshot {
 }
 
 export type GatewayResource =
-  "accounts" | "stats" | "settings" | "codex" | "logs" | "websocketConnections"
+  "accounts" | "stats" | "settings" | "codex" | "logs" | "websocketConnections" | "usage"
+
+export type CodexUsageRange = "7d" | "14d" | "30d" | "90d" | "all"
+export interface CodexUsageFilters { range: CodexUsageRange; model?: string; project?: string }
+export interface CodexUsageDashboard {
+  status: "scanning" | "ready" | "partial"
+  scope: "local_codex_home"
+  generatedAt: number
+  timezone: string
+  coverage: { firstEventAt: number | null; lastEventAt: number | null; rollouts: number; sourceRollouts: number; retainedRollouts: number; lastScannedAt: number | null; lastRetentionAt: number | null; parseWarnings: number; scan: { complete: boolean; lastSuccessfulAt: number | null; pendingMissingRollouts: number }; retention: { pendingAuditEvents: number; lastVerifiedAt: number | null }; backup: { status: "ready" | "pending" | "failed" | "unavailable"; lastSuccessfulAt: number | null; generations: number; lastRecoveryAt: number | null } }
+  summary: { totalTokens: number; todayTokens: number; dailyAverage: number; inputTokens: number; cachedInputTokens: number; uncachedInputTokens: number; outputTokens: number; reasoningOutputTokens: number; cacheHitPercent: number; sessions: number; tasksStarted: number; tasksCompleted: number; abortedTurns: number; compactions: number; completionPercent: number; tokensPerCompletedTask: number }
+  daily: Array<{ date: string; inputTokens: number; cachedInputTokens: number; uncachedInputTokens: number; outputTokens: number; reasoningOutputTokens: number; totalTokens: number; sessions: number; tasks: number; rollingAverage7d: number; isPartial: boolean }>
+  dailyModels: Array<{ date: string; totalTokens: number; isPartial: boolean; models: Array<{ key: string; label: string; totalTokens: number }> }>
+  models: Array<{ key: string; label: string; totalTokens: number; tasks: number; share: number }>
+  projects: Array<{ key: string; label: string; totalTokens: number; tasks: number; share: number }>
+  heatmap: Array<{ weekday: string; hour: number; totalTokens: number }>
+  filters: { models: string[]; projects: Array<{ key: string; label: string }> }
+}
 
 export type RequestLogRange = "1h" | "24h" | "7d"
 export type RequestOutcome =
@@ -260,6 +277,7 @@ export interface GatewayService {
   getSnapshot(): Promise<GatewaySnapshot>
   getAccounts(): Promise<AccountsResponse>
   getWebSocketConnections(): Promise<WebSocketConnectionView[]>
+  getCodexUsage(filters: CodexUsageFilters): Promise<CodexUsageDashboard>
   getRequestLogs(filters: RequestLogFilters): Promise<RequestLogsResponse>
   getWebSocketConnectionLogs(
     filters: WebSocketConnectionLogFilters
