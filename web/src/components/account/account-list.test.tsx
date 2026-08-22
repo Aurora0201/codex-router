@@ -14,10 +14,16 @@ const HOUR = 60 * 60 * 1000
 const DAY = 24 * HOUR
 
 function window(usedPercent: number | null, mins: number): UsageWindowView {
-  return { usedPercent, resetsAt: Date.now() + 3 * HOUR, windowDurationMins: mins }
+  return {
+    usedPercent,
+    resetsAt: Date.now() + 3 * HOUR,
+    windowDurationMins: mins,
+  }
 }
 
-function bucket(values: Partial<RateLimitBucketView> = {}): RateLimitBucketView {
+function bucket(
+  values: Partial<RateLimitBucketView> = {}
+): RateLimitBucketView {
   return {
     key: "codex",
     limitId: null,
@@ -96,7 +102,7 @@ const renderList = (
   )
 
 const rows = () =>
-  Array.from(document.querySelectorAll<HTMLLIElement>("ul > li"))
+  Array.from(document.querySelectorAll<HTMLElement>("[data-slot=account-row]"))
 
 describe("AccountList", () => {
   it("names the live route in the header and offers to clear it", async () => {
@@ -122,30 +128,95 @@ describe("AccountList", () => {
 
   it("explains passthrough when no account is routed", () => {
     renderList([account()])
-    expect(screen.getByText("尚未选择路由账号")).toBeInTheDocument()
     expect(
-      screen.getByText("· 请求使用 Codex 当前登录账号透传")
+      screen.getByText("尚未选择路由账号 · 请求使用 Codex 当前登录账号透传")
     ).toBeInTheDocument()
     expect(
       screen.queryByRole("button", { name: "清除路由" })
     ).not.toBeInTheDocument()
   })
 
-  it("marks the live row with a badge instead of a switch button", () => {
+  it("routes through a single radio group with exactly one account checked", async () => {
+    const onSelect = vi.fn()
+    const standby = account({ id: "standby", chatgptAccountId: "acct-standby" })
+    renderList([account({ id: "live", isActive: true }), standby], { onSelect })
+
+    const group = screen.getByRole("radiogroup", { name: "选择路由账号" })
+    const radios = within(group).getAllByRole("radio")
+    expect(radios.map((radio) => radio.getAttribute("aria-checked"))).toEqual([
+      "true",
+      "false",
+    ])
+    expect(
+      within(group).queryByRole("button", { name: /切换/ })
+    ).not.toBeInTheDocument()
+
+    await userEvent.click(
+      screen.getByRole("radio", { name: "路由到 acct-standby" })
+    )
+    expect(onSelect).toHaveBeenCalledWith(standby)
+  })
+
+  it("disables the radio on accounts that cannot be routed", () => {
     renderList([
-      account({ id: "live", isActive: true }),
-      account({ id: "standby", chatgptAccountId: "acct-standby" }),
+      account({ id: "ready" }),
+      account({
+        id: "broken",
+        chatgptAccountId: "acct-broken",
+        authStatus: "relogin_required",
+      }),
     ])
 
-    const live = rows()[0]
-    expect(live).toHaveClass("border-l-primary")
-    expect(within(live).getByText("当前路由")).toBeInTheDocument()
+    const broken = screen.getByRole("radio", { name: "路由到 acct-broken" })
+    expect(broken).toHaveAttribute("aria-disabled", "true")
+    expect(broken).toHaveClass("data-disabled:opacity-40")
     expect(
-      within(live).queryByRole("button", { name: "切换到此" })
-    ).not.toBeInTheDocument()
-    expect(
-      within(rows()[1]).getByRole("button", { name: "切换到此" })
-    ).toBeInTheDocument()
+      screen.getByRole("radio", { name: "路由到 acct-alpha" })
+    ).not.toHaveAttribute("aria-disabled", "true")
+  })
+
+  it("keeps row order stable when the route changes", async () => {
+    const { rerender } = renderList([
+      account({
+        id: "a",
+        chatgptAccountId: "acct-a",
+        limits: quota([bucket({ primary: window(10, 300) })]),
+      }),
+      account({
+        id: "b",
+        chatgptAccountId: "acct-b",
+        limits: quota([bucket({ primary: window(80, 300) })]),
+      }),
+    ])
+    const before = rows().map((row) => row.textContent)
+
+    rerender(
+      <TooltipProvider>
+        <AccountList
+          accounts={[
+            account({
+              id: "a",
+              chatgptAccountId: "acct-a",
+              limits: quota([bucket({ primary: window(10, 300) })]),
+            }),
+            account({
+              id: "b",
+              chatgptAccountId: "acct-b",
+              isActive: true,
+              limits: quota([bucket({ primary: window(80, 300) })]),
+            }),
+          ]}
+          busyId={null}
+          onSelect={vi.fn()}
+          onClearRoute={vi.fn()}
+          onAction={vi.fn()}
+          onConsumeReset={vi.fn(async () => undefined)}
+        />
+      </TooltipProvider>
+    )
+
+    expect(rows().map((row) => row.textContent)).toEqual(before)
+    await Promise.resolve()
   })
 
   it("puts the roomiest routable account first and sinks broken ones", () => {
@@ -189,17 +260,20 @@ describe("AccountList", () => {
     expect(id.compareDocumentPosition(email)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING
     )
-    const weekly = within(row).getByRole("progressbar", { name: "周剩余额度" })
-    const short = within(row).getByRole("progressbar", { name: "5 小时剩余额度" })
+    const weekly = within(row).getByRole("progressbar", { name: "周额度剩余" })
+    const short = within(row).getByRole("progressbar", {
+      name: "5 小时额度剩余",
+    })
     expect(weekly.compareDocumentPosition(short)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING
     )
   })
 
-  it("offers the next useful step instead of a dead switch button", async () => {
+  it("offers a repair on rows that cannot be routed and nothing on rows that can", async () => {
     const onAction = vi.fn()
     renderList(
       [
+        account({ id: "ready", chatgptAccountId: "acct-ready" }),
         account({ id: "broken", authStatus: "error" }),
         account({
           id: "off",
@@ -211,6 +285,11 @@ describe("AccountList", () => {
       { onAction }
     )
 
+    const readyRow = rows().find((row) =>
+      row.textContent?.includes("acct-ready")
+    )!
+    expect(within(readyRow).queryAllByRole("button")).toHaveLength(2) // id + ⋯
+
     await userEvent.click(screen.getByRole("button", { name: "刷新认证" }))
     expect(onAction.mock.calls[0][1]).toBe("auth")
     await userEvent.click(screen.getByRole("button", { name: "启用账号" }))
@@ -221,7 +300,10 @@ describe("AccountList", () => {
     renderList([
       account({
         subscriptionExpiresAt: Date.now() - DAY,
-        subscription: { expiresAt: Date.now() - DAY, source: "legacy_estimate" },
+        subscription: {
+          expiresAt: Date.now() - DAY,
+          source: "legacy_estimate",
+        },
         auth: {
           status: "ready",
           mode: "chatgpt",

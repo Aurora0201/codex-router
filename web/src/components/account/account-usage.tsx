@@ -2,12 +2,17 @@ import { useTranslation } from "react-i18next"
 
 import { Progress, ProgressValue } from "@/components/ui/progress"
 import { QUOTA_TIGHT_PERCENT, remainingPercent } from "@/lib/account-state"
-import { formatRelativeTime, shortUsageWindow } from "@/lib/format"
+import { formatRelativeTime, formatUsageWindow } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { UsageWindowView } from "@/services/contracts"
 
+/**
+ * Fixed tracks, so every meter in the list occupies the same geometry no matter
+ * what sits to its right. The bar is deliberately short: it is a glanceable
+ * shape next to the number, not the number itself.
+ */
 const METER_COLUMNS =
-  "grid-cols-[2.75rem_minmax(0,1fr)_2.75rem_6.5rem] items-center gap-x-2.5"
+  "grid-cols-[5.5rem_minmax(0,9rem)_2.75rem_6.5rem] items-center gap-x-2.5"
 
 /**
  * One quota window on one text line. The bar fills with what is left, not what
@@ -22,7 +27,7 @@ export function QuotaMeter({
   className?: string
 }) {
   const { t } = useTranslation()
-  const label = shortUsageWindow(window)
+  const label = formatUsageWindow(window)
   const remaining = remainingPercent(window)
 
   if (remaining === null) {
@@ -43,7 +48,7 @@ export function QuotaMeter({
   return (
     <Progress
       value={remaining}
-      aria-label={t("{{label}}剩余额度", { label })}
+      aria-label={t("{{label}}剩余", { label })}
       data-slot="quota-meter"
       className={cn(
         "grid h-5",
@@ -53,7 +58,7 @@ export function QuotaMeter({
           ? "[&_[data-slot=progress-indicator]]:bg-destructive"
           : tight
             ? "[&_[data-slot=progress-indicator]]:bg-warning"
-            : "[&_[data-slot=progress-indicator]]:bg-foreground/35",
+            : "[&_[data-slot=progress-indicator]]:bg-primary",
         className
       )}
     >

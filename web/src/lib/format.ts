@@ -33,24 +33,6 @@ export function formatUsageWindow(window: UsageWindowView | null): string {
   return i18n.t("{{count}} 分钟额度", { count: minutes })
 }
 
-/**
- * The row meter carries its own "剩余额度" column header, so the per-line label
- * drops the repeated 额度 and keeps only the window itself.
- */
-export function shortUsageWindow(window: UsageWindowView | null): string {
-  const minutes = window?.windowDurationMins
-  if (!minutes) return i18n.t("额度")
-  if (minutes % 10080 === 0) {
-    const weeks = minutes / 10080
-    return weeks === 1 ? i18n.t("周") : i18n.t("{{count}} 周", { count: weeks })
-  }
-  if (minutes % 1440 === 0)
-    return i18n.t("{{count}} 天", { count: minutes / 1440 })
-  if (minutes % 60 === 0)
-    return i18n.t("{{count}} 小时", { count: minutes / 60 })
-  return i18n.t("{{count}} 分钟", { count: minutes })
-}
-
 export function formatRelativeTime(
   timestamp: number | null,
   now = Date.now()

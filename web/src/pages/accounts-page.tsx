@@ -193,7 +193,7 @@ export function AccountsPage({
     ) ?? false
 
   return (
-    <section className="flex flex-col gap-5">
+    <section className="flex flex-col gap-5 lg:h-full lg:min-h-0">
       <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">

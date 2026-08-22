@@ -32,9 +32,9 @@ describe("App", () => {
     expect(
       await screen.findByRole("heading", { name: "账号与路由" })
     ).toBeInTheDocument()
-    expect(
-      screen.getAllByRole("button", { name: "切换到此" })
-    ).not.toHaveLength(0)
+    expect(screen.getAllByRole("radio", { name: /^路由到 / })).not.toHaveLength(
+      0
+    )
     expect(screen.queryByText("Manual routing")).not.toBeInTheDocument()
     expect(screen.queryByText("实时路由")).not.toBeInTheDocument()
     expect(screen.queryByText("运行概览")).not.toBeInTheDocument()
@@ -46,7 +46,9 @@ describe("App", () => {
     expect(
       await screen.findByRole("heading", { name: "运行状态" })
     ).toBeInTheDocument()
-    expect(screen.queryByRole("switch", { name: "请求元数据记录" })).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole("switch", { name: "请求元数据记录" })
+    ).not.toBeInTheDocument()
     await user.click(screen.getByRole("button", { name: "偏好设置" }))
     expect(screen.getByRole("switch", { name: "请求元数据记录" })).toBeChecked()
   })
@@ -54,11 +56,13 @@ describe("App", () => {
   it("uses one desktop top inset for regular and fixed-height pages", async () => {
     const user = userEvent.setup()
     renderApp()
-    const accountHeading = await screen.findByRole("heading", { name: "账号与路由" })
+    const accountHeading = await screen.findByRole("heading", {
+      name: "账号与路由",
+    })
     const pageContent = accountHeading.closest("section")?.parentElement
 
-    expect(pageContent).toHaveClass("lg:py-4")
-    expect(pageContent).not.toHaveClass("lg:h-full")
+    // Accounts is a fixed-height page: its list scrolls inside its own card.
+    expect(pageContent).toHaveClass("lg:h-full", "lg:py-4")
     expect(pageContent).not.toHaveClass("lg:py-8")
 
     await user.click(screen.getByRole("button", { name: "运行状态" }))

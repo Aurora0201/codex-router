@@ -25,8 +25,16 @@ describe("AccountsPage", () => {
       7,
       1
     )
-    service.snapshot.accounts.accounts[0].subscriptionExpiresAt = Date.UTC(2026, 7, 31)
-    service.snapshot.accounts.accounts[0].subscription.expiresAt = Date.UTC(2026, 7, 31)
+    service.snapshot.accounts.accounts[0].subscriptionExpiresAt = Date.UTC(
+      2026,
+      7,
+      31
+    )
+    service.snapshot.accounts.accounts[0].subscription.expiresAt = Date.UTC(
+      2026,
+      7,
+      31
+    )
     service.snapshot.accounts.accounts[0].subscription.source = "manual"
     const updateAccount = vi.spyOn(service, "updateAccount")
 
@@ -69,7 +77,9 @@ describe("AccountsPage", () => {
     renderPage(snapshot, service)
 
     expect(screen.queryByRole("alert")).not.toBeInTheDocument()
-    expect(screen.getByText("尚未选择路由账号")).toBeInTheDocument()
+    expect(
+      screen.getByText("尚未选择路由账号 · 请求使用 Codex 当前登录账号透传")
+    ).toBeInTheDocument()
   })
 
   it("clears the manual route from the route summary", async () => {

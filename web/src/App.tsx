@@ -96,7 +96,8 @@ export function App({
       unsubscribe = service.subscribe(
         (resources) => {
           if (resources.includes("logs")) setLogsRevision((value) => value + 1)
-          if (resources.includes("usage")) setUsageRevision((value) => value + 1)
+          if (resources.includes("usage"))
+            setUsageRevision((value) => value + 1)
           if (resources.length === 1 && resources[0] === "usage") return
           window.clearTimeout(debounce)
           debounce = window.setTimeout(refresh, 100)
@@ -145,6 +146,8 @@ export function App({
   }
   const fixedLogsLayout = page === "logs" && Boolean(snapshot) && !error
   const gatewayLayout = page === "gateway" && Boolean(snapshot) && !error
+  // The account list scrolls inside its own card, so the page itself must not.
+  const accountsLayout = page === "accounts" && Boolean(snapshot) && !error
 
   return (
     <SidebarProvider className="h-dvh min-h-0 overflow-hidden">
@@ -163,7 +166,7 @@ export function App({
         <ScrollArea
           className={cn(
             "min-h-0 flex-1",
-            fixedLogsLayout &&
+            (fixedLogsLayout || accountsLayout) &&
               "lg:[&_[data-slot=scroll-area-viewport]]:overflow-hidden"
           )}
         >
@@ -171,7 +174,8 @@ export function App({
             className={cn(
               "mx-auto w-full max-w-[88rem] px-4 py-6 sm:px-6 lg:px-8 lg:py-4",
               fixedLogsLayout && "lg:h-full",
-              gatewayLayout && "lg:h-full"
+              gatewayLayout && "lg:h-full",
+              accountsLayout && "lg:h-full"
             )}
           >
             {error ? (

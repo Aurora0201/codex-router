@@ -17,13 +17,13 @@ describe("QuotaMeter", () => {
       />
     )
 
-    const meter = screen.getByRole("progressbar", { name: "5 小时剩余额度" })
+    const meter = screen.getByRole("progressbar", { name: "5 小时额度剩余" })
     expect(meter).toHaveAttribute("aria-valuenow", "72")
     expect(screen.getByText("72%")).toBeInTheDocument()
     expect(screen.getByText("2 小时后回满")).toBeInTheDocument()
   })
 
-  it("labels a full week as 周, not 7 天", () => {
+  it("labels a full week as 周额度, not 7 天额度", () => {
     render(
       <QuotaMeter
         window={{
@@ -35,7 +35,7 @@ describe("QuotaMeter", () => {
     )
 
     expect(
-      screen.getByRole("progressbar", { name: "周剩余额度" })
+      screen.getByRole("progressbar", { name: "周额度剩余" })
     ).toBeInTheDocument()
     expect(screen.getByText("54%")).toBeInTheDocument()
   })
@@ -51,7 +51,10 @@ describe("QuotaMeter", () => {
       />
     )
 
-    expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "0")
+    expect(screen.getByRole("progressbar")).toHaveAttribute(
+      "aria-valuenow",
+      "0"
+    )
     expect(screen.getByText("0%")).toHaveClass("text-destructive")
     expect(screen.getByText("3 小时后回满")).toHaveClass("text-foreground")
   })

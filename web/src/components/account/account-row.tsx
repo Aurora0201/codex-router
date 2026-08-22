@@ -4,8 +4,8 @@ import { useTranslation } from "react-i18next"
 import { AccountActions, type AccountAction } from "./account-actions"
 import { AccountStatus } from "./account-status-badge"
 import { QuotaMeter } from "./account-usage"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { RadioGroupItem } from "@/components/ui/radio-group"
 import {
   Tooltip,
   TooltipContent,
@@ -14,6 +14,7 @@ import {
 import {
   QUOTA_STALE_MS,
   accountWindows,
+  isRoutable,
   subscriptionExpired,
   subscriptionExpiringSoon,
 } from "@/lib/account-state"
@@ -50,15 +51,14 @@ function qualifier(account: AccountView, now: number, t: Translate) {
 }
 
 /**
- * A row that cannot be routed still offers its own next step instead of a dead
- * greyed-out button.
+ * The radio only covers routable accounts. A row that cannot be routed offers
+ * its own repair instead, so no row is ever a dead end.
  */
-function primaryAction(account: AccountView, t: Translate) {
+function remedy(account: AccountView, t: Translate) {
+  if (isRoutable(account)) return null
   if (!account.enabled)
-    return { label: t("启用账号"), action: "toggle" as const, primary: false }
-  if (account.auth.status === "ready")
-    return { label: t("切换到此"), action: "select" as const, primary: true }
-  return { label: t("刷新认证"), action: "auth" as const, primary: false }
+    return { label: t("启用账号"), action: "toggle" as const }
+  return { label: t("刷新认证"), action: "auth" as const }
 }
 
 export function AccountRow({
@@ -66,23 +66,43 @@ export function AccountRow({
   busy,
   now,
   mobile,
-  onSelect,
   onAction,
 }: {
   account: AccountView
   busy: boolean
   now: number
   mobile: boolean
-  onSelect(): void
   onAction(action: AccountAction): void
 }) {
   const { t } = useTranslation()
   const windows = accountWindows(account)
   const note = qualifier(account, now, t)
-  const primary = primaryAction(account, t)
+  const repair = remedy(account, t)
   const accountId = shortAccountId(account.chatgptAccountId)
-  const run = () =>
-    primary.action === "select" ? onSelect() : onAction(primary.action)
+
+  const radio = (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <RadioGroupItem
+            value={account.id}
+            disabled={busy || repair !== null}
+            aria-label={t("路由到 {{account}}", { account: accountId })}
+            // base-ui marks the state with data-disabled, not :disabled, so the
+            // primitive's own disabled styling never fires here.
+            className="data-disabled:cursor-not-allowed data-disabled:opacity-40"
+          />
+        }
+      />
+      <TooltipContent>
+        {account.isActive
+          ? t("当前路由账号")
+          : repair
+            ? t("该账号当前不可路由")
+            : t("把后续请求切换到这个账号")}
+      </TooltipContent>
+    </Tooltip>
+  )
 
   const identity = (
     <Tooltip>
@@ -133,43 +153,26 @@ export function AccountRow({
     </>
   )
 
-  // The marker and the button share a minimum width so the quota column starts
-  // at the same x on every row and the percentages stay comparable down the list.
-  const slot = "min-w-20 justify-center"
-
-  const routeBadge = (
-    <Badge
-      variant="outline"
-      className={cn(slot, "border-primary/40 text-primary")}
-    >
-      {t("当前路由")}
-    </Badge>
-  )
-
-  const actionButton = (
+  const repairButton = repair ? (
     <Button
-      className={slot}
       size="sm"
-      variant={primary.primary ? "default" : "outline"}
+      variant="outline"
       disabled={busy}
-      onClick={run}
+      onClick={() => onAction(repair.action)}
     >
-      {primary.label}
+      {repair.label}
     </Button>
-  )
+  ) : null
 
   if (mobile) {
     return (
-      <li
-        className={cn(
-          "border-l-2 px-4 py-3",
-          account.isActive
-            ? "border-l-primary bg-primary/[0.04]"
-            : "border-l-transparent"
-        )}
+      <div
+        data-slot="account-row"
+        className={cn("px-4 py-3", account.isActive && "bg-primary/[0.04]")}
       >
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
+        <div className="flex items-start gap-3">
+          <div className="flex h-5 items-center">{radio}</div>
+          <div className="min-w-0 flex-1">
             {identity}
             {email}
           </div>
@@ -179,42 +182,28 @@ export function AccountRow({
             onAction={onAction}
           />
         </div>
-        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 pl-7">
           <AccountStatus account={account} />
           {note ? (
             <span className={cn("text-xs", note.tone)}>{note.label}</span>
           ) : null}
         </div>
-        <div className="mt-2.5 space-y-1">{meters}</div>
-        <div className="mt-3">
-          {account.isActive ? (
-            routeBadge
-          ) : (
-            <Button
-              className="w-full"
-              size="sm"
-              variant={primary.primary ? "default" : "outline"}
-              disabled={busy}
-              onClick={run}
-            >
-              {primary.label}
-            </Button>
-          )}
-        </div>
-      </li>
+        <div className="mt-2.5 space-y-1 pl-7">{meters}</div>
+        {repairButton ? <div className="mt-3 pl-7">{repairButton}</div> : null}
+      </div>
     )
   }
 
   return (
-    <li
+    <div
+      data-slot="account-row"
       className={cn(
-        "border-l-2 transition-colors",
-        account.isActive
-          ? "border-l-primary bg-primary/[0.04]"
-          : "border-l-transparent hover:bg-muted/40"
+        "flex items-center gap-4 px-4 py-2.5 transition-colors",
+        account.isActive ? "bg-primary/[0.04]" : "hover:bg-muted/40"
       )}
     >
-      <div className="grid grid-cols-[minmax(0,13rem)_minmax(0,9rem)_minmax(0,1fr)_auto] items-start gap-x-5 px-4 py-2.5">
+      {radio}
+      <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,13rem)_minmax(0,9rem)_minmax(0,26rem)_minmax(0,1fr)] items-start gap-x-5">
         <div className="min-w-0 space-y-1">
           <div className="flex h-5 items-center">{identity}</div>
           <div className="flex h-5 items-center">{email}</div>
@@ -233,7 +222,7 @@ export function AccountRow({
         </div>
         <div className="min-w-0 space-y-1">{meters}</div>
         <div className="flex items-center justify-end gap-1.5 self-center">
-          {account.isActive ? routeBadge : actionButton}
+          {repairButton}
           <AccountActions
             account={account}
             disabled={busy}
@@ -241,6 +230,6 @@ export function AccountRow({
           />
         </div>
       </div>
-    </li>
+    </div>
   )
 }

@@ -36,6 +36,7 @@
 
 - Keep Accounts and Settings as separate page components selected by the top-level app shell.
 - Desktop layouts may use dense tables and side panels; below tablet width, switch to readable stacked cards without horizontal scrolling.
+- Pages whose main content scrolls internally (Accounts, Gateway, Request logs) opt into `lg:h-full` in the app shell so the page itself does not scroll on desktop.
 - The transport trace is the sole signature visual and must encode live Gateway-to-account flow, not serve as decoration.
 
 ## Accounts page rules
@@ -43,10 +44,12 @@
 - The page is a comparison surface: exactly one account is live and the rest are standby reserves, and the layout must encode that asymmetry rather than render peer cards.
 - The account identity shown first is the real ChatGPT Account ID (`chatgptAccountId`) in a monospace font, with email and plan as auxiliary information.
 - Never show a user-entered account label input; add-account dialog starts official Codex Browser OAuth with no label.
-- Accounts are listed one per row across two aligned lines; switching happens on the row itself. Do not reintroduce a separate account picker control.
-- The live route is marked by a full-height left rail plus a text marker, never by color alone, and its action slot carries no switch button. `清除路由` lives in the route summary at the top of the list.
-- A row that cannot be routed offers its own next step (`刷新认证`, `启用账号`) instead of a disabled switch button.
-- Quota meters fill by remaining, not used, so a fuller bar always means a better route. The meter keeps the same shape in every state; only emphasis moves. Healthy stays neutral, `--warning` marks a tight window, `--destructive` marks an exhausted one.
+- Accounts are listed one per row across two aligned lines. The list is a single shadcn RadioGroup and each row leads with its radio, because exactly one of N accounts is live. Do not reintroduce a separate account picker or a per-row switch button.
+- Row order does not depend on which account is live; re-sorting on selection would make the list jump under the pointer. Order is routable (roomiest first), then rows needing attention, then disabled.
+- `清除路由` lives in the route summary at the top of the list, never in a row.
+- A row that cannot be routed has a disabled radio and offers its own next step (`刷新认证`, `启用账号`) instead.
+- Quota meters fill by remaining, not used, so a fuller bar always means a better route. The meter keeps the same shape in every state; only emphasis moves. Healthy uses `--primary`, `--warning` marks a tight window, `--destructive` marks an exhausted one.
+- Meter tracks are fixed-width so every percentage in the list lines up vertically; the bar is a glanceable shape beside the number, not a substitute for it.
 - `null` usage renders as "未报告" with no bar, never as 0%.
 - At most one qualifier per row (subscription state, then stale auth, then stale limits). Everything else — plan, auth mode, credits, per-bucket windows, reset credits — belongs in the detail sheet.
 - Destructive actions (remove account) use shadcn AlertDialog instead of native `confirm()`.

@@ -27,7 +27,8 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty"
 import { Input } from "@/components/ui/input"
-import { Separator } from "@/components/ui/separator"
+import { RadioGroup } from "@/components/ui/radio-group"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { useIsMobile } from "@/hooks/use-mobile"
 import {
@@ -45,12 +46,22 @@ import type {
 
 type AccountFilter = "all" | "routable" | "attention" | "disabled"
 
-/** Rows the console can route through sit above rows that need repair. */
+/**
+ * A plain rule rather than the Separator primitive: its `data-vertical:self-stretch`
+ * outranks a plain `self-center`, which top-aligns it against its neighbours, and
+ * `role="separator"` is noise inside a run of inline metadata.
+ */
+const RULE = "h-3.5 w-px shrink-0 self-center bg-border"
+
+/**
+ * Rows the console can route through sit above rows that need repair. The live
+ * account is deliberately not pinned first: the radio already marks it, and
+ * re-sorting on selection would make the list jump under the pointer.
+ */
 function rank(account: AccountView) {
-  if (account.isActive) return 0
-  if (isRoutable(account)) return 1
-  if (isDisabled(account)) return 3
-  return 2
+  if (isRoutable(account)) return 0
+  if (isDisabled(account)) return 2
+  return 1
 }
 
 export function AccountList({
@@ -143,37 +154,46 @@ export function AccountList({
 
   return (
     <>
-      <Card className="gap-0 py-0">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b bg-muted/30 px-4 py-3">
+      <Card className="gap-0 py-0 lg:min-h-0 lg:flex-1">
+        <div className="flex items-center gap-x-3 gap-y-2 border-b bg-muted/30 px-4 py-3 max-sm:flex-wrap">
           <RouteIcon
             aria-hidden="true"
             className={cn(
-              "size-4",
+              "size-4 shrink-0",
               active ? "text-primary" : "text-muted-foreground"
             )}
           />
-          <span className="text-sm text-muted-foreground">
-            {active ? t("请求经由") : t("尚未选择路由账号")}
-          </span>
           {active ? (
             <>
-              <span className="font-mono text-sm font-medium">
-                {shortAccountId(active.chatgptAccountId)}
-              </span>
-              <Separator orientation="vertical" className="h-4" />
-              <AccountStatus account={active} />
-              {activeRemaining !== null ? (
-                <>
-                  <Separator orientation="vertical" className="h-4" />
-                  <span className="text-xs text-muted-foreground">
-                    {t("最紧额度剩余 {{value}}%", {
-                      value: Math.round(activeRemaining),
-                    })}
-                  </span>
-                </>
-              ) : null}
+              {/* One non-wrapping group, so the rules never end up stranded at
+                  the start or end of a wrapped line. */}
+              <div className="flex min-w-0 items-center gap-x-3">
+                <span className="shrink-0 text-sm text-muted-foreground">
+                  {t("请求经由")}
+                </span>
+                <span className="truncate font-mono text-sm font-medium">
+                  {shortAccountId(active.chatgptAccountId)}
+                </span>
+                <span aria-hidden="true" className={RULE} />
+                <div className="shrink-0">
+                  <AccountStatus account={active} />
+                </div>
+                {activeRemaining !== null ? (
+                  <>
+                    <span
+                      aria-hidden="true"
+                      className={cn(RULE, "max-sm:hidden")}
+                    />
+                    <span className="shrink-0 text-xs text-muted-foreground max-sm:hidden">
+                      {t("最紧额度剩余 {{value}}%", {
+                        value: Math.round(activeRemaining),
+                      })}
+                    </span>
+                  </>
+                ) : null}
+              </div>
               <Button
-                className="ml-auto"
+                className="ml-auto shrink-0"
                 variant="ghost"
                 size="sm"
                 disabled={busyId !== null}
@@ -185,7 +205,7 @@ export function AccountList({
             </>
           ) : (
             <span className="text-sm text-muted-foreground">
-              {t("· 请求使用 Codex 当前登录账号透传")}
+              {t("尚未选择路由账号 · 请求使用 Codex 当前登录账号透传")}
             </span>
           )}
         </div>
@@ -234,27 +254,39 @@ export function AccountList({
             {mobile ? null : (
               <div
                 aria-hidden="true"
-                className="grid grid-cols-[minmax(0,13rem)_minmax(0,9rem)_minmax(0,1fr)_auto] gap-x-5 border-b border-l-2 border-l-transparent px-4 py-1.5 text-xs text-muted-foreground"
+                className="flex gap-4 border-b px-4 py-1.5 text-xs text-muted-foreground"
               >
-                <span>{t("账号")}</span>
-                <span>{t("状态")}</span>
-                <span>{t("剩余额度")}</span>
-                <span />
+                <span className="size-4" />
+                <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,13rem)_minmax(0,9rem)_minmax(0,26rem)_minmax(0,1fr)] gap-x-5">
+                  <span>{t("账号")}</span>
+                  <span>{t("状态")}</span>
+                  <span>{t("剩余额度")}</span>
+                  <span />
+                </div>
               </div>
             )}
-            <ul className="divide-y">
-              {filtered.map((account) => (
-                <AccountRow
-                  key={account.id}
-                  account={account}
-                  busy={busyId === account.id}
-                  now={now}
-                  mobile={mobile}
-                  onSelect={() => onSelect(account)}
-                  onAction={(action) => handleAction(account, action)}
-                />
-              ))}
-            </ul>
+            <ScrollArea className="lg:min-h-0 lg:flex-1">
+              <RadioGroup
+                className="block divide-y"
+                aria-label={t("选择路由账号")}
+                value={active?.id ?? null}
+                onValueChange={(value: unknown) => {
+                  const next = accounts.find((item) => item.id === value)
+                  if (next && !next.isActive) onSelect(next)
+                }}
+              >
+                {filtered.map((account) => (
+                  <AccountRow
+                    key={account.id}
+                    account={account}
+                    busy={busyId === account.id}
+                    now={now}
+                    mobile={mobile}
+                    onAction={(action) => handleAction(account, action)}
+                  />
+                ))}
+              </RadioGroup>
+            </ScrollArea>
           </>
         ) : (
           <Empty className="py-12">
