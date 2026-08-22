@@ -40,10 +40,15 @@
 
 ## Accounts page rules
 
+- The page is a comparison surface: exactly one account is live and the rest are standby reserves, and the layout must encode that asymmetry rather than render peer cards.
 - The account identity shown first is the real ChatGPT Account ID (`chatgptAccountId`) in a monospace font, with email and plan as auxiliary information.
 - Never show a user-entered account label input; add-account dialog starts official Codex Browser OAuth with no label.
-- The current account is selected via the shadcn Select at the top of the Accounts page; switching takes effect on the next request for all traffic.
-- Usage is shown as "已使用 X%" with the shadcn Progress component, driven by the upstream `usedPercent`; `null` usage renders as "Not reported", never as 0%.
+- Accounts are listed one per row across two aligned lines; switching happens on the row itself. Do not reintroduce a separate account picker control.
+- The live route is marked by a full-height left rail plus a text marker, never by color alone, and its action slot carries no switch button. `清除路由` lives in the route summary at the top of the list.
+- A row that cannot be routed offers its own next step (`刷新认证`, `启用账号`) instead of a disabled switch button.
+- Quota meters fill by remaining, not used, so a fuller bar always means a better route. The meter keeps the same shape in every state; only emphasis moves. Healthy stays neutral, `--warning` marks a tight window, `--destructive` marks an exhausted one.
+- `null` usage renders as "未报告" with no bar, never as 0%.
+- At most one qualifier per row (subscription state, then stale auth, then stale limits). Everything else — plan, auth mode, credits, per-bucket windows, reset credits — belongs in the detail sheet.
 - Destructive actions (remove account) use shadcn AlertDialog instead of native `confirm()`.
 - Icon-only actions get a shadcn Tooltip; account actions beyond the primary one live in a shadcn DropdownMenu.
 

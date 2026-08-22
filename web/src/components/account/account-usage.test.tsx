@@ -1,46 +1,70 @@
 import { render, screen } from "@testing-library/react"
 import { describe, expect, it } from "vitest"
 
-import { AccountUsage } from "./account-usage"
+import { QuotaMeter } from "./account-usage"
 
-describe("AccountUsage", () => {
-  it("renders two labeled Nova progress windows", () => {
+const HOUR = 60 * 60 * 1000
+
+describe("QuotaMeter", () => {
+  it("fills by remaining quota so a fuller bar means a better route", () => {
     render(
-      <AccountUsage
-        usage={{
-          primary: {
-            usedPercent: 28,
-            resetsAt: Date.now() + 2 * 60 * 60 * 1000,
-            windowDurationMins: 300,
-          },
-          secondary: {
-            usedPercent: 46,
-            resetsAt: Date.now() + 3 * 24 * 60 * 60 * 1000,
-            windowDurationMins: 10080,
-          },
+      <QuotaMeter
+        window={{
+          usedPercent: 28,
+          resetsAt: Date.now() + 2 * HOUR,
+          windowDurationMins: 300,
+        }}
+      />
+    )
+
+    const meter = screen.getByRole("progressbar", { name: "5 小时剩余额度" })
+    expect(meter).toHaveAttribute("aria-valuenow", "72")
+    expect(screen.getByText("72%")).toBeInTheDocument()
+    expect(screen.getByText("2 小时后回满")).toBeInTheDocument()
+  })
+
+  it("labels a full week as 周, not 7 天", () => {
+    render(
+      <QuotaMeter
+        window={{
+          usedPercent: 46,
+          resetsAt: Date.now() + 3 * 24 * HOUR,
+          windowDurationMins: 10080,
         }}
       />
     )
 
     expect(
-      screen.getByRole("progressbar", { name: /^5 小时额度/ })
+      screen.getByRole("progressbar", { name: "周剩余额度" })
     ).toBeInTheDocument()
-    expect(
-      screen.getByRole("progressbar", { name: /^7 天额度/ })
-    ).toBeInTheDocument()
-    expect(screen.getByText("28%")).toBeInTheDocument()
-    expect(screen.getByText("46%")).toBeInTheDocument()
-    expect(screen.getAllByText(/重置$/)).toHaveLength(2)
+    expect(screen.getByText("54%")).toBeInTheDocument()
   })
 
-  it("shows an indeterminate state when usage is not reported", () => {
-    render(<AccountUsage usage={{ primary: null, secondary: null }} />)
+  it("keeps an exhausted window measurable and emphasises when it refills", () => {
+    render(
+      <QuotaMeter
+        window={{
+          usedPercent: 100,
+          resetsAt: Date.now() + 3 * HOUR,
+          windowDurationMins: 300,
+        }}
+      />
+    )
 
-    expect(screen.getAllByText("未报告")).toHaveLength(2)
-    expect(screen.getAllByText(/暂无额度数据/)).toHaveLength(2)
-    expect(screen.queryByText("服务尚未返回额度数据")).not.toBeInTheDocument()
-    expect(
-      screen.getAllByRole("progressbar", { name: /^用量额度/ })
-    ).toHaveLength(2)
+    expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "0")
+    expect(screen.getByText("0%")).toHaveClass("text-destructive")
+    expect(screen.getByText("3 小时后回满")).toHaveClass("text-foreground")
+  })
+
+  it("renders an unreported window as 未报告 instead of a zeroed bar", () => {
+    render(
+      <QuotaMeter
+        window={{ usedPercent: null, resetsAt: null, windowDurationMins: 300 }}
+      />
+    )
+
+    expect(screen.getByText("未报告")).toBeInTheDocument()
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument()
+    expect(screen.queryByText("0%")).not.toBeInTheDocument()
   })
 })

@@ -33,7 +33,7 @@ describe("App", () => {
       await screen.findByRole("heading", { name: "账号与路由" })
     ).toBeInTheDocument()
     expect(
-      screen.getAllByRole("button", { name: /设为当前路由/ })
+      screen.getAllByRole("button", { name: "切换到此" })
     ).not.toHaveLength(0)
     expect(screen.queryByText("Manual routing")).not.toBeInTheDocument()
     expect(screen.queryByText("实时路由")).not.toBeInTheDocument()

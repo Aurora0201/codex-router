@@ -69,7 +69,16 @@ describe("AccountsPage", () => {
     renderPage(snapshot, service)
 
     expect(screen.queryByRole("alert")).not.toBeInTheDocument()
-    expect(screen.getByText("未选择")).toBeInTheDocument()
+    expect(screen.getByText("尚未选择路由账号")).toBeInTheDocument()
+  })
+
+  it("clears the manual route from the route summary", async () => {
+    const service = createGatewayServiceFixture()
+    const clearActiveAccount = vi.spyOn(service, "clearActiveAccount")
+    renderPage(await service.getSnapshot(), service)
+
+    await userEvent.click(screen.getByRole("button", { name: "清除路由" }))
+    expect(clearActiveAccount).toHaveBeenCalled()
   })
 
   it("warns when the active route account is unavailable", async () => {

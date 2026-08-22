@@ -1,0 +1,75 @@
+import type {
+  AccountView,
+  RateLimitBucketView,
+  UsageWindowView,
+} from "@/services/contracts"
+
+export const EXPIRING_SOON_MS = 7 * 24 * 60 * 60_000
+export const QUOTA_STALE_MS = 10 * 60_000
+/** Remaining quota at or below this share turns the meter into a warning. */
+export const QUOTA_TIGHT_PERCENT = 25
+
+export function isDisabled(account: AccountView) {
+  return !account.enabled || account.auth.status === "disabled"
+}
+
+export function isRoutable(account: AccountView) {
+  return account.enabled && account.auth.status === "ready"
+}
+
+export function subscriptionExpired(account: AccountView, now: number) {
+  const expiresAt = account.subscription.expiresAt
+  return expiresAt !== null && expiresAt < now
+}
+
+export function subscriptionExpiringSoon(account: AccountView, now: number) {
+  const expiresAt = account.subscription.expiresAt
+  return (
+    expiresAt !== null &&
+    expiresAt >= now &&
+    expiresAt - now <= EXPIRING_SOON_MS
+  )
+}
+
+export function needsAttention(account: AccountView, now: number) {
+  if (isDisabled(account)) return false
+  return (
+    !isRoutable(account) ||
+    account.subscription.source === "legacy_estimate" ||
+    subscriptionExpired(account, now) ||
+    subscriptionExpiringSoon(account, now)
+  )
+}
+
+export function defaultBucket(
+  account: AccountView
+): RateLimitBucketView | undefined {
+  return (
+    account.limits.buckets.find(
+      (bucket) => bucket.key === account.limits.defaultBucketKey
+    ) ?? account.limits.buckets[0]
+  )
+}
+
+/** The bucket's windows, longest first, so the weekly ceiling reads above the short window. */
+export function accountWindows(account: AccountView): UsageWindowView[] {
+  const bucket = defaultBucket(account)
+  if (!bucket) return []
+  return [bucket.primary, bucket.secondary]
+    .filter((window): window is UsageWindowView => window !== null)
+    .sort((a, b) => (b.windowDurationMins ?? 0) - (a.windowDurationMins ?? 0))
+    .slice(0, 2)
+}
+
+export function remainingPercent(window: UsageWindowView): number | null {
+  if (window.usedPercent === null) return null
+  return Math.min(100, Math.max(0, 100 - window.usedPercent))
+}
+
+/** The tightest reported window, which is what actually caps the next request. */
+export function tightestRemaining(account: AccountView): number | null {
+  const values = accountWindows(account)
+    .map(remainingPercent)
+    .filter((value): value is number => value !== null)
+  return values.length ? Math.min(...values) : null
+}
