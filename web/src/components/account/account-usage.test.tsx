@@ -60,14 +60,31 @@ describe("QuotaMeter", () => {
     expect(screen.getByText("3 小时后重置")).toHaveClass("text-foreground")
   })
 
-  it("reads an absent window as 无限制 only when the bucket was reported", () => {
-    const { rerender } = render(<QuotaMeter window={null} />)
+  it("names an absent window and draws it full when there is no cap", () => {
+    const { container, rerender } = render(
+      <QuotaMeter window={null} placeholderMins={300} />
+    )
+    expect(screen.getByText("5 小时额度")).toBeInTheDocument()
     expect(screen.getByText("无限制")).toBeInTheDocument()
+    const bar = container.querySelector(
+      "[data-slot=quota-meter]"
+    )!.lastElementChild!
+    expect(bar).toHaveClass("bg-primary")
 
-    // Limits were never fetched, so the slot must not claim there is no cap.
-    rerender(<QuotaMeter window={null} known={false} fallback="额度尚未刷新" />)
+    // Limits were never fetched, so the slot keeps its name but claims nothing.
+    rerender(
+      <QuotaMeter
+        window={null}
+        placeholderMins={300}
+        known={false}
+        fallback="额度尚未刷新"
+      />
+    )
+    expect(screen.getByText("5 小时额度")).toBeInTheDocument()
     expect(screen.queryByText("无限制")).not.toBeInTheDocument()
-    expect(screen.getByText("额度尚未刷新")).toBeInTheDocument()
+    expect(
+      container.querySelector("[data-slot=quota-meter]")!.lastElementChild
+    ).not.toHaveClass("bg-primary")
   })
 
   it("holds an empty slot open when the window is missing entirely", () => {

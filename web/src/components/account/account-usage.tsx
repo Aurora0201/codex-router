@@ -21,11 +21,14 @@ const TRACK = "[&_[data-slot=progress-track]]:h-[3px]"
  */
 export function QuotaMeter({
   window,
+  placeholderMins,
   known = true,
   fallback,
   className,
 }: {
   window: UsageWindowView | null
+  /** Names the slot when upstream omitted the window itself. */
+  placeholderMins?: number
   /**
    * Whether upstream reported this bucket at all. When it did, an absent window
    * means there is no such cap; when it did not, an absent window means nothing
@@ -38,6 +41,16 @@ export function QuotaMeter({
 }) {
   const { t } = useTranslation()
   const remaining = window ? remainingPercent(window) : null
+  const label = formatUsageWindow(
+    window ??
+      (placeholderMins !== undefined
+        ? {
+            usedPercent: null,
+            resetsAt: null,
+            windowDurationMins: placeholderMins,
+          }
+        : null)
+  )
 
   // An empty slot still holds its place, so both windows stay on screen and the
   // rows below keep their alignment.
@@ -46,28 +59,30 @@ export function QuotaMeter({
       <div
         data-slot="quota-meter"
         className={cn(SLOT, className)}
-        aria-label={window ? formatUsageWindow(window) : undefined}
+        aria-label={label}
       >
         <div className={TEXT_LINE}>
-          {window ? (
-            <span className="truncate text-muted-foreground">
-              {formatUsageWindow(window)}
-            </span>
-          ) : null}
+          <span className="truncate text-muted-foreground">{label}</span>
           <span className="ml-auto shrink-0 truncate text-muted-foreground">
             {/* A window reported without a number is 未报告; an absent window on
                 a bucket upstream did report means there is no such cap. */}
             {window ? t("未报告") : known ? t("无限制") : fallback}
           </span>
         </div>
-        <div className="h-[3px] rounded-full bg-muted/60" />
+        {/* No cap means nothing is spent, so the rule is drawn full rather than
+            empty. It is not a progressbar: there is no measurement behind it. */}
+        <div
+          className={cn(
+            "h-[3px] rounded-full",
+            !window && known ? "bg-primary" : "bg-muted/60"
+          )}
+        />
       </div>
     )
   }
 
   const empty = remaining <= 0
   const tight = !empty && remaining <= QUOTA_TIGHT_PERCENT
-  const label = formatUsageWindow(window)
 
   return (
     <Progress

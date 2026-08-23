@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/tooltip"
 import {
   QUOTA_STALE_MS,
+  SLOT_WINDOW_MINS,
   accountWindowSlots,
   isRoutable,
   subscriptionExpired,
@@ -158,6 +159,7 @@ export function AccountRow({
             window ? `${window.windowDurationMins}-${index}` : `slot-${index}`
           }
           window={window}
+          placeholderMins={SLOT_WINDOW_MINS[index]}
           known={known}
           fallback={index === 0 ? fallback : undefined}
         />

@@ -51,7 +51,9 @@
 - Each row leads with the OpenAI mark in a rounded tile; it is `aria-hidden` brand furniture, not status, and reuses `@/components/app/openai-mark`.
 - Quota meters fill by remaining, not used, so a fuller bar always means a better route. The meter keeps the same shape in every state; only emphasis moves. Healthy uses `--primary`, `--warning` marks a tight window, `--destructive` marks an exhausted one.
 - A meter is a text line (window, refill time, percentage) with its bar drawn as a rule underneath, on a fixed-height slot. Every row renders both window slots even when a window is unreported or limits were never fetched, so the two-line layout never collapses and the percentages stay aligned down the list.
-- `null` usage renders as "未报告" with no bar, never as 0%. A window upstream omitted entirely reads as "无限制", but only when the bucket itself was reported; when limits were never fetched the slot says so instead of claiming there is no cap.
+- `null` usage renders as "未报告" with no bar, never as 0%.
+- Both slots are always named from `SLOT_WINDOW_MINS` (7 天额度 / 5 小时额度), even when upstream omitted the window, and the slots are filled by role so a lone weekly window leaves the short slot empty rather than the other way round.
+- A window upstream omitted entirely reads as "无限制" with a full rule, but only when the bucket itself was reported; when limits were never fetched the slot keeps its name, says so, and draws a muted rule instead of claiming there is no cap.
 - Reset times count down in two units ("3 天 5 小时后重置"), dropping the minor unit when it is zero.
 - Subscription state in a row is the date itself ("2026-09-15 到期"), not a word like "即将到期"; tone escalates but the date is always the label.
 - At most one qualifier per row (subscription state, then stale auth, then stale limits). Everything else — plan, auth mode, credits, per-bucket windows, reset credits — belongs in the detail sheet.

@@ -8,6 +8,12 @@ export const EXPIRING_SOON_MS = 7 * 24 * 60 * 60_000
 export const QUOTA_STALE_MS = 10 * 60_000
 /** Remaining quota at or below this share turns the meter into a warning. */
 export const QUOTA_TIGHT_PERCENT = 25
+const DAY_MINS = 1440
+/**
+ * Codex reports a 5-hour and a 7-day window per bucket. These name a slot the
+ * upstream omitted, so an absent window can still say which cap it stands for.
+ */
+export const SLOT_WINDOW_MINS = [7 * DAY_MINS, 300] as const
 
 export function isDisabled(account: AccountView) {
   return !account.enabled || account.auth.status === "disabled"
@@ -70,6 +76,15 @@ export function accountWindowSlots(
   account: AccountView
 ): [UsageWindowView | null, UsageWindowView | null] {
   const windows = accountWindows(account)
+  // Split by role rather than by position, so a lone weekly window leaves the
+  // short slot empty and not the other way round.
+  const long =
+    windows.find((w) => (w.windowDurationMins ?? 0) >= DAY_MINS) ?? null
+  const short =
+    windows.find(
+      (w) => w.windowDurationMins !== null && w.windowDurationMins < DAY_MINS
+    ) ?? null
+  if (long || short) return [long, short]
   return [windows[0] ?? null, windows[1] ?? null]
 }
 

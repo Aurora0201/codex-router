@@ -354,6 +354,39 @@ describe("AccountList", () => {
     const none = rows().find((row) => row.textContent?.includes("acct-none"))!
     expect(within(none).getAllByText("额度尚未刷新")).toHaveLength(1)
     expect(within(none).queryByText("无限制")).not.toBeInTheDocument()
+    // Both slots stay named even with nothing to report.
+    expect(within(none).getByText("7 天额度")).toBeInTheDocument()
+    expect(within(none).getByText("5 小时额度")).toBeInTheDocument()
+  })
+
+  it("names the missing window by its role, whichever one upstream omitted", () => {
+    renderList([
+      account({
+        id: "no-short",
+        chatgptAccountId: "acct-no-short",
+        limits: quota([bucket({ secondary: window(12, 10080) })]),
+      }),
+      account({
+        id: "no-long",
+        chatgptAccountId: "acct-no-long",
+        limits: quota([bucket({ primary: window(30, 300) })]),
+      }),
+    ])
+
+    const noShort = rows().find((r) =>
+      r.textContent?.includes("acct-no-short")
+    )!
+    const noLong = rows().find((r) => r.textContent?.includes("acct-no-long"))!
+    for (const row of [noShort, noLong]) {
+      expect(within(row).getByText("7 天额度")).toBeInTheDocument()
+      expect(within(row).getByText("5 小时额度")).toBeInTheDocument()
+      expect(within(row).getByText("无限制")).toBeInTheDocument()
+    }
+    // The unlimited slot is the one upstream left out, not simply the last one.
+    const slots = (row: HTMLElement) =>
+      Array.from(row.querySelectorAll("[data-slot=quota-meter]"))
+    expect(slots(noShort)[1]).toHaveTextContent("无限制")
+    expect(slots(noLong)[0]).toHaveTextContent("无限制")
   })
 
   it("shows only the most urgent qualifier on the second line", () => {
