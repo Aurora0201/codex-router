@@ -35,7 +35,7 @@ import type { AccountView } from "@/services/contracts"
 export const ROW_COLUMNS =
   "grid-cols-[minmax(0,14rem)_minmax(0,9rem)_minmax(0,1fr)_minmax(0,1fr)_auto]"
 /** The row adds the two baselines; the column header only borrows the tracks. */
-export const ROW_BASELINES = "grid-rows-[1.5rem_1.5rem] gap-y-2"
+export const ROW_BASELINES = "grid-rows-[1.25rem_1.25rem] gap-y-1"
 export const ACTIONS_CELL = "col-start-5"
 
 type Translate = (key: string, values?: Record<string, unknown>) => string
@@ -168,7 +168,6 @@ export function AccountRow({
       window={window}
       placeholderMins={SLOT_WINDOW_MINS[index]}
       known={known}
-      live={account.isActive}
       fallback={index === 0 ? fallback : undefined}
     />
   ))

@@ -52,9 +52,11 @@
 - Every column in a row shares the same two baselines via `grid-rows-subgrid` against `ROW_BASELINES`, and the column header borrows `ROW_COLUMNS` alone. Columns must not carry their own line heights.
 - Leftover width goes to the quota columns, which are the flexible tracks. Identity and status are capped, so slack is spent on content rather than pooling as a void.
 - Quota meters fill by remaining, not used, so a fuller bar always means a better route. The meter keeps the same shape in every state; only emphasis moves.
-- `--primary` is reserved for one fact: which account traffic is routed through. Healthy meters on standby rows stay neutral, so `--warning` (tight) and `--destructive` (exhausted) keep their force against a grey field. No other element may spend an accent hue on a default state.
+- Healthy meters use `--primary` on every row; the live account is marked by its radio and row tint, not by bar colour. `--warning` (tight) and `--destructive` (exhausted) override it.
+- The meter track is `--foreground/20`, dark enough that a full bar is still readable as a bar rather than disappearing into the card.
 - The two quota windows sit in their own columns side by side, not stacked. They are the only content in the row that can honestly use the width, and stacking them left roughly half the row empty.
-- A meter spans both row baselines: window name, bar and percentage share the first line so the bar fills the space between the label and the number, and the reset countdown takes the second. Nothing in a row may leave a horizontal gap wider than about 40px.
+- A meter spans both row baselines: window name, bar and percentage share the first line so the bar fills the space between the label and the number, and the second line carries the state — the reset countdown, or "无限制" / "未报告" / "额度尚未刷新" when there is no number. Nothing in a row may leave a horizontal gap wider than about 40px.
+- An unmeasured window still reserves the number column, so both windows keep the same bar geometry.
 - Every row renders both window slots even when a window is unreported or limits were never fetched, so the layout never collapses and the percentages stay aligned down each window column.
 - `null` usage renders as "未报告" with no bar, never as 0%.
 - Both slots are always named from `SLOT_WINDOW_MINS` (7 天额度 / 5 小时额度), even when upstream omitted the window, and the slots are filled by role so a lone weekly window leaves the short slot empty rather than the other way round.

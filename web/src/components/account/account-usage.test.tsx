@@ -61,19 +61,15 @@ describe("QuotaMeter", () => {
   })
 
   it("names an absent window and draws it full when there is no cap", () => {
-    const { container, rerender } = render(
-      <QuotaMeter window={null} placeholderMins={300} live />
+    const { container } = render(
+      <QuotaMeter window={null} placeholderMins={300} />
     )
     expect(screen.getByText("5 小时额度")).toBeInTheDocument()
-    expect(screen.getByText("无限制")).toBeInTheDocument()
+    // The state reads on the caption line, where the countdown sits on a
+    // measured window, so the two windows stay parallel.
+    expect(screen.getByText("无限制")).toHaveClass("row-start-2")
     expect(container.querySelector("[data-slot=quota-bar]")).toHaveClass(
       "bg-primary"
-    )
-
-    // Colour is reserved for the live account; a standby row stays neutral.
-    rerender(<QuotaMeter window={null} placeholderMins={300} />)
-    expect(container.querySelector("[data-slot=quota-bar]")).toHaveClass(
-      "bg-foreground/25"
     )
   })
 
@@ -86,6 +82,9 @@ describe("QuotaMeter", () => {
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument()
     expect(container.querySelector("[data-slot=quota-meter]")).toHaveClass(
       "row-span-2"
+    )
+    expect(container.querySelector("[data-slot=quota-bar]")).toHaveClass(
+      "bg-foreground/20"
     )
   })
 

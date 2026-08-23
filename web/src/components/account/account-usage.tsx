@@ -15,7 +15,7 @@ import type { UsageWindowView } from "@/services/contracts"
 const METER =
   "row-span-2 grid grid-rows-subgrid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2 text-xs"
 const TRACK =
-  "[&>[data-slot=progress-track]]:col-start-2 [&>[data-slot=progress-track]]:row-start-1 [&>[data-slot=progress-track]]:h-[3px]"
+  "[&>[data-slot=progress-track]]:col-start-2 [&>[data-slot=progress-track]]:row-start-1 [&>[data-slot=progress-track]]:h-[3px] [&>[data-slot=progress-track]]:bg-foreground/20"
 const LABEL = "col-start-1 row-start-1 truncate text-muted-foreground"
 const VALUE = "col-start-3 row-start-1 w-9 text-right font-mono tabular-nums"
 const CAPTION = "col-span-3 row-start-2 truncate text-muted-foreground"
@@ -29,7 +29,6 @@ export function QuotaMeter({
   window,
   placeholderMins,
   known = true,
-  live = false,
   fallback,
   className,
 }: {
@@ -42,12 +41,6 @@ export function QuotaMeter({
    * is known and the slot must not claim otherwise.
    */
   known?: boolean
-  /**
-   * Whether this meter belongs to the account traffic is routed through. Colour
-   * is reserved for that one fact, so a healthy standby row stays neutral and
-   * the warning and exhausted tones keep their force.
-   */
-  live?: boolean
   /** Shown on one unknown slot; repeating it on both is just noise. */
   fallback?: string
   className?: string
@@ -81,14 +74,12 @@ export function QuotaMeter({
           data-slot="quota-bar"
           className={cn(
             "col-start-2 row-start-1 h-[3px] rounded-full",
-            !window && known
-              ? live
-                ? "bg-primary"
-                : "bg-foreground/25"
-              : "bg-muted/60"
+            !window && known ? "bg-primary" : "bg-foreground/20"
           )}
         />
-        <span className={cn(VALUE, "w-auto font-sans text-muted-foreground")}>
+        {/* Holds the number column open so both windows keep the same bar length. */}
+        <span aria-hidden="true" className={VALUE} />
+        <span className={CAPTION}>
           {/* A window reported without a number is 未报告; an absent window on
               a bucket upstream did report means there is no such cap. */}
           {window ? t("未报告") : known ? t("无限制") : fallback}
@@ -112,9 +103,7 @@ export function QuotaMeter({
           ? "[&_[data-slot=progress-indicator]]:bg-destructive"
           : tight
             ? "[&_[data-slot=progress-indicator]]:bg-warning"
-            : live
-              ? "[&_[data-slot=progress-indicator]]:bg-primary"
-              : "[&_[data-slot=progress-indicator]]:bg-foreground/25",
+            : "[&_[data-slot=progress-indicator]]:bg-primary",
         className
       )}
     >

@@ -389,35 +389,30 @@ describe("AccountList", () => {
     expect(slots(noLong)[0]).toHaveTextContent("无限制")
   })
 
-  it("spends the accent colour only on the account traffic runs through", () => {
+  it("keeps both windows on the same bar geometry whatever they report", () => {
     renderList([
       account({
-        id: "live",
-        isActive: true,
-        limits: quota([bucket({ primary: window(20, 300) })]),
-      }),
-      account({
-        id: "standby",
-        chatgptAccountId: "acct-standby",
-        limits: quota([bucket({ primary: window(20, 300) })]),
+        limits: quota([
+          bucket({ primary: window(20, 300), secondary: window(50, 10080) }),
+        ]),
       }),
     ])
 
-    const live = rows().find((r) => r.textContent?.includes("acct-alpha"))!
-    const standby = rows().find((r) => r.textContent?.includes("acct-standby"))!
-    expect(live.querySelector("[role=progressbar]")).toHaveClass(
-      "[&_[data-slot=progress-indicator]]:bg-primary"
+    const meters = Array.from(
+      rows()[0].querySelectorAll("[data-slot=quota-meter]")
     )
-    expect(standby.querySelector("[role=progressbar]")).toHaveClass(
-      "[&_[data-slot=progress-indicator]]:bg-foreground/25"
-    )
+    expect(meters).toHaveLength(2)
+    // Both windows reserve the number column, so their bars stay the same width.
+    for (const meter of meters) {
+      expect(meter.querySelector("[class*=w-9]")).toBeTruthy()
+    }
   })
 
   it("puts every column on the same two baselines", () => {
     renderList([account()])
     const grid = rows()[0].lastElementChild!
-    expect(grid).toHaveClass("grid-rows-[1.5rem_1.5rem]")
-    for (const column of Array.from(grid.children).slice(0, 3)) {
+    expect(grid).toHaveClass("grid-rows-[1.25rem_1.25rem]")
+    for (const column of Array.from(grid.children).slice(0, 4)) {
       expect(column).toHaveClass("row-span-2", "grid-rows-subgrid")
     }
   })
