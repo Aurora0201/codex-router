@@ -3,7 +3,7 @@ import { RouteIcon, RouteOffIcon, SearchXIcon } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
 import { AccountDetailSheet } from "./account-detail-sheet"
-import { AccountRow } from "./account-row"
+import { AccountRow, ROW_COLUMNS } from "./account-row"
 import { AccountStatus } from "./account-status-badge"
 import type { AccountAction } from "./account-actions"
 import { Button } from "@/components/ui/button"
@@ -258,11 +258,13 @@ export function AccountList({
               >
                 <span className="size-4 shrink-0" />
                 <span className="size-12 shrink-0" />
-                <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,13rem)_minmax(0,9rem)_minmax(0,26rem)_minmax(0,1fr)] gap-x-5">
+                <div className={cn("grid min-w-0 flex-1 gap-x-6", ROW_COLUMNS)}>
                   <span>{t("账号")}</span>
                   <span>{t("状态")}</span>
                   <span>{t("剩余额度")}</span>
-                  <span />
+                  {/* Matches the actions button, so the tracks resolve the same
+                      width here as they do on a row. */}
+                  <span className="size-7" />
                 </div>
               </div>
             )}

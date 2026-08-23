@@ -389,6 +389,39 @@ describe("AccountList", () => {
     expect(slots(noLong)[0]).toHaveTextContent("无限制")
   })
 
+  it("spends the accent colour only on the account traffic runs through", () => {
+    renderList([
+      account({
+        id: "live",
+        isActive: true,
+        limits: quota([bucket({ primary: window(20, 300) })]),
+      }),
+      account({
+        id: "standby",
+        chatgptAccountId: "acct-standby",
+        limits: quota([bucket({ primary: window(20, 300) })]),
+      }),
+    ])
+
+    const live = rows().find((r) => r.textContent?.includes("acct-alpha"))!
+    const standby = rows().find((r) => r.textContent?.includes("acct-standby"))!
+    expect(live.querySelector("[role=progressbar]")).toHaveClass(
+      "[&_[data-slot=progress-indicator]]:bg-primary"
+    )
+    expect(standby.querySelector("[role=progressbar]")).toHaveClass(
+      "[&_[data-slot=progress-indicator]]:bg-foreground/25"
+    )
+  })
+
+  it("puts every column on the same two baselines", () => {
+    renderList([account()])
+    const grid = rows()[0].lastElementChild!
+    expect(grid).toHaveClass("grid-rows-[1.5rem_1.5rem]")
+    for (const column of Array.from(grid.children).slice(0, 3)) {
+      expect(column).toHaveClass("row-span-2", "grid-rows-subgrid")
+    }
+  })
+
   it("shows only the most urgent qualifier on the second line", () => {
     renderList([
       account({

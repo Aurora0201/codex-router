@@ -23,6 +23,7 @@ export function QuotaMeter({
   window,
   placeholderMins,
   known = true,
+  live = false,
   fallback,
   className,
 }: {
@@ -35,6 +36,12 @@ export function QuotaMeter({
    * is known and the slot must not claim otherwise.
    */
   known?: boolean
+  /**
+   * Whether this meter belongs to the account traffic is routed through. Colour
+   * is reserved for that one fact, so a healthy standby row stays neutral and
+   * the warning and exhausted tones keep their force.
+   */
+  live?: boolean
   /** Shown on one unknown slot; repeating it on both is just noise. */
   fallback?: string
   className?: string
@@ -74,7 +81,11 @@ export function QuotaMeter({
         <div
           className={cn(
             "h-[3px] rounded-full",
-            !window && known ? "bg-primary" : "bg-muted/60"
+            !window && known
+              ? live
+                ? "bg-primary"
+                : "bg-foreground/25"
+              : "bg-muted/60"
           )}
         />
       </div>
@@ -96,7 +107,9 @@ export function QuotaMeter({
           ? "[&_[data-slot=progress-indicator]]:bg-destructive"
           : tight
             ? "[&_[data-slot=progress-indicator]]:bg-warning"
-            : "[&_[data-slot=progress-indicator]]:bg-primary",
+            : live
+              ? "[&_[data-slot=progress-indicator]]:bg-primary"
+              : "[&_[data-slot=progress-indicator]]:bg-foreground/25",
         className
       )}
     >

@@ -62,7 +62,7 @@ describe("QuotaMeter", () => {
 
   it("names an absent window and draws it full when there is no cap", () => {
     const { container, rerender } = render(
-      <QuotaMeter window={null} placeholderMins={300} />
+      <QuotaMeter window={null} placeholderMins={300} live />
     )
     expect(screen.getByText("5 小时额度")).toBeInTheDocument()
     expect(screen.getByText("无限制")).toBeInTheDocument()
@@ -70,6 +70,12 @@ describe("QuotaMeter", () => {
       "[data-slot=quota-meter]"
     )!.lastElementChild!
     expect(bar).toHaveClass("bg-primary")
+
+    // Colour is reserved for the live account; a standby row stays neutral.
+    rerender(<QuotaMeter window={null} placeholderMins={300} />)
+    expect(
+      container.querySelector("[data-slot=quota-meter]")!.lastElementChild
+    ).toHaveClass("bg-foreground/25")
 
     // Limits were never fetched, so the slot keeps its name but claims nothing.
     rerender(

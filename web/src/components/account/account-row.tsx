@@ -27,6 +27,16 @@ import {
 import { cn } from "@/lib/utils"
 import type { AccountView } from "@/services/contracts"
 
+/**
+ * Two 24px baselines shared by every column, and a flexible status track that
+ * absorbs the leftover width so it reads as a gap between "who" and "how much"
+ * instead of a void at the end of the row.
+ */
+export const ROW_COLUMNS =
+  "grid-cols-[minmax(0,14rem)_minmax(0,1fr)_26rem_auto]"
+/** The row adds the two baselines; the column header only borrows the tracks. */
+export const ROW_BASELINES = "grid-rows-[1.5rem_1.5rem] gap-y-2"
+
 type Translate = (key: string, values?: Record<string, unknown>) => string
 
 /**
@@ -161,6 +171,7 @@ export function AccountRow({
           window={window}
           placeholderMins={SLOT_WINDOW_MINS[index]}
           known={known}
+          live={account.isActive}
           fallback={index === 0 ? fallback : undefined}
         />
       ))}
@@ -232,16 +243,25 @@ export function AccountRow({
     >
       {radio}
       {avatar}
-      <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,13rem)_minmax(0,9rem)_minmax(0,26rem)_minmax(0,1fr)] items-center gap-x-5">
-        <div className="min-w-0 space-y-1">
-          <div className="flex h-5 items-center">{identity}</div>
-          <div className="flex h-5 items-center">{email}</div>
+      {/* Every column shares the same two 24px rows via subgrid, so identity,
+          status and the quota meters sit on the same two baselines. The slack
+          lives between status and quota rather than trailing after the row. */}
+      <div
+        className={cn(
+          "grid min-w-0 flex-1 gap-x-6",
+          ROW_COLUMNS,
+          ROW_BASELINES
+        )}
+      >
+        <div className="row-span-2 grid min-w-0 grid-rows-subgrid">
+          <div className="flex items-center">{identity}</div>
+          <div className="flex items-center">{email}</div>
         </div>
-        <div className="min-w-0 space-y-1">
-          <div className="flex h-5 items-center">
+        <div className="row-span-2 grid min-w-0 grid-rows-subgrid">
+          <div className="flex items-center">
             <AccountStatus account={account} />
           </div>
-          <div className="flex h-5 items-center">
+          <div className="flex items-center">
             {note ? (
               <span className={cn("truncate text-xs", note.tone)}>
                 {note.label}
@@ -249,8 +269,10 @@ export function AccountRow({
             ) : null}
           </div>
         </div>
-        <div className="min-w-0 space-y-2">{meters}</div>
-        <div className="flex items-center justify-end gap-1.5">
+        <div className="row-span-2 grid min-w-0 grid-rows-subgrid">
+          {meters}
+        </div>
+        <div className="row-span-2 flex items-center justify-end gap-1.5">
           {repairButton}
           <AccountActions
             account={account}

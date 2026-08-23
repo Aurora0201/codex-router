@@ -49,7 +49,10 @@
 - `清除路由` lives in the route summary at the top of the list, never in a row.
 - A row that cannot be routed has a disabled radio and offers its own next step (`刷新认证`, `启用账号`) instead.
 - Each row leads with the OpenAI mark in a rounded tile; it is `aria-hidden` brand furniture, not status, and reuses `@/components/app/openai-mark`.
-- Quota meters fill by remaining, not used, so a fuller bar always means a better route. The meter keeps the same shape in every state; only emphasis moves. Healthy uses `--primary`, `--warning` marks a tight window, `--destructive` marks an exhausted one.
+- Every column in a row shares the same two baselines via `grid-rows-subgrid` against `ROW_BASELINES`, and the column header borrows `ROW_COLUMNS` alone. Columns must not carry their own line heights.
+- The flexible track sits in the middle of the row, not at the end: leftover width reads as a gap between identity and quota rather than a void trailing the last column.
+- Quota meters fill by remaining, not used, so a fuller bar always means a better route. The meter keeps the same shape in every state; only emphasis moves.
+- `--primary` is reserved for one fact: which account traffic is routed through. Healthy meters on standby rows stay neutral, so `--warning` (tight) and `--destructive` (exhausted) keep their force against a grey field. No other element may spend an accent hue on a default state.
 - A meter is a text line (window, refill time, percentage) with its bar drawn as a rule underneath, on a fixed-height slot. Every row renders both window slots even when a window is unreported or limits were never fetched, so the two-line layout never collapses and the percentages stay aligned down the list.
 - `null` usage renders as "未报告" with no bar, never as 0%.
 - Both slots are always named from `SLOT_WINDOW_MINS` (7 天额度 / 5 小时额度), even when upstream omitted the window, and the slots are filled by role so a lone weekly window leaves the short slot empty rather than the other way round.
