@@ -77,8 +77,12 @@ export function QuotaMeter({
             !window && known ? "bg-primary" : "bg-foreground/20"
           )}
         />
-        {/* Holds the number column open so both windows keep the same bar length. */}
-        <span aria-hidden="true" className={VALUE} />
+        {/* Holds the number column open so both windows keep the same bar
+            length, and stands where a percentage would when there is no cap.
+            The caption carries the words, so the symbol stays decorative. */}
+        <span aria-hidden="true" className={VALUE}>
+          {!window && known ? "∞" : null}
+        </span>
         <span className={CAPTION}>
           {/* A window reported without a number is 未报告; an absent window on
               a bucket upstream did report means there is no such cap. */}

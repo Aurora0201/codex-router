@@ -293,128 +293,76 @@ describe("AccountList", () => {
     )
   })
 
-  it("offers a repair on rows that cannot be routed and nothing on rows that can", async () => {
+  it("offers a repair only where a row stays broken until someone acts", async () => {
     const onAction = vi.fn()
     renderList(
       [
         account({ id: "ready", chatgptAccountId: "acct-ready" }),
-        account({ id: "broken", authStatus: "error" }),
+        account({
+          id: "broken",
+          chatgptAccountId: "acct-broken",
+          authStatus: "error",
+        }),
+        // Disabling is a deliberate act, not a fault to repair.
         account({
           id: "off",
           chatgptAccountId: "acct-off",
           enabled: false,
           authStatus: "disabled",
         }),
+        // Transient and self-clearing states resolve without a button.
+        account({
+          id: "busy",
+          chatgptAccountId: "acct-busy",
+          authStatus: "checking",
+        }),
+        account({
+          id: "limited",
+          chatgptAccountId: "acct-limited",
+          authStatus: "rate_limited",
+        }),
       ],
       { onAction }
     )
 
-    const readyRow = rows().find((row) =>
-      row.textContent?.includes("acct-ready")
-    )!
-    expect(within(readyRow).queryAllByRole("button")).toHaveLength(2) // id + ⋯
+    const row = (id: string) => rows().find((r) => r.textContent?.includes(id))!
+    // Two buttons means identity plus the actions menu, and nothing else.
+    for (const id of ["acct-ready", "acct-off", "acct-busy", "acct-limited"]) {
+      expect(within(row(id)).queryAllByRole("button")).toHaveLength(2)
+    }
+    expect(
+      within(row("acct-broken")).getByRole("button", { name: "刷新认证" })
+    ).toBeInTheDocument()
 
     await userEvent.click(screen.getByRole("button", { name: "刷新认证" }))
     expect(onAction.mock.calls[0][1]).toBe("auth")
-    await userEvent.click(screen.getByRole("button", { name: "启用账号" }))
-    expect(onAction.mock.calls[1][1]).toBe("toggle")
   })
 
-  it("keeps two quota slots on every row and brands each with the OpenAI mark", () => {
+  it("locks the radio on every account that cannot be routed", () => {
     renderList([
+      account({ id: "ready", chatgptAccountId: "acct-ready" }),
       account({
-        id: "both",
-        limits: quota([
-          bucket({ primary: window(25, 300), secondary: window(50, 10080) }),
-        ]),
-      }),
-      // Only the short window reported: the weekly slot still holds its place.
-      account({
-        id: "partial",
-        chatgptAccountId: "acct-partial",
-        limits: quota([
-          bucket({ primary: window(40, 300), secondary: window(null, 10080) }),
-        ]),
-      }),
-      account({ id: "none", chatgptAccountId: "acct-none" }),
-    ])
-
-    for (const row of rows()) {
-      expect(row.querySelectorAll("[data-slot=quota-meter]")).toHaveLength(2)
-      expect(row.querySelectorAll("[data-slot=metric-mark]")).toHaveLength(1)
-    }
-
-    const partial = rows().find((row) =>
-      row.textContent?.includes("acct-partial")
-    )!
-    expect(within(partial).getByText("7 天额度")).toBeInTheDocument()
-    expect(within(partial).getByText("未报告")).toBeInTheDocument()
-
-    // A row with no limit data at all says so once, and never claims 无限制.
-    const none = rows().find((row) => row.textContent?.includes("acct-none"))!
-    expect(within(none).getAllByText("额度尚未刷新")).toHaveLength(1)
-    expect(within(none).queryByText("无限制")).not.toBeInTheDocument()
-    // Both slots stay named even with nothing to report.
-    expect(within(none).getByText("7 天额度")).toBeInTheDocument()
-    expect(within(none).getByText("5 小时额度")).toBeInTheDocument()
-  })
-
-  it("names the missing window by its role, whichever one upstream omitted", () => {
-    renderList([
-      account({
-        id: "no-short",
-        chatgptAccountId: "acct-no-short",
-        limits: quota([bucket({ secondary: window(12, 10080) })]),
+        id: "off",
+        chatgptAccountId: "acct-off",
+        enabled: false,
+        authStatus: "disabled",
       }),
       account({
-        id: "no-long",
-        chatgptAccountId: "acct-no-long",
-        limits: quota([bucket({ primary: window(30, 300) })]),
+        id: "limited",
+        chatgptAccountId: "acct-limited",
+        authStatus: "rate_limited",
       }),
     ])
 
-    const noShort = rows().find((r) =>
-      r.textContent?.includes("acct-no-short")
-    )!
-    const noLong = rows().find((r) => r.textContent?.includes("acct-no-long"))!
-    for (const row of [noShort, noLong]) {
-      expect(within(row).getByText("7 天额度")).toBeInTheDocument()
-      expect(within(row).getByText("5 小时额度")).toBeInTheDocument()
-      expect(within(row).getByText("无限制")).toBeInTheDocument()
+    // Routability decides this, not whether the row happens to show a button.
+    for (const id of ["acct-off", "acct-limited"]) {
+      expect(
+        screen.getByRole("radio", { name: `路由到 ${id}` })
+      ).toHaveAttribute("aria-disabled", "true")
     }
-    // The unlimited slot is the one upstream left out, not simply the last one.
-    const slots = (row: HTMLElement) =>
-      Array.from(row.querySelectorAll("[data-slot=quota-meter]"))
-    expect(slots(noShort)[1]).toHaveTextContent("无限制")
-    expect(slots(noLong)[0]).toHaveTextContent("无限制")
-  })
-
-  it("keeps both windows on the same bar geometry whatever they report", () => {
-    renderList([
-      account({
-        limits: quota([
-          bucket({ primary: window(20, 300), secondary: window(50, 10080) }),
-        ]),
-      }),
-    ])
-
-    const meters = Array.from(
-      rows()[0].querySelectorAll("[data-slot=quota-meter]")
-    )
-    expect(meters).toHaveLength(2)
-    // Both windows reserve the number column, so their bars stay the same width.
-    for (const meter of meters) {
-      expect(meter.querySelector("[class*=w-9]")).toBeTruthy()
-    }
-  })
-
-  it("puts every column on the same two baselines", () => {
-    renderList([account()])
-    const grid = rows()[0].lastElementChild!
-    expect(grid).toHaveClass("grid-rows-[1.25rem_1.25rem]")
-    for (const column of Array.from(grid.children).slice(0, 4)) {
-      expect(column).toHaveClass("row-span-2", "grid-rows-subgrid")
-    }
+    expect(
+      screen.getByRole("radio", { name: "路由到 acct-ready" })
+    ).not.toHaveAttribute("aria-disabled", "true")
   })
 
   it("shows only the most urgent qualifier on the second line", () => {

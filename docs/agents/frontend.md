@@ -49,7 +49,8 @@
 - Accounts are listed one per row across two aligned lines. The list is a single shadcn RadioGroup and each row leads with its radio, because exactly one of N accounts is live. Do not reintroduce a separate account picker or a per-row switch button.
 - Row order does not depend on which account is live; re-sorting on selection would make the list jump under the pointer. Order is routable (roomiest first), then rows needing attention, then disabled.
 - `清除路由` lives in the route summary at the top of the list, never in a row.
-- A row that cannot be routed has a disabled radio and offers its own next step (`刷新认证`, `启用账号`) instead.
+- A row that cannot be routed has a disabled radio. Whether the radio is locked follows routability, never the presence of a button.
+- A repair button appears only where a row stays broken until someone acts (`relogin_required`, `error`). A deliberately disabled account is not a fault, and checking, waiting or rate-limited rows clear on their own, so none of them get one; the actions menu still covers those cases.
 - Each row leads with the OpenAI mark in a rounded tile; it is `aria-hidden` brand furniture, not status, and reuses `@/components/app/openai-mark`.
 - Every column in a row shares the same two baselines via `grid-rows-subgrid` against `ROW_BASELINES`, and the column header borrows `ROW_COLUMNS` alone. Columns must not carry their own line heights.
 - Leftover width goes to the quota columns, which are the flexible tracks. Identity and status are capped, so slack is spent on content rather than pooling as a void.
@@ -63,7 +64,7 @@
 - Every row renders both window slots even when a window is unreported or limits were never fetched, so the layout never collapses and the percentages stay aligned down each window column.
 - `null` usage renders as "未报告" with no bar, never as 0%.
 - Both slots are always named from `SLOT_WINDOW_MINS` (7 天额度 / 5 小时额度), even when upstream omitted the window, and the slots are filled by role so a lone weekly window leaves the short slot empty rather than the other way round.
-- A window upstream omitted entirely reads as "无限制" with a full rule, but only when the bucket itself was reported; when limits were never fetched the slot keeps its name, says so, and draws a muted rule instead of claiming there is no cap.
+- A window upstream omitted entirely reads as "无限制" with a full rule and an `∞` where a percentage would sit, but only when the bucket itself was reported; when limits were never fetched the slot keeps its name, says so, and draws a muted rule instead of claiming there is no cap.
 - Reset times count down in two units ("3 天 5 小时后重置"), dropping the minor unit when it is zero.
 - Subscription state in a row is the date itself ("2026-09-15 到期"), not a word like "即将到期"; tone escalates but the date is always the label.
 - At most one qualifier per row (subscription state, then stale auth, then stale limits). Everything else — plan, auth mode, credits, per-bucket windows, reset credits — belongs in the detail sheet.

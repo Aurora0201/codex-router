@@ -82,14 +82,18 @@ function qualifier(account: AccountView, now: number, t: Translate) {
 }
 
 /**
- * The radio only covers routable accounts. A row that cannot be routed offers
- * its own repair instead, so no row is ever a dead end.
+ * A repair button is only for states that stay broken until someone acts on
+ * them. A deliberately disabled account is not a fault, and checking, waiting
+ * or rate-limited accounts resolve without help, so offering a button there
+ * reads as an error the reader did not make. Everything else those rows might
+ * need still lives in the actions menu.
  */
 function remedy(account: AccountView, t: Translate) {
-  if (isRoutable(account)) return null
-  if (!account.enabled)
-    return { label: t("启用账号"), action: "toggle" as const }
-  return { label: t("刷新认证"), action: "auth" as const }
+  if (isRoutable(account) || !account.enabled) return null
+  const blocked =
+    account.auth.status === "relogin_required" ||
+    account.auth.status === "error"
+  return blocked ? { label: t("刷新认证"), action: "auth" as const } : null
 }
 
 export function AccountRow({
@@ -108,6 +112,7 @@ export function AccountRow({
   const { t } = useTranslation()
   const slots = accountWindowSlots(account)
   const note = qualifier(account, now, t)
+  const routable = isRoutable(account)
   const repair = remedy(account, t)
   const accountId = shortAccountId(account.chatgptAccountId)
 
@@ -117,7 +122,7 @@ export function AccountRow({
         render={
           <RadioGroupItem
             value={account.id}
-            disabled={busy || repair !== null}
+            disabled={busy || !routable}
             aria-label={t("路由到 {{account}}", { account: accountId })}
             // base-ui marks the state with data-disabled, not :disabled, so the
             // primitive's own disabled styling never fires here.
@@ -128,9 +133,9 @@ export function AccountRow({
       <TooltipContent>
         {account.isActive
           ? t("当前路由账号")
-          : repair
-            ? t("该账号当前不可路由")
-            : t("把后续请求切换到这个账号")}
+          : routable
+            ? t("把后续请求切换到这个账号")
+            : t("该账号当前不可路由")}
       </TooltipContent>
     </Tooltip>
   )
