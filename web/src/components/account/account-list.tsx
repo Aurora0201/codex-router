@@ -155,7 +155,7 @@ export function AccountList({
   return (
     <>
       <Card className="gap-0 py-0 lg:min-h-0 lg:flex-1">
-        <div className="flex items-center gap-x-3 gap-y-2 border-b bg-muted/30 px-4 py-3 max-sm:flex-wrap">
+        <div className="flex min-h-13 items-center gap-x-3 gap-y-2 border-b bg-muted/30 px-4 py-2.5 max-sm:flex-wrap">
           <RouteIcon
             aria-hidden="true"
             className={cn(
@@ -254,10 +254,10 @@ export function AccountList({
             {mobile ? null : (
               <div
                 aria-hidden="true"
-                className="flex gap-4 border-b px-4 py-1.5 text-xs text-muted-foreground"
+                className="flex h-10 items-center gap-4 border-b px-4 text-sm font-medium text-foreground"
               >
-                <span className="size-4" />
-                <span className="size-9" />
+                <span className="size-4 shrink-0" />
+                <span className="size-12 shrink-0" />
                 <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,13rem)_minmax(0,9rem)_minmax(0,26rem)_minmax(0,1fr)] gap-x-5">
                   <span>{t("账号")}</span>
                   <span>{t("状态")}</span>
@@ -268,7 +268,7 @@ export function AccountList({
             )}
             <ScrollArea className="lg:min-h-0 lg:flex-1">
               <RadioGroup
-                className="block divide-y"
+                className="block"
                 aria-label={t("选择路由账号")}
                 value={active?.id ?? null}
                 onValueChange={(value: unknown) => {

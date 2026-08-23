@@ -136,6 +136,28 @@ describe("AccountList", () => {
     ).not.toBeInTheDocument()
   })
 
+  it("keeps the route summary the same height with and without a route", () => {
+    const routed = renderList([account({ id: "live", isActive: true })])
+    const withRoute = screen
+      .getByText("请求经由")
+      .closest("div")!.parentElement!
+    expect(withRoute).toHaveClass("min-h-13")
+    routed.unmount()
+
+    renderList([account()])
+    const withoutRoute = screen.getByText(
+      "尚未选择路由账号 · 请求使用 Codex 当前登录账号透传"
+    ).parentElement!
+    expect(withoutRoute).toHaveClass("min-h-13")
+  })
+
+  it("indents the row dividers away from the card edge", () => {
+    renderList([account({ id: "one" }), account({ id: "two" })])
+    for (const row of rows()) {
+      expect(row).toHaveClass("after:inset-x-4", "last:after:hidden")
+    }
+  })
+
   it("routes through a single radio group with exactly one account checked", async () => {
     const onSelect = vi.fn()
     const standby = account({ id: "standby", chatgptAccountId: "acct-standby" })

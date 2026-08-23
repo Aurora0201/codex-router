@@ -150,9 +150,9 @@ export function AccountRow({
   const avatar = (
     <span
       aria-hidden="true"
-      className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-foreground"
+      className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-muted text-foreground"
     >
-      <OpenAiMark className="size-[1.125rem]" />
+      <OpenAiMark className="size-6" />
     </span>
   )
 
@@ -171,7 +171,10 @@ export function AccountRow({
     return (
       <div
         data-slot="account-row"
-        className={cn("px-4 py-3", account.isActive && "bg-primary/[0.04]")}
+        className={cn(
+          "relative px-4 py-3 after:pointer-events-none after:absolute after:inset-x-4 after:bottom-0 after:h-px after:bg-border last:after:hidden",
+          account.isActive && "bg-primary/[0.04]"
+        )}
       >
         <div className="flex items-center gap-3">
           {radio}
@@ -203,6 +206,7 @@ export function AccountRow({
       data-slot="account-row"
       className={cn(
         "flex items-center gap-4 px-4 py-2.5 transition-colors",
+        "relative after:pointer-events-none after:absolute after:inset-x-4 after:bottom-0 after:h-px after:bg-border last:after:hidden",
         account.isActive ? "bg-primary/[0.04]" : "hover:bg-muted/40"
       )}
     >
