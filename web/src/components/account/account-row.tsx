@@ -48,20 +48,23 @@ function qualifier(account: AccountView, now: number, t: Translate) {
   // The date itself is the label: "2026-09-15 到期" answers the follow-up
   // question that "订阅即将到期" only raises.
   const expiresAt = formatDateOnly(account.subscription.expiresAt)
+  // A lapsed reminder is a notice, not a failure: the expiry date is maintained
+  // by hand and never blocks routing, so it must not wear the blocking tone.
   if (subscriptionExpired(account, now))
     return {
       label: t("已于 {{date}} 到期", { date: expiresAt }),
-      tone: "text-destructive",
+      tone: "text-warning",
     }
   if (account.subscription.source === "legacy_estimate")
     return {
       label: t("{{date}} 到期 · 待确认", { date: expiresAt }),
-      tone: "text-warning",
+      tone: "text-muted-foreground",
     }
+  // Nothing has happened yet; the date itself is the whole message.
   if (subscriptionExpiringSoon(account, now))
     return {
       label: t("{{date}} 到期", { date: expiresAt }),
-      tone: "text-warning",
+      tone: "text-muted-foreground",
     }
   if (account.auth.stale)
     return { label: t("认证数据已陈旧"), tone: "text-muted-foreground" }

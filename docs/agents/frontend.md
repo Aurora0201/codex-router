@@ -18,6 +18,8 @@
 - Define colors, radii, shadows, and font families as CSS variables in `web/src/index.css` using the standard shadcn token set (`background`, `card`, `popover`, `foreground`, `muted`, `border`, `input`, `ring`, `primary`, `secondary`, `accent`, `destructive`, …).
 - Consume semantic tokens instead of page-local hex colors.
 - Status must always include a text label; color is supplemental.
+- Accent tone follows what a state asks of the reader, not what kind of state it is: `--muted-foreground` when there is nothing to do (including every healthy default), `--warning` when it clears on its own or is only a reminder, `--destructive` when routing is blocked until someone acts, `--primary` for the account traffic is routed through. A default state never wears an accent, or the exceptions have nothing to stand out against.
+- `--warning` and `--destructive` are tuned to the same contrast weight (4.77:1 on the light card, ~6.2:1 on the dark one) so neither out-shouts the other. Re-check any change to these tokens against WCAG AA (4.5:1) in both themes.
 
 ## Component seams
 
@@ -53,6 +55,7 @@
 - Leftover width goes to the quota columns, which are the flexible tracks. Identity and status are capped, so slack is spent on content rather than pooling as a void.
 - Quota meters fill by remaining, not used, so a fuller bar always means a better route. The meter keeps the same shape in every state; only emphasis moves.
 - Healthy meters use `--primary` on every row; the live account is marked by its radio and row tint, not by bar colour. `--warning` (tight) and `--destructive` (exhausted) override it.
+- The subscription expiry date is a manual reminder that never blocks routing, so a lapsed one is `--warning`, never `--destructive`. A date that has not lapsed carries no accent at all.
 - The meter track is `--foreground/20`, dark enough that a full bar is still readable as a bar rather than disappearing into the card.
 - The two quota windows sit in their own columns side by side, not stacked. They are the only content in the row that can honestly use the width, and stacking them left roughly half the row empty.
 - A meter spans both row baselines: window name, bar and percentage share the first line so the bar fills the space between the label and the number, and the second line carries the state — the reset countdown, or "无限制" / "未报告" / "额度尚未刷新" when there is no number. Nothing in a row may leave a horizontal gap wider than about 40px.

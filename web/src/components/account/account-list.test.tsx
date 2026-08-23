@@ -436,7 +436,8 @@ describe("AccountList", () => {
       }),
     ])
 
-    expect(screen.getByText(/^已于 .+ 到期$/)).toBeInTheDocument()
+    // An expired reminder never blocks routing, so it is a notice, not a failure.
+    expect(screen.getByText(/^已于 .+ 到期$/)).toHaveClass("text-warning")
     expect(screen.queryByText(/待确认/)).not.toBeInTheDocument()
     expect(screen.queryByText("认证数据已陈旧")).not.toBeInTheDocument()
   })
