@@ -11,11 +11,11 @@ import {
   ShieldCheckIcon,
   UserRoundIcon,
 } from "lucide-react"
-import openAiIconUrl from "@lobehub/icons-static-svg/icons/openai.svg"
 import { useTranslation } from "react-i18next"
 
 import { BrandMark } from "@/components/app/brand-mark"
 import { MetricIconMedia } from "@/components/app/metric-icon-media"
+import { OpenAiMark } from "@/components/app/openai-mark"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -52,21 +52,6 @@ import type { AccountView, CodexStatusView, GatewayService } from "@/services/co
 
 type CodexAction = "apply" | "restore" | "restart"
 type RuntimeState = "config_missing" | "not_applied" | "codex_stopped" | "passthrough" | "managed" | "route_blocked"
-
-const openAiMaskStyle = {
-  maskImage: `url("${openAiIconUrl}")`,
-  maskPosition: "center",
-  maskRepeat: "no-repeat",
-  maskSize: "contain",
-  WebkitMaskImage: `url("${openAiIconUrl}")`,
-  WebkitMaskPosition: "center",
-  WebkitMaskRepeat: "no-repeat",
-  WebkitMaskSize: "contain",
-}
-
-function OpenAiMark() {
-  return <span data-slot="metric-mark" aria-hidden="true" className="bg-current" style={openAiMaskStyle} />
-}
 
 function FlowConnector() {
   return (

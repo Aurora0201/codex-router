@@ -48,8 +48,9 @@
 - Row order does not depend on which account is live; re-sorting on selection would make the list jump under the pointer. Order is routable (roomiest first), then rows needing attention, then disabled.
 - `清除路由` lives in the route summary at the top of the list, never in a row.
 - A row that cannot be routed has a disabled radio and offers its own next step (`刷新认证`, `启用账号`) instead.
+- Each row leads with the OpenAI mark in a rounded tile; it is `aria-hidden` brand furniture, not status, and reuses `@/components/app/openai-mark`.
 - Quota meters fill by remaining, not used, so a fuller bar always means a better route. The meter keeps the same shape in every state; only emphasis moves. Healthy uses `--primary`, `--warning` marks a tight window, `--destructive` marks an exhausted one.
-- Meter tracks are fixed-width so every percentage in the list lines up vertically; the bar is a glanceable shape beside the number, not a substitute for it.
+- A meter is a text line (window, refill time, percentage) with its bar drawn as a rule underneath, on a fixed-height slot. Every row renders both window slots even when a window is unreported or limits were never fetched, so the two-line layout never collapses and the percentages stay aligned down the list.
 - `null` usage renders as "未报告" with no bar, never as 0%.
 - At most one qualifier per row (subscription state, then stale auth, then stale limits). Everything else — plan, auth mode, credits, per-bucket windows, reset credits — belongs in the detail sheet.
 - Destructive actions (remove account) use shadcn AlertDialog instead of native `confirm()`.

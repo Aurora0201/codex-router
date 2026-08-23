@@ -59,6 +59,38 @@ describe("QuotaMeter", () => {
     expect(screen.getByText("3 小时后回满")).toHaveClass("text-foreground")
   })
 
+  it("holds an empty slot open when the window is missing entirely", () => {
+    const { container } = render(
+      <QuotaMeter window={null} fallback="额度尚未刷新" />
+    )
+
+    expect(screen.getByText("额度尚未刷新")).toBeInTheDocument()
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument()
+    expect(container.querySelector("[data-slot=quota-meter]")).toHaveClass(
+      "h-6"
+    )
+  })
+
+  it("draws the bar as a rule under its own text line", () => {
+    const { container } = render(
+      <QuotaMeter
+        window={{
+          usedPercent: 20,
+          resetsAt: Date.now() + HOUR,
+          windowDurationMins: 300,
+        }}
+      />
+    )
+
+    const meter = container.querySelector("[data-slot=quota-meter]")!
+    const track = meter.querySelector("[data-slot=progress-track]")!
+    const text = screen.getByText("5 小时额度").parentElement!
+    expect(text.compareDocumentPosition(track)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    )
+    expect(screen.getByText("80%")).toBeInTheDocument()
+  })
+
   it("renders an unreported window as 未报告 instead of a zeroed bar", () => {
     render(
       <QuotaMeter

@@ -1,9 +1,9 @@
-import { GaugeIcon } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
 import { AccountActions, type AccountAction } from "./account-actions"
 import { AccountStatus } from "./account-status-badge"
 import { QuotaMeter } from "./account-usage"
+import { OpenAiMark } from "@/components/app/openai-mark"
 import { Button } from "@/components/ui/button"
 import { RadioGroupItem } from "@/components/ui/radio-group"
 import {
@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/tooltip"
 import {
   QUOTA_STALE_MS,
-  accountWindows,
+  accountWindowSlots,
   isRoutable,
   subscriptionExpired,
   subscriptionExpiringSoon,
@@ -75,7 +75,7 @@ export function AccountRow({
   onAction(action: AccountAction): void
 }) {
   const { t } = useTranslation()
-  const windows = accountWindows(account)
+  const slots = accountWindowSlots(account)
   const note = qualifier(account, now, t)
   const repair = remedy(account, t)
   const accountId = shortAccountId(account.chatgptAccountId)
@@ -131,26 +131,29 @@ export function AccountRow({
     </span>
   )
 
-  const meters = windows.length ? (
+  const fallback =
+    account.limits.checkedAt === null ? t("额度尚未刷新") : t("额度数据不可用")
+  const meters = (
     <>
-      {windows.map((window, index) => (
+      {slots.map((window, index) => (
         <QuotaMeter
-          key={`${window.windowDurationMins}-${index}`}
+          key={
+            window ? `${window.windowDurationMins}-${index}` : `slot-${index}`
+          }
           window={window}
+          fallback={index === 0 ? fallback : undefined}
         />
       ))}
-      {windows.length === 1 ? <div aria-hidden="true" className="h-5" /> : null}
     </>
-  ) : (
-    <>
-      <div className="flex h-5 items-center gap-1.5 text-xs text-muted-foreground">
-        <GaugeIcon aria-hidden="true" className="size-3.5" />
-        {account.limits.checkedAt === null
-          ? t("额度尚未刷新")
-          : t("额度数据不可用")}
-      </div>
-      <div aria-hidden="true" className="h-5" />
-    </>
+  )
+
+  const avatar = (
+    <span
+      aria-hidden="true"
+      className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-foreground"
+    >
+      <OpenAiMark className="size-[1.125rem]" />
+    </span>
   )
 
   const repairButton = repair ? (
@@ -170,8 +173,9 @@ export function AccountRow({
         data-slot="account-row"
         className={cn("px-4 py-3", account.isActive && "bg-primary/[0.04]")}
       >
-        <div className="flex items-start gap-3">
-          <div className="flex h-5 items-center">{radio}</div>
+        <div className="flex items-center gap-3">
+          {radio}
+          {avatar}
           <div className="min-w-0 flex-1">
             {identity}
             {email}
@@ -182,14 +186,14 @@ export function AccountRow({
             onAction={onAction}
           />
         </div>
-        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 pl-7">
+        <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1">
           <AccountStatus account={account} />
           {note ? (
             <span className={cn("text-xs", note.tone)}>{note.label}</span>
           ) : null}
         </div>
-        <div className="mt-2.5 space-y-1 pl-7">{meters}</div>
-        {repairButton ? <div className="mt-3 pl-7">{repairButton}</div> : null}
+        <div className="mt-2.5 space-y-2">{meters}</div>
+        {repairButton ? <div className="mt-3">{repairButton}</div> : null}
       </div>
     )
   }
@@ -203,7 +207,8 @@ export function AccountRow({
       )}
     >
       {radio}
-      <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,13rem)_minmax(0,9rem)_minmax(0,26rem)_minmax(0,1fr)] items-start gap-x-5">
+      {avatar}
+      <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,13rem)_minmax(0,9rem)_minmax(0,26rem)_minmax(0,1fr)] items-center gap-x-5">
         <div className="min-w-0 space-y-1">
           <div className="flex h-5 items-center">{identity}</div>
           <div className="flex h-5 items-center">{email}</div>
@@ -220,8 +225,8 @@ export function AccountRow({
             ) : null}
           </div>
         </div>
-        <div className="min-w-0 space-y-1">{meters}</div>
-        <div className="flex items-center justify-end gap-1.5 self-center">
+        <div className="min-w-0 space-y-2">{meters}</div>
+        <div className="flex items-center justify-end gap-1.5">
           {repairButton}
           <AccountActions
             account={account}

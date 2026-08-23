@@ -6,44 +6,64 @@ import { formatRelativeTime, formatUsageWindow } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { UsageWindowView } from "@/services/contracts"
 
-/**
- * Fixed tracks, so every meter in the list occupies the same geometry no matter
- * what sits to its right. The bar is deliberately short: it is a glanceable
- * shape next to the number, not the number itself.
- */
-const METER_COLUMNS =
-  "grid-cols-[5.5rem_minmax(0,9rem)_2.75rem_6.5rem] items-center gap-x-2.5"
+const TEXT_LINE = "flex h-4 items-center gap-2 text-xs"
+/** A fixed slot, so a reported window and a placeholder occupy the same height. */
+const SLOT = "block h-6 space-y-1"
+const TRACK = "[&_[data-slot=progress-track]]:h-[3px]"
 
 /**
- * One quota window on one text line. The bar fills with what is left, not what
- * was spent, so a fuller bar always means a better account to route through.
- * The shape never changes between states; only the emphasis moves.
+ * One quota window as a labelled line with its bar drawn as a rule underneath,
+ * so the number sits beside its own label instead of across a long bar.
+ *
+ * The bar fills with what is left, not what was spent, so a fuller bar always
+ * means a better account to route through. The shape never changes between
+ * states; only the emphasis moves.
  */
 export function QuotaMeter({
   window,
+  fallback,
   className,
 }: {
-  window: UsageWindowView
+  window: UsageWindowView | null
+  /**
+   * Shown when the window is missing entirely, e.g. limits were never fetched.
+   * Only the first empty slot carries it; repeating it on both is just noise.
+   */
+  fallback?: string
   className?: string
 }) {
   const { t } = useTranslation()
-  const label = formatUsageWindow(window)
-  const remaining = remainingPercent(window)
+  const remaining = window ? remainingPercent(window) : null
 
-  if (remaining === null) {
+  // An empty slot still holds its place, so both windows stay on screen and the
+  // rows below keep their alignment.
+  if (!window || remaining === null) {
     return (
       <div
-        className={cn("grid h-5 text-xs", METER_COLUMNS, className)}
         data-slot="quota-meter"
+        className={cn(SLOT, className)}
+        aria-label={window ? formatUsageWindow(window) : undefined}
       >
-        <span className="truncate text-muted-foreground">{label}</span>
-        <span className="col-span-3 text-muted-foreground">{t("未报告")}</span>
+        <div className={TEXT_LINE}>
+          {window ? (
+            <span className="truncate text-muted-foreground">
+              {formatUsageWindow(window)}
+            </span>
+          ) : null}
+          {window || fallback ? (
+            <span className="ml-auto shrink-0 truncate text-muted-foreground">
+              {window ? t("未报告") : fallback}
+            </span>
+          ) : null}
+        </div>
+        <div className="h-[3px] rounded-full bg-muted/60" />
       </div>
     )
   }
 
   const empty = remaining <= 0
   const tight = !empty && remaining <= QUOTA_TIGHT_PERCENT
+  const label = formatUsageWindow(window)
 
   return (
     <Progress
@@ -51,9 +71,8 @@ export function QuotaMeter({
       aria-label={t("{{label}}剩余", { label })}
       data-slot="quota-meter"
       className={cn(
-        "grid h-5",
-        METER_COLUMNS,
-        "[&_[data-slot=progress-track]]:order-2",
+        SLOT,
+        TRACK,
         empty
           ? "[&_[data-slot=progress-indicator]]:bg-destructive"
           : tight
@@ -62,30 +81,30 @@ export function QuotaMeter({
         className
       )}
     >
-      {/* A plain span, not ProgressLabel: base-ui would wire it as aria-labelledby
-          and shadow the fuller aria-label above. */}
-      <span className="order-1 truncate text-xs text-muted-foreground">
-        {label}
-      </span>
-      <ProgressValue
-        className={cn(
-          "order-3 ml-0 text-right font-mono text-xs tabular-nums",
-          empty && "text-destructive",
-          tight && "text-warning"
-        )}
-      >
-        {() => t("{{value}}%", { value: Math.round(remaining) })}
-      </ProgressValue>
-      <span
-        className={cn(
-          "order-4 truncate text-right text-xs",
-          empty ? "font-medium text-foreground" : "text-muted-foreground"
-        )}
-      >
-        {window.resetsAt === null
-          ? t("回满时间未知")
-          : t("{{time}}回满", { time: formatRelativeTime(window.resetsAt) })}
-      </span>
+      <div className={TEXT_LINE}>
+        {/* A plain span, not ProgressLabel: base-ui would wire it as
+            aria-labelledby and shadow the fuller aria-label above. */}
+        <span className="truncate text-muted-foreground">{label}</span>
+        <span
+          className={cn(
+            "ml-auto shrink-0 truncate",
+            empty ? "font-medium text-foreground" : "text-muted-foreground"
+          )}
+        >
+          {window.resetsAt === null
+            ? t("回满时间未知")
+            : t("{{time}}回满", { time: formatRelativeTime(window.resetsAt) })}
+        </span>
+        <ProgressValue
+          className={cn(
+            "ml-0 w-9 shrink-0 text-right font-mono text-xs tabular-nums",
+            empty && "text-destructive",
+            tight && "text-warning"
+          )}
+        >
+          {() => t("{{value}}%", { value: Math.round(remaining) })}
+        </ProgressValue>
+      </div>
     </Progress>
   )
 }

@@ -61,6 +61,18 @@ export function accountWindows(account: AccountView): UsageWindowView[] {
     .slice(0, 2)
 }
 
+/**
+ * Exactly two slots, longest window first, padded with nulls. The row is a
+ * two-line layout, so a missing window holds its place rather than collapsing
+ * the account to a single line.
+ */
+export function accountWindowSlots(
+  account: AccountView
+): [UsageWindowView | null, UsageWindowView | null] {
+  const windows = accountWindows(account)
+  return [windows[0] ?? null, windows[1] ?? null]
+}
+
 export function remainingPercent(window: UsageWindowView): number | null {
   if (window.usedPercent === null) return null
   return Math.min(100, Math.max(0, 100 - window.usedPercent))

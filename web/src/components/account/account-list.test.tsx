@@ -296,6 +296,41 @@ describe("AccountList", () => {
     expect(onAction.mock.calls[1][1]).toBe("toggle")
   })
 
+  it("keeps two quota slots on every row and brands each with the OpenAI mark", () => {
+    renderList([
+      account({
+        id: "both",
+        limits: quota([
+          bucket({ primary: window(25, 300), secondary: window(50, 10080) }),
+        ]),
+      }),
+      // Only the short window reported: the weekly slot still holds its place.
+      account({
+        id: "partial",
+        chatgptAccountId: "acct-partial",
+        limits: quota([
+          bucket({ primary: window(40, 300), secondary: window(null, 10080) }),
+        ]),
+      }),
+      account({ id: "none", chatgptAccountId: "acct-none" }),
+    ])
+
+    for (const row of rows()) {
+      expect(row.querySelectorAll("[data-slot=quota-meter]")).toHaveLength(2)
+      expect(row.querySelectorAll("[data-slot=metric-mark]")).toHaveLength(1)
+    }
+
+    const partial = rows().find((row) =>
+      row.textContent?.includes("acct-partial")
+    )!
+    expect(within(partial).getByText("周额度")).toBeInTheDocument()
+    expect(within(partial).getByText("未报告")).toBeInTheDocument()
+
+    // A row with no limit data at all says so once, not once per slot.
+    const none = rows().find((row) => row.textContent?.includes("acct-none"))!
+    expect(within(none).getAllByText("额度尚未刷新")).toHaveLength(1)
+  })
+
   it("shows only the most urgent qualifier on the second line", () => {
     renderList([
       account({

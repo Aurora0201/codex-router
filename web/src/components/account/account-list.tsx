@@ -257,6 +257,7 @@ export function AccountList({
                 className="flex gap-4 border-b px-4 py-1.5 text-xs text-muted-foreground"
               >
                 <span className="size-4" />
+                <span className="size-9" />
                 <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,13rem)_minmax(0,9rem)_minmax(0,26rem)_minmax(0,1fr)] gap-x-5">
                   <span>{t("账号")}</span>
                   <span>{t("状态")}</span>
