@@ -18,7 +18,11 @@ import {
   subscriptionExpired,
   subscriptionExpiringSoon,
 } from "@/lib/account-state"
-import { formatRelativeTime, shortAccountId } from "@/lib/format"
+import {
+  formatDateOnly,
+  formatRelativeTime,
+  shortAccountId,
+} from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { AccountView } from "@/services/contracts"
 
@@ -29,12 +33,24 @@ type Translate = (key: string, values?: Record<string, unknown>) => string
  * into noise, so only the most urgent one earns the second line.
  */
 function qualifier(account: AccountView, now: number, t: Translate) {
+  // The date itself is the label: "2026-09-15 到期" answers the follow-up
+  // question that "订阅即将到期" only raises.
+  const expiresAt = formatDateOnly(account.subscription.expiresAt)
   if (subscriptionExpired(account, now))
-    return { label: t("订阅已过期"), tone: "text-destructive" }
+    return {
+      label: t("已于 {{date}} 到期", { date: expiresAt }),
+      tone: "text-destructive",
+    }
   if (account.subscription.source === "legacy_estimate")
-    return { label: t("到期日待确认"), tone: "text-warning" }
+    return {
+      label: t("{{date}} 到期 · 待确认", { date: expiresAt }),
+      tone: "text-warning",
+    }
   if (subscriptionExpiringSoon(account, now))
-    return { label: t("订阅即将到期"), tone: "text-warning" }
+    return {
+      label: t("{{date}} 到期", { date: expiresAt }),
+      tone: "text-warning",
+    }
   if (account.auth.stale)
     return { label: t("认证数据已陈旧"), tone: "text-muted-foreground" }
   if (
@@ -131,6 +147,7 @@ export function AccountRow({
     </span>
   )
 
+  const known = account.limits.buckets.length > 0
   const fallback =
     account.limits.checkedAt === null ? t("额度尚未刷新") : t("额度数据不可用")
   const meters = (
@@ -141,6 +158,7 @@ export function AccountRow({
             window ? `${window.windowDurationMins}-${index}` : `slot-${index}`
           }
           window={window}
+          known={known}
           fallback={index === 0 ? fallback : undefined}
         />
       ))}
@@ -205,7 +223,7 @@ export function AccountRow({
     <div
       data-slot="account-row"
       className={cn(
-        "flex items-center gap-4 px-4 py-2.5 transition-colors",
+        "flex items-center gap-4 px-4 py-2.5 transition-colors sm:px-6",
         "relative after:pointer-events-none after:absolute after:inset-x-4 after:bottom-0 after:h-px after:bg-border last:after:hidden",
         account.isActive ? "bg-primary/[0.04]" : "hover:bg-muted/40"
       )}

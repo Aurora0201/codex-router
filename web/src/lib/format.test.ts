@@ -16,14 +16,14 @@ describe("account formatting", () => {
         resetsAt: null,
         windowDurationMins: 10080,
       })
-    ).toBe("周额度")
+    ).toBe("7 天额度")
     expect(
       formatUsageWindow({
         usedPercent: 10,
         resetsAt: null,
         windowDurationMins: 2 * 10080,
       })
-    ).toBe("2 周额度")
+    ).toBe("14 天额度")
   })
 
   it("keeps short ids and truncates long ids consistently", () => {

@@ -282,7 +282,9 @@ describe("AccountList", () => {
     expect(id.compareDocumentPosition(email)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING
     )
-    const weekly = within(row).getByRole("progressbar", { name: "周额度剩余" })
+    const weekly = within(row).getByRole("progressbar", {
+      name: "7 天额度剩余",
+    })
     const short = within(row).getByRole("progressbar", {
       name: "5 小时额度剩余",
     })
@@ -345,12 +347,13 @@ describe("AccountList", () => {
     const partial = rows().find((row) =>
       row.textContent?.includes("acct-partial")
     )!
-    expect(within(partial).getByText("周额度")).toBeInTheDocument()
+    expect(within(partial).getByText("7 天额度")).toBeInTheDocument()
     expect(within(partial).getByText("未报告")).toBeInTheDocument()
 
-    // A row with no limit data at all says so once, not once per slot.
+    // A row with no limit data at all says so once, and never claims 无限制.
     const none = rows().find((row) => row.textContent?.includes("acct-none"))!
     expect(within(none).getAllByText("额度尚未刷新")).toHaveLength(1)
+    expect(within(none).queryByText("无限制")).not.toBeInTheDocument()
   })
 
   it("shows only the most urgent qualifier on the second line", () => {
@@ -372,8 +375,8 @@ describe("AccountList", () => {
       }),
     ])
 
-    expect(screen.getByText("订阅已过期")).toBeInTheDocument()
-    expect(screen.queryByText("到期日待确认")).not.toBeInTheDocument()
+    expect(screen.getByText(/^已于 .+ 到期$/)).toBeInTheDocument()
+    expect(screen.queryByText(/待确认/)).not.toBeInTheDocument()
     expect(screen.queryByText("认证数据已陈旧")).not.toBeInTheDocument()
   })
 

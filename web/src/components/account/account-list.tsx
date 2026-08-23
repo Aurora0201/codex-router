@@ -155,7 +155,7 @@ export function AccountList({
   return (
     <>
       <Card className="gap-0 py-0 lg:min-h-0 lg:flex-1">
-        <div className="flex min-h-13 items-center gap-x-3 gap-y-2 border-b bg-muted/30 px-4 py-2.5 max-sm:flex-wrap">
+        <div className="flex min-h-13 items-center gap-x-3 gap-y-2 border-b bg-muted/30 px-4 py-2.5 max-sm:flex-wrap sm:px-6">
           <RouteIcon
             aria-hidden="true"
             className={cn(
@@ -210,7 +210,7 @@ export function AccountList({
           )}
         </div>
 
-        <div className="flex flex-col gap-2 border-b px-4 py-2.5 sm:flex-row sm:items-center">
+        <div className="flex flex-col gap-2 border-b px-4 py-2.5 sm:flex-row sm:items-center sm:px-6">
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
@@ -254,7 +254,7 @@ export function AccountList({
             {mobile ? null : (
               <div
                 aria-hidden="true"
-                className="flex h-10 items-center gap-4 border-b px-4 text-sm font-medium text-foreground"
+                className="flex h-10 items-center gap-4 border-b px-4 text-sm font-medium text-foreground sm:px-6"
               >
                 <span className="size-4 shrink-0" />
                 <span className="size-12 shrink-0" />

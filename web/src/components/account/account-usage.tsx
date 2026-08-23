@@ -2,7 +2,7 @@ import { useTranslation } from "react-i18next"
 
 import { Progress, ProgressValue } from "@/components/ui/progress"
 import { QUOTA_TIGHT_PERCENT, remainingPercent } from "@/lib/account-state"
-import { formatRelativeTime, formatUsageWindow } from "@/lib/format"
+import { formatCountdown, formatUsageWindow } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { UsageWindowView } from "@/services/contracts"
 
@@ -21,14 +21,18 @@ const TRACK = "[&_[data-slot=progress-track]]:h-[3px]"
  */
 export function QuotaMeter({
   window,
+  known = true,
   fallback,
   className,
 }: {
   window: UsageWindowView | null
   /**
-   * Shown when the window is missing entirely, e.g. limits were never fetched.
-   * Only the first empty slot carries it; repeating it on both is just noise.
+   * Whether upstream reported this bucket at all. When it did, an absent window
+   * means there is no such cap; when it did not, an absent window means nothing
+   * is known and the slot must not claim otherwise.
    */
+  known?: boolean
+  /** Shown on one unknown slot; repeating it on both is just noise. */
   fallback?: string
   className?: string
 }) {
@@ -50,11 +54,11 @@ export function QuotaMeter({
               {formatUsageWindow(window)}
             </span>
           ) : null}
-          {window || fallback ? (
-            <span className="ml-auto shrink-0 truncate text-muted-foreground">
-              {window ? t("未报告") : fallback}
-            </span>
-          ) : null}
+          <span className="ml-auto shrink-0 truncate text-muted-foreground">
+            {/* A window reported without a number is 未报告; an absent window on
+                a bucket upstream did report means there is no such cap. */}
+            {window ? t("未报告") : known ? t("无限制") : fallback}
+          </span>
         </div>
         <div className="h-[3px] rounded-full bg-muted/60" />
       </div>
@@ -91,9 +95,7 @@ export function QuotaMeter({
             empty ? "font-medium text-foreground" : "text-muted-foreground"
           )}
         >
-          {window.resetsAt === null
-            ? t("回满时间未知")
-            : t("{{time}}回满", { time: formatRelativeTime(window.resetsAt) })}
+          {t("{{time}}重置", { time: formatCountdown(window.resetsAt) })}
         </span>
         <ProgressValue
           className={cn(

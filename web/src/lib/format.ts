@@ -20,17 +20,43 @@ export function formatDateOnly(value: number | null): string {
 export function formatUsageWindow(window: UsageWindowView | null): string {
   const minutes = window?.windowDurationMins
   if (!minutes) return i18n.t("用量额度")
-  if (minutes % 10080 === 0) {
-    const weeks = minutes / 10080
-    return weeks === 1
-      ? i18n.t("周额度")
-      : i18n.t("{{count}} 周额度", { count: weeks })
-  }
+  // A week reads as "7 天额度": the upstream window is a rolling duration, not a
+  // calendar week, so the day count is the honest name for it.
   if (minutes % 1440 === 0)
     return i18n.t("{{count}} 天额度", { count: minutes / 1440 })
   if (minutes % 60 === 0)
     return i18n.t("{{count}} 小时额度", { count: minutes / 60 })
   return i18n.t("{{count}} 分钟额度", { count: minutes })
+}
+
+/**
+ * A countdown to a reset, carried to two units so "3 天 5 小时后" says more than
+ * "4 天后" about when an account actually comes back.
+ */
+export function formatCountdown(
+  timestamp: number | null,
+  now = Date.now()
+): string {
+  if (timestamp === null) return i18n.t("时间未知")
+  const diff = timestamp - now
+  if (diff <= 0) return i18n.t("即将")
+  // Rounded, not floored: a reset 2 hours minus 3ms away should read "2 小时后".
+  const minutes = Math.round(diff / 60_000)
+  const days = Math.floor(minutes / 1440)
+  const hours = Math.floor((minutes % 1440) / 60)
+  // The minor unit is dropped when it is zero: "2 小时后" beats "2 小时 0 分钟后".
+  if (days > 0)
+    return hours > 0
+      ? i18n.t("{{days}} 天 {{hours}} 小时后", { days, hours })
+      : i18n.t("{{count}} 天后", { count: days })
+  if (hours > 0)
+    return minutes % 60 > 0
+      ? i18n.t("{{hours}} 小时 {{minutes}} 分钟后", {
+          hours,
+          minutes: minutes % 60,
+        })
+      : i18n.t("{{count}} 小时后", { count: hours })
+  return i18n.t("{{count}} 分钟后", { count: Math.max(1, minutes) })
 }
 
 export function formatRelativeTime(

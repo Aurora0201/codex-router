@@ -20,24 +20,25 @@ describe("QuotaMeter", () => {
     const meter = screen.getByRole("progressbar", { name: "5 小时额度剩余" })
     expect(meter).toHaveAttribute("aria-valuenow", "72")
     expect(screen.getByText("72%")).toBeInTheDocument()
-    expect(screen.getByText("2 小时后回满")).toBeInTheDocument()
+    expect(screen.getByText("2 小时后重置")).toBeInTheDocument()
   })
 
-  it("labels a full week as 周额度, not 7 天额度", () => {
+  it("labels a full week as 7 天额度 and counts down in two units", () => {
     render(
       <QuotaMeter
         window={{
           usedPercent: 46,
-          resetsAt: Date.now() + 3 * 24 * HOUR,
+          resetsAt: Date.now() + 3 * 24 * HOUR + 5 * HOUR,
           windowDurationMins: 10080,
         }}
       />
     )
 
     expect(
-      screen.getByRole("progressbar", { name: "周额度剩余" })
+      screen.getByRole("progressbar", { name: "7 天额度剩余" })
     ).toBeInTheDocument()
     expect(screen.getByText("54%")).toBeInTheDocument()
+    expect(screen.getByText("3 天 5 小时后重置")).toBeInTheDocument()
   })
 
   it("keeps an exhausted window measurable and emphasises when it refills", () => {
@@ -56,12 +57,22 @@ describe("QuotaMeter", () => {
       "0"
     )
     expect(screen.getByText("0%")).toHaveClass("text-destructive")
-    expect(screen.getByText("3 小时后回满")).toHaveClass("text-foreground")
+    expect(screen.getByText("3 小时后重置")).toHaveClass("text-foreground")
+  })
+
+  it("reads an absent window as 无限制 only when the bucket was reported", () => {
+    const { rerender } = render(<QuotaMeter window={null} />)
+    expect(screen.getByText("无限制")).toBeInTheDocument()
+
+    // Limits were never fetched, so the slot must not claim there is no cap.
+    rerender(<QuotaMeter window={null} known={false} fallback="额度尚未刷新" />)
+    expect(screen.queryByText("无限制")).not.toBeInTheDocument()
+    expect(screen.getByText("额度尚未刷新")).toBeInTheDocument()
   })
 
   it("holds an empty slot open when the window is missing entirely", () => {
     const { container } = render(
-      <QuotaMeter window={null} fallback="额度尚未刷新" />
+      <QuotaMeter window={null} known={false} fallback="额度尚未刷新" />
     )
 
     expect(screen.getByText("额度尚未刷新")).toBeInTheDocument()
