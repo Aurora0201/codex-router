@@ -33,9 +33,10 @@ import type { AccountView } from "@/services/contracts"
  * instead of a void at the end of the row.
  */
 export const ROW_COLUMNS =
-  "grid-cols-[minmax(0,14rem)_minmax(0,1fr)_26rem_auto]"
+  "grid-cols-[minmax(0,14rem)_minmax(0,9rem)_minmax(0,1fr)_minmax(0,1fr)_auto]"
 /** The row adds the two baselines; the column header only borrows the tracks. */
 export const ROW_BASELINES = "grid-rows-[1.5rem_1.5rem] gap-y-2"
+export const ACTIONS_CELL = "col-start-5"
 
 type Translate = (key: string, values?: Record<string, unknown>) => string
 
@@ -161,22 +162,16 @@ export function AccountRow({
   const known = account.limits.buckets.length > 0
   const fallback =
     account.limits.checkedAt === null ? t("额度尚未刷新") : t("额度数据不可用")
-  const meters = (
-    <>
-      {slots.map((window, index) => (
-        <QuotaMeter
-          key={
-            window ? `${window.windowDurationMins}-${index}` : `slot-${index}`
-          }
-          window={window}
-          placeholderMins={SLOT_WINDOW_MINS[index]}
-          known={known}
-          live={account.isActive}
-          fallback={index === 0 ? fallback : undefined}
-        />
-      ))}
-    </>
-  )
+  const meters = slots.map((window, index) => (
+    <QuotaMeter
+      key={window ? `${window.windowDurationMins}-${index}` : `slot-${index}`}
+      window={window}
+      placeholderMins={SLOT_WINDOW_MINS[index]}
+      known={known}
+      live={account.isActive}
+      fallback={index === 0 ? fallback : undefined}
+    />
+  ))
 
   const avatar = (
     <span
@@ -269,10 +264,13 @@ export function AccountRow({
             ) : null}
           </div>
         </div>
-        <div className="row-span-2 grid min-w-0 grid-rows-subgrid">
-          {meters}
-        </div>
-        <div className="row-span-2 flex items-center justify-end gap-1.5">
+        {meters}
+        <div
+          className={cn(
+            "row-span-2 flex items-center justify-end gap-1.5",
+            ACTIONS_CELL
+          )}
+        >
           {repairButton}
           <AccountActions
             account={account}

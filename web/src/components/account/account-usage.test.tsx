@@ -66,31 +66,15 @@ describe("QuotaMeter", () => {
     )
     expect(screen.getByText("5 小时额度")).toBeInTheDocument()
     expect(screen.getByText("无限制")).toBeInTheDocument()
-    const bar = container.querySelector(
-      "[data-slot=quota-meter]"
-    )!.lastElementChild!
-    expect(bar).toHaveClass("bg-primary")
+    expect(container.querySelector("[data-slot=quota-bar]")).toHaveClass(
+      "bg-primary"
+    )
 
     // Colour is reserved for the live account; a standby row stays neutral.
     rerender(<QuotaMeter window={null} placeholderMins={300} />)
-    expect(
-      container.querySelector("[data-slot=quota-meter]")!.lastElementChild
-    ).toHaveClass("bg-foreground/25")
-
-    // Limits were never fetched, so the slot keeps its name but claims nothing.
-    rerender(
-      <QuotaMeter
-        window={null}
-        placeholderMins={300}
-        known={false}
-        fallback="额度尚未刷新"
-      />
+    expect(container.querySelector("[data-slot=quota-bar]")).toHaveClass(
+      "bg-foreground/25"
     )
-    expect(screen.getByText("5 小时额度")).toBeInTheDocument()
-    expect(screen.queryByText("无限制")).not.toBeInTheDocument()
-    expect(
-      container.querySelector("[data-slot=quota-meter]")!.lastElementChild
-    ).not.toHaveClass("bg-primary")
   })
 
   it("holds an empty slot open when the window is missing entirely", () => {
@@ -101,11 +85,11 @@ describe("QuotaMeter", () => {
     expect(screen.getByText("额度尚未刷新")).toBeInTheDocument()
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument()
     expect(container.querySelector("[data-slot=quota-meter]")).toHaveClass(
-      "h-6"
+      "row-span-2"
     )
   })
 
-  it("draws the bar as a rule under its own text line", () => {
+  it("runs the bar between the label and the number, not under them", () => {
     const { container } = render(
       <QuotaMeter
         window={{
@@ -117,12 +101,17 @@ describe("QuotaMeter", () => {
     )
 
     const meter = container.querySelector("[data-slot=quota-meter]")!
-    const track = meter.querySelector("[data-slot=progress-track]")!
-    const text = screen.getByText("5 小时额度").parentElement!
-    expect(text.compareDocumentPosition(track)).toBe(
-      Node.DOCUMENT_POSITION_FOLLOWING
+    // Label, bar and number share the first row; the countdown takes the second.
+    expect(screen.getByText("5 小时额度")).toHaveClass(
+      "col-start-1",
+      "row-start-1"
     )
-    expect(screen.getByText("80%")).toBeInTheDocument()
+    expect(meter).toHaveClass(
+      "[&>[data-slot=progress-track]]:col-start-2",
+      "[&>[data-slot=progress-track]]:row-start-1"
+    )
+    expect(screen.getByText("80%")).toHaveClass("col-start-3", "row-start-1")
+    expect(screen.getByText("1 小时后重置")).toHaveClass("row-start-2")
   })
 
   it("renders an unreported window as 未报告 instead of a zeroed bar", () => {

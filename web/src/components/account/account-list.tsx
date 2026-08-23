@@ -3,7 +3,7 @@ import { RouteIcon, RouteOffIcon, SearchXIcon } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
 import { AccountDetailSheet } from "./account-detail-sheet"
-import { AccountRow, ROW_COLUMNS } from "./account-row"
+import { ACTIONS_CELL, AccountRow, ROW_COLUMNS } from "./account-row"
 import { AccountStatus } from "./account-status-badge"
 import type { AccountAction } from "./account-actions"
 import { Button } from "@/components/ui/button"
@@ -262,15 +262,16 @@ export function AccountList({
                   <span>{t("账号")}</span>
                   <span>{t("状态")}</span>
                   <span>{t("剩余额度")}</span>
+                  <span />
                   {/* Matches the actions button, so the tracks resolve the same
                       width here as they do on a row. */}
-                  <span className="size-7" />
+                  <span className={cn("size-7", ACTIONS_CELL)} />
                 </div>
               </div>
             )}
             <ScrollArea className="lg:min-h-0 lg:flex-1">
               <RadioGroup
-                className="block"
+                className="@container/rows block"
                 aria-label={t("选择路由账号")}
                 value={active?.id ?? null}
                 onValueChange={(value: unknown) => {
