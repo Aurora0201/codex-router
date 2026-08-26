@@ -47,7 +47,7 @@
 - The account identity shown first is the real ChatGPT Account ID (`chatgptAccountId`) in a monospace font, with email and plan as auxiliary information.
 - Never show a user-entered account label input; add-account dialog starts official Codex Browser OAuth with no label.
 - Accounts are listed one per row across two aligned lines. The list is a single shadcn RadioGroup and each row leads with its radio, because exactly one of N accounts is live. Do not reintroduce a separate account picker or a per-row switch button.
-- Row order does not depend on which account is live; re-sorting on selection would make the list jump under the pointer. Order is routable (roomiest first), then rows needing attention, then disabled.
+- The list is filtered but never re-sorted: it keeps the server order, which is `created_at ASC`. Ranking rows by health or by remaining quota reshuffles them as accounts are used, so a row is rarely where it was last seen. Anything that varies with usage or status must not decide row order.
 - `清除路由` lives in the route summary at the top of the list, never in a row.
 - A row that cannot be routed has a disabled radio. Whether the radio is locked follows routability, never the presence of a button.
 - A repair button appears only where a row stays broken until someone acts (`relogin_required`, `error`). A deliberately disabled account is not a fault, and checking, waiting or rate-limited rows clear on their own, so none of them get one; the actions menu still covers those cases.

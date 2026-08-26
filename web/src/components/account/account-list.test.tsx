@@ -197,52 +197,8 @@ describe("AccountList", () => {
     ).not.toHaveAttribute("aria-disabled", "true")
   })
 
-  it("keeps row order stable when the route changes", async () => {
-    const { rerender } = renderList([
-      account({
-        id: "a",
-        chatgptAccountId: "acct-a",
-        limits: quota([bucket({ primary: window(10, 300) })]),
-      }),
-      account({
-        id: "b",
-        chatgptAccountId: "acct-b",
-        limits: quota([bucket({ primary: window(80, 300) })]),
-      }),
-    ])
-    const before = rows().map((row) => row.textContent)
-
-    rerender(
-      <TooltipProvider>
-        <AccountList
-          accounts={[
-            account({
-              id: "a",
-              chatgptAccountId: "acct-a",
-              limits: quota([bucket({ primary: window(10, 300) })]),
-            }),
-            account({
-              id: "b",
-              chatgptAccountId: "acct-b",
-              isActive: true,
-              limits: quota([bucket({ primary: window(80, 300) })]),
-            }),
-          ]}
-          busyId={null}
-          onSelect={vi.fn()}
-          onClearRoute={vi.fn()}
-          onAction={vi.fn()}
-          onConsumeReset={vi.fn(async () => undefined)}
-        />
-      </TooltipProvider>
-    )
-
-    expect(rows().map((row) => row.textContent)).toEqual(before)
-    await Promise.resolve()
-  })
-
-  it("puts the roomiest routable account first and sinks broken ones", () => {
-    renderList([
+  it("keeps the order the server gave, whatever the accounts are doing", () => {
+    const pool = [
       account({
         id: "tight",
         chatgptAccountId: "acct-tight",
@@ -258,13 +214,47 @@ describe("AccountList", () => {
         chatgptAccountId: "acct-roomy",
         limits: quota([bucket({ primary: window(10, 300) })]),
       }),
-    ])
-
-    expect(rows().map((row) => row.textContent)).toEqual([
-      expect.stringContaining("acct-roomy"),
+      account({
+        id: "off",
+        chatgptAccountId: "acct-off",
+        enabled: false,
+        authStatus: "disabled",
+      }),
+    ]
+    const expected = [
       expect.stringContaining("acct-tight"),
       expect.stringContaining("acct-broken"),
-    ])
+      expect.stringContaining("acct-roomy"),
+      expect.stringContaining("acct-off"),
+    ]
+    const { rerender } = renderList(pool)
+    expect(rows().map((row) => row.textContent)).toEqual(expected)
+
+    // Spending quota and losing auth must not move anybody.
+    rerender(
+      <TooltipProvider>
+        <AccountList
+          accounts={[
+            {
+              ...pool[0],
+              limits: quota([bucket({ primary: window(5, 300) })]),
+            },
+            { ...pool[1], isActive: true },
+            {
+              ...pool[2],
+              limits: quota([bucket({ primary: window(99, 300) })]),
+            },
+            pool[3],
+          ]}
+          busyId={null}
+          onSelect={vi.fn()}
+          onClearRoute={vi.fn()}
+          onAction={vi.fn()}
+          onConsumeReset={vi.fn(async () => undefined)}
+        />
+      </TooltipProvider>
+    )
+    expect(rows().map((row) => row.textContent)).toEqual(expected)
   })
 
   it("stacks the account id above the email and the weekly window above the short one", () => {

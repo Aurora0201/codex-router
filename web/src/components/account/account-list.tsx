@@ -53,17 +53,6 @@ type AccountFilter = "all" | "routable" | "attention" | "disabled"
  */
 const RULE = "h-3.5 w-px shrink-0 self-center bg-border"
 
-/**
- * Rows the console can route through sit above rows that need repair. The live
- * account is deliberately not pinned first: the radio already marks it, and
- * re-sorting on selection would make the list jump under the pointer.
- */
-function rank(account: AccountView) {
-  if (isRoutable(account)) return 0
-  if (isDisabled(account)) return 2
-  return 1
-}
-
 export function AccountList({
   accounts,
   busyId,
@@ -105,33 +94,24 @@ export function AccountList({
   )
 
   const normalized = query.trim().toLowerCase()
+  // Filtered but never re-sorted. The server returns accounts by creation date,
+  // which is the one order that does not move: ranking by status or by
+  // remaining quota reshuffled the list every time an account was used, so the
+  // row you were aiming at was rarely where you last saw it.
   const filtered = useMemo(
     () =>
-      accounts
-        .filter((account) => {
-          const text =
-            !normalized ||
-            account.email?.toLowerCase().includes(normalized) ||
-            account.chatgptAccountId?.toLowerCase().includes(normalized)
-          const state =
-            filter === "all" ||
-            (filter === "routable" && isRoutable(account)) ||
-            (filter === "attention" && needsAttention(account, now)) ||
-            (filter === "disabled" && isDisabled(account))
-          return Boolean(text && state)
-        })
-        .map((account, index) => ({ account, index }))
-        .sort((a, b) => {
-          const byRank = rank(a.account) - rank(b.account)
-          if (byRank !== 0) return byRank
-          // Within routable accounts the roomiest one is the best next route.
-          const left = tightestRemaining(a.account)
-          const right = tightestRemaining(b.account)
-          if (left !== right && left !== null && right !== null)
-            return right - left
-          return a.index - b.index
-        })
-        .map(({ account }) => account),
+      accounts.filter((account) => {
+        const text =
+          !normalized ||
+          account.email?.toLowerCase().includes(normalized) ||
+          account.chatgptAccountId?.toLowerCase().includes(normalized)
+        const state =
+          filter === "all" ||
+          (filter === "routable" && isRoutable(account)) ||
+          (filter === "attention" && needsAttention(account, now)) ||
+          (filter === "disabled" && isDisabled(account))
+        return Boolean(text && state)
+      }),
     [accounts, filter, normalized, now]
   )
 
