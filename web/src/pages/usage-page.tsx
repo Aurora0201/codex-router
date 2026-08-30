@@ -569,7 +569,7 @@ export function UsagePage({
               <div>
                 <p className="text-xs text-emphasis-muted">{t("区间总 Token")}</p>
                 <p
-                  className="mt-1 font-brand text-3xl leading-none font-semibold tabular-nums"
+                  className="mt-1 text-3xl leading-none font-semibold tabular-nums"
                   title={fullTokens(summary.totalTokens)}
                 >
                   {formatTokens(summary.totalTokens)}

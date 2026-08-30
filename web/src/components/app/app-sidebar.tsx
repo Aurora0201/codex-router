@@ -105,7 +105,7 @@ export function AppSidebar({
         ) : (
           <div className="flex h-14 items-center gap-3 px-3">
             <BrandMark className="size-6 text-sidebar-foreground" />
-            <p className="min-w-0 truncate font-brand text-lg font-semibold leading-none">
+            <p className="min-w-0 truncate font-logo text-lg font-semibold leading-none">
               Codex Router
             </p>
             <SidebarTrigger className="ml-auto size-8" />
