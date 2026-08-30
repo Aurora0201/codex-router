@@ -1,3 +1,4 @@
+import { setTimeout as delay } from "node:timers/promises";
 import { AccountOperationLock } from "./account-lock.js";
 import { withAppServerClient, type AppServerClient } from "./app-server-client.js";
 import { CredentialReader } from "./credential-reader.js";
@@ -35,8 +36,10 @@ function accountMetadata(result: unknown): { mode: string | null; email: string 
 export class AccountStatusService {
   private readonly lock = new AccountOperationLock();
   private readonly inFlight = new Map<string, Promise<AccountStatusRefresh>>();
+  private readonly backgroundTasks = new Set<Promise<boolean>>();
   private readonly lastAttemptAt = new Map<string, number>();
   private readonly reader = new CredentialReader();
+  private readonly shutdownController = new AbortController();
   private closed = false;
 
   constructor(
@@ -65,11 +68,24 @@ export class AccountStatusService {
   }
 
   refreshInBackground(accountId: string): Promise<boolean> {
+    if (this.closed) return Promise.resolve(false);
+    const task = this.refreshWithRetry(accountId);
+    this.backgroundTasks.add(task);
+    void task.finally(() => this.backgroundTasks.delete(task));
+    return task;
+  }
+
+  private async refreshWithRetry(accountId: string): Promise<boolean> {
     return this.refresh(accountId).then(() => true).catch(async () => {
       if (this.closed) return false;
       const account = this.database.accounts.get(accountId);
       if (!account || !account.enabled) return false;
-      await new Promise((resolve) => setTimeout(resolve, this.retryDelayMs()));
+      try {
+        await delay(this.retryDelayMs(), undefined, { signal: this.shutdownController.signal });
+      } catch {
+        return false;
+      }
+      if (this.closed) return false;
       return this.refresh(accountId).then(() => true).catch(() => false);
     });
   }
@@ -90,7 +106,8 @@ export class AccountStatusService {
 
   async close(): Promise<void> {
     this.closed = true;
-    await Promise.allSettled([...this.inFlight.values()]);
+    this.shutdownController.abort();
+    await Promise.allSettled([...this.backgroundTasks, ...this.inFlight.values()]);
   }
 
   consumeResetCredit(accountId: string, idempotencyKey: string, creditId?: string): Promise<ResetCreditOutcome> {

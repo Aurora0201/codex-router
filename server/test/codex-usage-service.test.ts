@@ -257,7 +257,7 @@ ${tokens("2026-08-22T17:00:01.000Z", 8, 1, 4, 1)}
     await mkdir(path.join(root, "sessions"), { recursive: true }); await mkdir(path.join(root, "archived_sessions"), { recursive: true });
     process.env.CODEX_HOME = root;
     await writeFile(path.join(root, "sessions", `rollout-${thread}.jsonl`), `${tokens("2026-08-20T16:00:00.000Z", 12, 4, 3, 1)}\n`);
-    const gateway = await buildGateway({ dataDir: path.join(root, "router"), webDistDir: path.join(root, "missing-web"), developerMode: true });
+    const gateway = await buildGateway({ dataDir: path.join(root, "router"), webDistDir: path.join(root, "missing-web"), developerMode: true }, { backgroundTasks: false });
     await gateway.codexUsage.scan();
     const response = await gateway.app.inject({ method: "GET", url: "/api/codex-usage?range=14d" });
     expect(response.statusCode).toBe(200); expect(response.json().summary.totalTokens).toBe(15);

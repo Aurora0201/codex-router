@@ -543,34 +543,14 @@ describe("Codex app-server adapter", () => {  it("uses isolated CODEX_HOME and J
     database.close();
   });
 
-  it("retries a background quota refresh once without retrying a manual refresh", async () => {
+  it("can disable automatic quota refreshes without disabling manual refresh", async () => {
     const root = await tempDir();
     const database = new GatewayDatabase(path.join(root, "gateway.db"));
     database.accounts.insert({ id: "account", codexHome: path.join(root, "account") });
     database.accounts.update("account", { authStatus: "ready" });
-    const usage = new AccountUsageService({} as never, database);
-    const snapshot = { primary: null, secondary: null, rateLimitReachedType: null, loadedAt: Date.now() };
-    const refreshOnce = vi.spyOn(
-      usage as unknown as { refreshOnce(accountId: string): Promise<typeof snapshot> },
-      "refreshOnce",
-    );
-
-    refreshOnce.mockRejectedValueOnce(new Error("temporary"));
-    await expect(usage.refresh("account")).rejects.toThrow("temporary");
-    expect(refreshOnce).toHaveBeenCalledTimes(1);
-
-    vi.useFakeTimers();
-    try {
-      refreshOnce.mockReset()
-        .mockRejectedValueOnce(new Error("temporary"))
-        .mockResolvedValueOnce(snapshot);
-      const background = usage.refreshInBackground("account");
-      await vi.advanceTimersByTimeAsync(2_500);
-      await expect(background).resolves.toBe(true);
-      expect(refreshOnce).toHaveBeenCalledTimes(2);
-    } finally {
-      vi.useRealTimers();
-    }
+    const usage = new AccountUsageService({} as never, database, undefined, false);
+    usage.refreshIfStale("account");
+    await expect(usage.refreshInBackground("account")).resolves.toBe(false);
     database.close();
   });
 

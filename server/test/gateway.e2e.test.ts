@@ -269,7 +269,7 @@ beforeAll(async () => {
     accountsDir: path.join(root, "data", "accounts"),
     databasePath: path.join(root, "data", "gateway.db"),
     webDistDir: webDir,
-  });
+  }, { backgroundTasks: false });
   const accountHome = path.join(
     root,
     "data",
@@ -333,7 +333,7 @@ beforeAll(async () => {
     accountsDir: path.join(emptyGatewayRoot, "accounts"),
     databasePath: path.join(emptyGatewayRoot, "gateway.db"),
     webDistDir: webDir,
-  });
+  }, { backgroundTasks: false });
   emptyGatewayUrl = await emptyGateway.app.listen({
     host: "127.0.0.1",
     port: 0,
@@ -1080,7 +1080,7 @@ describe("security and admin API", () => {
       dataDir: path.join(root, "missing-ui-data"),
       databasePath: path.join(root, "missing-ui-data", "gateway.db"),
       webDistDir: missing,
-    });
+    }, { backgroundTasks: false });
     expect(
       (await withoutUi.app.inject({ method: "GET", url: "/admin" })).statusCode,
     ).toBe(503);

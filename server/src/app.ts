@@ -36,6 +36,10 @@ export interface GatewayApp {
   codexUsage: CodexUsageService;
 }
 
+export interface GatewayBuildOptions {
+  backgroundTasks?: boolean;
+}
+
 function startUsageRefreshScheduler(status: AccountStatusService, onRefresh: () => void): NodeJS.Timeout {
   const refreshAccounts = () => {
     void status.refreshAll(onRefresh);
@@ -64,8 +68,9 @@ async function backfillChatgptAccountIds(database: GatewayDatabase): Promise<voi
   }
 }
 
-export async function buildGateway(overrides: Partial<GatewayConfig> = {}): Promise<GatewayApp> {
+export async function buildGateway(overrides: Partial<GatewayConfig> = {}, options: GatewayBuildOptions = {}): Promise<GatewayApp> {
   const config = loadConfig(overrides);
+  const backgroundTasks = options.backgroundTasks ?? true;
   const startedAt = Date.now();
   const app = Fastify({
     bodyLimit: config.requestBodyLimit,
@@ -106,20 +111,20 @@ export async function buildGateway(overrides: Partial<GatewayConfig> = {}): Prom
   await logins.cleanupStaleStaging();
   const accountStatus = new AccountStatusService(config, database);
   const auth = new AccountAuthService(config, database, accountStatus);
-  const usage = new AccountUsageService(config, database, accountStatus);
+  const usage = new AccountUsageService(config, database, accountStatus, backgroundTasks);
   const csrf = new CsrfGuard();
   const proxy = new HttpProxy({ upstreamBaseUrl: config.upstreamBaseUrl, activeAccounts, auth, usage, database });
   const codexConfig = new CodexConfigService();
   const events = new AdminEventHub();
   const codexUsage = await CodexUsageService.create({ dataDir: config.dataDir, legacyDb: database.raw, onChange: () => events.invalidate("usage"), log: app.log });
-  if (process.env.NODE_ENV !== "test") codexUsage.start();
+  if (backgroundTasks) codexUsage.start();
   const websocketConnections = new WebSocketConnectionRegistry((connectionId) => {
     events.emitActivity({ type: "connection_updated", connectionId });
     events.invalidate("websocketConnections");
   });
-  const rateLimitTimer = startUsageRefreshScheduler(accountStatus, () => events.invalidate("accounts"));
+  const rateLimitTimer = backgroundTasks ? startUsageRefreshScheduler(accountStatus, () => events.invalidate("accounts")) : null;
   const codexProcess = new CodexProcessMonitor(() => events.invalidate("codex"));
-  await codexProcess.start();
+  if (backgroundTasks) await codexProcess.start();
   database.requestLog.onStarted = (id) => { events.emitActivity({ type: "request_started", id }); events.invalidate("logs"); };
   database.requestLog.onFinished = (id) => { events.emitActivity({ type: "request_finished", id }); events.invalidate("stats", "logs"); };
   database.websocketConnectionLog.onUpdated = (connectionId) => { events.emitActivity({ type: "connection_updated", connectionId }); events.invalidate("logs"); };
@@ -152,13 +157,13 @@ export async function buildGateway(overrides: Partial<GatewayConfig> = {}): Prom
   app.addHook("onClose", async () => {
     if (closed) return;
     closed = true;
-    clearInterval(rateLimitTimer);
-    codexProcess.close();
+    if (rateLimitTimer) clearInterval(rateLimitTimer);
+    await accountStatus.close();
+    await codexProcess.close();
     await codexUsage.close();
-    events.close();
     await logins.close();
     await proxy.close();
-    await accountStatus.close();
+    events.close();
     database.close();
   });
 

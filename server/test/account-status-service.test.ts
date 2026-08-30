@@ -1,7 +1,7 @@
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { AccountStatusService } from "../src/accounts/account-status-service.js"
 import { parseRateLimitResponse } from "../src/accounts/rate-limit-parser.js"
@@ -9,6 +9,7 @@ import { loadConfig } from "../src/config.js"
 import { GatewayDatabase } from "../src/db/database.js"
 
 const roots: string[] = []
+const fixtures: Array<{ database: GatewayDatabase; service: AccountStatusService }> = []
 async function fixture() {
   const root = await mkdtemp(path.join(os.tmpdir(), "account-status-test-"))
   roots.push(root)
@@ -27,9 +28,15 @@ async function fixture() {
   const database = new GatewayDatabase(config.databasePath)
   database.accounts.insert({ id: "account", codexHome: accountHome })
   database.accounts.update("account", { authStatus: "ready", chatgptAccountId: "account-id" })
-  return { root, accountHome, database, service: new AccountStatusService(config, database) }
+  const service = new AccountStatusService(config, database)
+  fixtures.push({ database, service })
+  return { root, accountHome, database, service }
 }
 afterEach(async () => {
+  for (const { database, service } of fixtures.splice(0).reverse()) {
+    await service.close()
+    if (database.raw.open) database.close()
+  }
   while (roots.length) await rm(roots.pop()!, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
 })
 
@@ -103,5 +110,38 @@ describe("dynamic account status", () => {
     await expect(transient.service.refresh("account")).rejects.toThrow("account_relogin_required")
     expect(transient.database.accounts.get("account")).toMatchObject({ authStatus: "relogin_required", authErrorCode: "relogin_required" })
     transient.database.close()
+  })
+
+  it("owns background retries and cancels a pending retry during shutdown", async () => {
+    const { accountHome, database, service } = await fixture()
+    await writeFile(path.join(accountHome, "force-transient"), "")
+    const background = service.refreshInBackground("account")
+    await expect.poll(async () => readFile(path.join(accountHome, "rpc.log"), "utf8").then((log) => log.includes("account/read")).catch(() => false)).toBe(true)
+
+    await service.close()
+    await expect(background).resolves.toBe(false)
+    expect(database.accounts.get("account")).toMatchObject({ authStatus: "ready", authErrorCode: "status_check_failed" })
+  })
+
+  it("retries a background refresh once while manual refresh remains single-attempt", async () => {
+    const { service } = await fixture()
+    const snapshot = { credential: { accessToken: "token", accountId: "account", email: null, planType: null, authMode: "chatgpt", fedRamp: false }, limits: { primary: null, secondary: null, buckets: [], rateLimitReachedType: null, resetCredits: null, planType: null, loadedAt: Date.now() } }
+    const refresh = vi.spyOn(service, "refresh")
+
+    refresh.mockRejectedValueOnce(new Error("temporary"))
+    await expect(service.refresh("account")).rejects.toThrow("temporary")
+    expect(refresh).toHaveBeenCalledTimes(1)
+
+    vi.useFakeTimers()
+    try {
+      refresh.mockReset().mockRejectedValueOnce(new Error("temporary")).mockResolvedValueOnce(snapshot)
+      const background = service.refreshInBackground("account")
+      await vi.advanceTimersByTimeAsync(2_500)
+      await expect(background).resolves.toBe(true)
+      expect(refresh).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+      refresh.mockRestore()
+    }
   })
 })

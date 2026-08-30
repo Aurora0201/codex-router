@@ -88,6 +88,7 @@ export class CodexProcessMonitor {
   private running = false;
   private initialized = false;
   private timer: NodeJS.Timeout | null = null;
+  private activeRefresh: Promise<boolean> | null = null;
 
   constructor(private readonly onChange: () => void) {}
 
@@ -101,12 +102,22 @@ export class CodexProcessMonitor {
     return this.running;
   }
 
-  close(): void {
+  async close(): Promise<void> {
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
+    await this.activeRefresh;
   }
 
-  async refresh(): Promise<boolean> {
+  refresh(): Promise<boolean> {
+    if (this.activeRefresh) return this.activeRefresh;
+    const task = this.performRefresh();
+    this.activeRefresh = task.finally(() => {
+      this.activeRefresh = null;
+    });
+    return this.activeRefresh;
+  }
+
+  private async performRefresh(): Promise<boolean> {
     const next = await codexRunning();
     const changed = this.initialized && next !== this.running;
     this.running = next;

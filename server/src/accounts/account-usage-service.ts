@@ -9,6 +9,7 @@ export class AccountUsageService {
     config: GatewayConfig,
     database: GatewayDatabase,
     status?: AccountStatusService,
+    private readonly backgroundRefreshEnabled = true,
   ) {
     this.status = status ?? new AccountStatusService(config, database);
   }
@@ -18,14 +19,13 @@ export class AccountUsageService {
   }
 
   refreshIfStale(accountId: string): void {
+    if (!this.backgroundRefreshEnabled) return;
     this.status.refreshIfStale(accountId);
   }
 
   refreshInBackground(accountId: string): Promise<boolean> {
-    return this.refresh(accountId).then(() => true).catch(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 2_000));
-      return this.refresh(accountId).then(() => true).catch(() => false);
-    });
+    if (!this.backgroundRefreshEnabled) return Promise.resolve(false);
+    return this.status.refreshInBackground(accountId);
   }
 
   private refreshOnce(accountId: string): Promise<RateLimitSnapshot> {
