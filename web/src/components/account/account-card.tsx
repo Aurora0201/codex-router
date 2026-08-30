@@ -88,21 +88,30 @@ export function AccountCard({
                 aria-label={t("路由到 {{account}}", { account: accountId })}
                 // Direct from base-ui rather than the RadioGroupItem wrapper:
                 // the control is the brand mark itself, not a dot.
+                //
+                // Only an unroutable account is dimmed and blocked. A switch in
+                // flight leaves the control untouched, so the cursor does not
+                // flicker on the way through; the mark's spin carries that.
                 className={cn(
                   "grid size-10 shrink-0 place-items-center rounded-xl transition-colors outline-none",
                   "focus-visible:ring-3 focus-visible:ring-ring/50",
                   "data-checked:bg-primary/10 data-checked:text-primary",
                   "data-unchecked:bg-muted data-unchecked:text-foreground",
-                  "not-data-disabled:data-unchecked:hover:bg-primary/10 not-data-disabled:data-unchecked:hover:text-primary",
-                  "data-disabled:cursor-not-allowed data-disabled:opacity-40"
+                  routable
+                    ? // Held explicitly: a switch in flight sets aria-disabled,
+                      // which would otherwise drop the base pointer rule.
+                      "cursor-pointer data-unchecked:hover:bg-primary/10 data-unchecked:hover:text-primary"
+                    : "cursor-not-allowed opacity-40"
                 )}
               />
             }
           >
+            {/* Spins while it is the route, and from the moment it is asked to
+                become one, so the switch reads as continuous. */}
             <OpenAiMark
               className={cn(
                 "size-[1.375rem]",
-                account.isActive && "motion-safe:animate-route-spin"
+                (account.isActive || busy) && "motion-safe:animate-route-spin"
               )}
             />
           </TooltipTrigger>

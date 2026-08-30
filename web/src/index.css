@@ -156,6 +156,15 @@
   }
 }
 
+/* Tailwind v4 preflight leaves interactive elements on the default arrow, so
+   nothing in the app looks clickable until it is asked for explicitly. */
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]),
+[role="radio"]:not([aria-disabled="true"]),
+[role="tab"]:not([aria-disabled="true"]) {
+    cursor: pointer;
+}
+
 .subtle-scrollbar {
     scrollbar-width: thin;
     scrollbar-color: var(--border) transparent;
