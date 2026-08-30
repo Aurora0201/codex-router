@@ -154,6 +154,9 @@ export async function buildGateway(overrides: Partial<GatewayConfig> = {}, optio
   }
 
   let closed = false;
+  // Fastify runs onClose only after the server has stopped accepting requests;
+  // it is lifecycle cleanup, not an HTTP handler reachable by a client.
+  // codeql[js/missing-rate-limiting]
   app.addHook("onClose", async () => {
     if (closed) return;
     closed = true;
