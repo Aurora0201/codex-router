@@ -613,6 +613,9 @@ describe("HTTP, SSE, compact and models", () => {
     const refresh = vi
       .spyOn(gateway.auth, "refresh")
       .mockImplementation((id) => gateway.auth.getCredential(id));
+    const refreshInBackground = vi
+      .spyOn(gateway.usage, "refreshInBackground")
+      .mockResolvedValue(false);
     const partial = await streamRequest(
       `${gatewayUrl}/backend-api/codex/responses`,
       Buffer.from(
@@ -653,6 +656,8 @@ describe("HTTP, SSE, compact and models", () => {
     expect(Buffer.concat(compact.chunks).toString()).toBe(
       '{"error":"compact_invalid"}',
     );
+    expect(refreshInBackground).toHaveBeenCalledWith("local");
+    refreshInBackground.mockRestore();
     refresh.mockRestore();
     gateway.database.accounts.update("local", { authStatus: "ready" });
   });
