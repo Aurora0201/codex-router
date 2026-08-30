@@ -122,7 +122,12 @@ export const en = {
   "本机数据始于 {{date}}；更早的本地记录不可恢复。":
     "Local data starts on {{date}}; earlier local records cannot be recovered.",
   "7 日均线": "7-day average",
-  数据覆盖滚动区域: "Scrollable data coverage",
+  "{{weekday}} {{hour}}:00 · {{tokens}}": "{{weekday}} {{hour}}:00 · {{tokens}}",
+  "全部历史 · 不随筛选变化": "All history · unaffected by filters",
+  最活跃: "Busiest",
+  工作时段占比: "Working hours",
+  周末占比: "Weekend",
+  白名单派生历史永久保留: "Allowlisted derived history is retained permanently",
   模型分布滚动区域: "Scrollable model usage ranking",
   模型分布排名: "Model usage ranking",
   "{{count}} 项": "{{count}} items",

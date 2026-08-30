@@ -1,5 +1,15 @@
 import { useEffect, useMemo, useState } from "react"
-import { AlertTriangleIcon, DatabaseIcon, InfoIcon } from "lucide-react"
+import {
+  AlertTriangleIcon,
+  BadgeCheckIcon,
+  CircleOffIcon,
+  DatabaseIcon,
+  FoldVerticalIcon,
+  InfoIcon,
+  MessageSquareIcon,
+  PercentIcon,
+  PlayIcon,
+} from "lucide-react"
 import { useTranslation } from "react-i18next"
 import { Bar, ComposedChart, Line } from "recharts"
 
@@ -75,6 +85,11 @@ const weekdayLabels: Record<string, string> = {
   Sat: "六",
   Sun: "日",
 }
+// The axis has one glyph of room; a day quoted on its own needs the 周 to read
+// as a weekday rather than as a numeral.
+const weekdayFullLabels: Record<string, string> = Object.fromEntries(
+  Object.entries(weekdayLabels).map(([key, label]) => [key, `周${label}`])
+)
 
 function formatTokens(value: number): string {
   return new Intl.NumberFormat(undefined, {
@@ -289,6 +304,33 @@ export function UsagePage({
     [data]
   )
   const heatMax = Math.max(0, ...heat.values())
+  const rhythm = useMemo(() => {
+    const cells = data?.heatmap ?? []
+    const total = cells.reduce((sum, cell) => sum + cell.totalTokens, 0)
+    const peak = cells.reduce<(typeof cells)[number] | null>(
+      (best, cell) =>
+        best && best.totalTokens >= cell.totalTokens ? best : cell,
+      null
+    )
+    const within = (predicate: (cell: (typeof cells)[number]) => boolean) =>
+      total
+        ? (cells
+            .filter(predicate)
+            .reduce((sum, cell) => sum + cell.totalTokens, 0) /
+            total) *
+          100
+        : 0
+    return {
+      busiest: peak
+        ? `${weekdayFullLabels[peak.weekday] ?? peak.weekday} ${String(peak.hour).padStart(2, "0")}:00`
+        : "—",
+      // Working hours are 09:00 through 20:59 local.
+      workHoursPercent: within((cell) => cell.hour >= 9 && cell.hour <= 20),
+      weekendPercent: within(
+        (cell) => cell.weekday === "Sat" || cell.weekday === "Sun"
+      ),
+    }
+  }, [data])
   const selectedProject =
     project === "all"
       ? null
@@ -711,7 +753,7 @@ export function UsagePage({
 
           <Panel
             title={t("活跃热力图")}
-            hint={t("按本机时区，星期 × 小时")}
+            hint={t("全部历史 · 不随筛选变化")}
             className="col-span-12 xl:col-span-8"
             bodyClassName="flex-1"
           >
@@ -733,10 +775,8 @@ export function UsagePage({
                       {Array.from({ length: 24 }, (_, hour) => {
                         const value = heat.get(`${day}|${hour}`) ?? 0
                         const level = heatMax ? value / heatMax : 0
-                        return (
+                        const cell = (
                           <span
-                            key={hour}
-                            title={`${weekdayLabels[day]} ${hour}:00 · ${fullTokens(value)}`}
                             className={cn(
                               "h-3.5 rounded-[3px]",
                               level === 0 && "bg-foreground/[0.06]",
@@ -746,6 +786,22 @@ export function UsagePage({
                               level > 0.75 && "bg-chart-5"
                             )}
                           />
+                        )
+                        // An empty hour has nothing to report, so only cells
+                        // with usage carry a tooltip.
+                        return value === 0 ? (
+                          <span key={hour}>{cell}</span>
+                        ) : (
+                          <Tooltip key={hour}>
+                            <TooltipTrigger render={cell} />
+                            <TooltipContent>
+                              {t("{{weekday}} {{hour}}:00 · {{tokens}}", {
+                                weekday: weekdayFullLabels[day],
+                                hour: String(hour).padStart(2, "0"),
+                                tokens: fullTokens(value),
+                              })}
+                            </TooltipContent>
+                          </Tooltip>
                         )
                       })}
                     </div>
@@ -758,110 +814,157 @@ export function UsagePage({
               <span>12:00</span>
               <span>23:00</span>
             </div>
-          </Panel>
-
-          <Panel
-            title={t("工作负载与覆盖")}
-            hint={t("同一筛选范围")}
-            className="col-span-12 xl:col-span-4"
-            bodyClassName="min-h-0 flex-1"
-          >
-            <dl className="grid shrink-0 grid-cols-2 content-start gap-x-4 gap-y-3.5">
+            {/* The grid shows the shape; this says what the shape amounts to,
+                and gives the panel a footer so it stops floating in dead space. */}
+            <dl className="mt-auto grid grid-cols-3 gap-4 border-t border-border pt-3">
               {[
-                { label: t("会话"), value: summary.sessions },
-                { label: t("任务启动"), value: summary.tasksStarted },
-                { label: t("任务完成"), value: summary.tasksCompleted },
+                { label: t("最活跃"), value: rhythm.busiest },
                 {
-                  label: t("任务完成率"),
-                  value: `${summary.completionPercent.toFixed(1)}%`,
+                  label: t("工作时段占比"),
+                  value: `${rhythm.workHoursPercent.toFixed(0)}%`,
                 },
-                { label: t("中止"), value: summary.abortedTurns },
-                { label: t("上下文压缩"), value: summary.compactions },
+                {
+                  label: t("周末占比"),
+                  value: `${rhythm.weekendPercent.toFixed(0)}%`,
+                },
               ].map((item) => (
                 <div key={item.label}>
                   <dt className="text-[11px] text-muted-foreground/70">
                     {item.label}
                   </dt>
-                  <dd className="text-sm font-semibold tabular-nums">
+                  <dd className="mt-0.5 text-sm font-semibold tabular-nums">
                     {item.value}
                   </dd>
                 </div>
               ))}
             </dl>
-            <div className="mt-4 flex min-h-0 flex-1 flex-col border-t border-border pt-3">
-              <p className="mb-2 flex items-center gap-1.5 text-[11px] text-muted-foreground/70">
-                <DatabaseIcon aria-hidden="true" className="size-3" />
-                {t("数据覆盖")}
-              </p>
-              {/* The full diagnostic set stays available; the panel scrolls
-                  rather than dropping the rarely-read half of it. */}
-              <ScrollArea
-                className="min-h-24 flex-1 [&_[data-slot=scroll-area-scrollbar]]:w-1.5"
-                aria-label={t("数据覆盖滚动区域") as string}
-              >
-                <dl className="grid gap-2 pr-2">
-                  {(
-                    [
-                      [t("统计会话"), String(data.coverage.rollouts)],
-                      [t("当前源文件"), String(data.coverage.sourceRollouts)],
-                      [t("永久保留"), String(data.coverage.retainedRollouts)],
-                      [
-                        t("扫描完整性"),
-                        t(data.coverage.scan.complete ? "完整" : "不完整"),
-                      ],
-                      [
-                        t("待确认缺失"),
-                        String(data.coverage.scan.pendingMissingRollouts),
-                      ],
-                      [t("解析警告"), String(data.coverage.parseWarnings)],
-                      [t("最早事件"), formatDate(data.coverage.firstEventAt)],
-                      [t("最新事件"), formatDate(data.coverage.lastEventAt)],
-                      [
-                        t("最近成功扫描"),
-                        formatDate(data.coverage.scan.lastSuccessfulAt),
-                      ],
-                      [
-                        t("最近保留"),
-                        formatDate(data.coverage.lastRetentionAt),
-                      ],
-                      [
-                        t("待同步审计"),
-                        String(data.coverage.retention.pendingAuditEvents),
-                      ],
-                      [
-                        t("审计最近校验"),
-                        formatDate(data.coverage.retention.lastVerifiedAt),
-                      ],
-                      [t("快照状态"), t(data.coverage.backup.status)],
-                      [
-                        t("最近快照"),
-                        formatDate(data.coverage.backup.lastSuccessfulAt),
-                      ],
-                      [t("快照代数"), String(data.coverage.backup.generations)],
-                      [
-                        t("最近数据库恢复"),
-                        formatDate(data.coverage.backup.lastRecoveryAt),
-                      ],
-                    ] as Array<[string, string]>
-                  ).map(([label, value]) => (
-                    <div
-                      className="flex justify-between gap-3 text-xs"
-                      key={label}
-                    >
-                      <dt className="truncate text-muted-foreground">
-                        {label}
-                      </dt>
-                      <dd
-                        className="min-w-0 shrink-0 truncate font-mono font-medium tabular-nums"
-                        title={value}
-                      >
-                        {value}
-                      </dd>
-                    </div>
-                  ))}
-                </dl>
-              </ScrollArea>
-            </div>
+          </Panel>
+
+          <Panel
+            title={t("工作负载")}
+            hint={t("同一筛选范围")}
+            className="col-span-12 xl:col-span-4"
+            bodyClassName="flex-1"
+          >
+            {/* One row per figure, the way the account cards list their facts:
+                a two-column grid of six numbers left more air than it did work. */}
+            <dl className="grid flex-1 content-between">
+              {[
+                {
+                  icon: MessageSquareIcon,
+                  label: t("会话"),
+                  value: String(summary.sessions),
+                },
+                {
+                  icon: PlayIcon,
+                  label: t("任务启动"),
+                  value: String(summary.tasksStarted),
+                },
+                {
+                  icon: BadgeCheckIcon,
+                  label: t("任务完成"),
+                  value: String(summary.tasksCompleted),
+                },
+                {
+                  icon: PercentIcon,
+                  label: t("任务完成率"),
+                  value: `${summary.completionPercent.toFixed(1)}%`,
+                },
+                {
+                  icon: CircleOffIcon,
+                  label: t("中止"),
+                  value: String(summary.abortedTurns),
+                },
+                {
+                  icon: FoldVerticalIcon,
+                  label: t("上下文压缩"),
+                  value: String(summary.compactions),
+                },
+              ].map((item) => (
+                <div
+                  className="flex items-center gap-2 text-xs"
+                  key={item.label}
+                >
+                  <dt className="flex min-w-0 items-center gap-2">
+                    <span className="grid size-6 shrink-0 place-items-center rounded-md bg-card text-muted-foreground">
+                      <item.icon aria-hidden="true" className="size-3.5" />
+                    </span>
+                    <span className="truncate text-muted-foreground">
+                      {item.label}：
+                    </span>
+                  </dt>
+                  <dd className="ml-auto shrink-0 font-mono text-sm font-semibold tabular-nums">
+                    {item.value}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </Panel>
+
+          {/* Coverage is reference material, not a comparison: it reads better
+              as one wide short strip than as a tall column beside a wide chart,
+              and every field fits without a scroll of its own. */}
+          <Panel
+            title={t("数据覆盖")}
+            hint={t("白名单派生历史永久保留")}
+            className="col-span-12"
+          >
+            <dl className="grid grid-cols-2 gap-x-6 gap-y-2.5 sm:grid-cols-3 xl:grid-cols-4">
+              {(
+                [
+                  [t("统计会话"), String(data.coverage.rollouts)],
+                  [t("当前源文件"), String(data.coverage.sourceRollouts)],
+                  [t("永久保留"), String(data.coverage.retainedRollouts)],
+                  [
+                    t("扫描完整性"),
+                    t(data.coverage.scan.complete ? "完整" : "不完整"),
+                  ],
+                  [
+                    t("待确认缺失"),
+                    String(data.coverage.scan.pendingMissingRollouts),
+                  ],
+                  [t("解析警告"), String(data.coverage.parseWarnings)],
+                  [t("最早事件"), formatDate(data.coverage.firstEventAt)],
+                  [t("最新事件"), formatDate(data.coverage.lastEventAt)],
+                  [
+                    t("最近成功扫描"),
+                    formatDate(data.coverage.scan.lastSuccessfulAt),
+                  ],
+                  [t("最近保留"), formatDate(data.coverage.lastRetentionAt)],
+                  [
+                    t("待同步审计"),
+                    String(data.coverage.retention.pendingAuditEvents),
+                  ],
+                  [
+                    t("审计最近校验"),
+                    formatDate(data.coverage.retention.lastVerifiedAt),
+                  ],
+                  [t("快照状态"), t(data.coverage.backup.status)],
+                  [
+                    t("最近快照"),
+                    formatDate(data.coverage.backup.lastSuccessfulAt),
+                  ],
+                  [t("快照代数"), String(data.coverage.backup.generations)],
+                  [
+                    t("最近数据库恢复"),
+                    formatDate(data.coverage.backup.lastRecoveryAt),
+                  ],
+                ] as Array<[string, string]>
+              ).map(([label, value]) => (
+                <div
+                  className="flex items-baseline justify-between gap-3 text-xs"
+                  key={label}
+                >
+                  <dt className="truncate text-muted-foreground">{label}</dt>
+                  <dd
+                    className="shrink-0 truncate font-mono font-medium tabular-nums"
+                    title={value}
+                  >
+                    {value}
+                  </dd>
+                </div>
+              ))}
+            </dl>
           </Panel>
 
           <p className="col-span-12 flex items-center gap-1.5 px-1 text-xs text-muted-foreground/70">

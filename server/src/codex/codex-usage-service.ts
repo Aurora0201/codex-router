@@ -478,7 +478,10 @@ export class CodexUsageService {
     const inputTokens = sum(selected, "inputTokens"), cachedInputTokens = sum(selected, "cachedInputTokens"), outputTokens = sum(selected, "outputTokens");
     const tasksStarted = selected.filter((event) => event.kind === "task_started").length, tasksCompleted = selected.filter((event) => event.kind === "task_completed").length;
     const hourFormatter = new Intl.DateTimeFormat("en-US", { timeZone: timezone, weekday: "short", hour: "2-digit", hourCycle: "h23" });
-    const heat = new Map<string, number>(); for (const event of selected.filter((item) => item.kind === "token_usage")) { const parts = hourFormatter.formatToParts(new Date(event.occurredAt)); const key = `${parts.find((part) => part.type === "weekday")?.value}|${Number(parts.find((part) => part.type === "hour")?.value)}`; heat.set(key, (heat.get(key) ?? 0) + event.totalTokens); }
+    // The heatmap answers "when do I work", which is a property of the whole
+    // history rather than of whatever slice is on screen, so it reads the
+    // unfiltered events instead of the selected ones.
+    const heat = new Map<string, number>(); for (const event of events.filter((item) => item.kind === "token_usage")) { const parts = hourFormatter.formatToParts(new Date(event.occurredAt)); const key = `${parts.find((part) => part.type === "weekday")?.value}|${Number(parts.find((part) => part.type === "hour")?.value)}`; heat.set(key, (heat.get(key) ?? 0) + event.totalTokens); }
     return { status: this.scanning ? "scanning" : (storeStatus.pendingAuditEvents > 0 ? "partial" : this.status), scope: "local_codex_home", generatedAt: Date.now(), timezone,
       coverage: { firstEventAt: coverageFirstAt, lastEventAt: lastTimes.length ? Math.max(...lastTimes) : null,
         rollouts: activeCoverage.count + retainedCoverage.count, sourceRollouts: sourceCoverage?.discoveredRollouts ?? 0, retainedRollouts: retainedCoverage.count,

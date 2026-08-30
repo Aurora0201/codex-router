@@ -102,12 +102,14 @@ describe("UsagePage", () => {
     expect(await screen.findByLabelText("每日 Token 趋势")).toBeInTheDocument()
     expect(screen.getByText("区间总 Token")).toBeInTheDocument()
     expect(screen.getByText(/本机数据始于/)).toBeInTheDocument()
-    // Every coverage diagnostic stays reachable; the panel scrolls instead of
-    // dropping the rarely-read half of them.
-    const coverage = screen.getByLabelText("数据覆盖滚动区域")
+    // Every coverage diagnostic is on screen at once: the wide strip fits all
+    // sixteen without a scroll of its own.
     for (const label of ["扫描完整性", "待同步审计", "快照代数", "解析警告"]) {
-      expect(within(coverage).getByText(label)).toBeInTheDocument()
+      expect(screen.getByText(label)).toBeInTheDocument()
     }
+    // The heatmap describes the whole history, so it says so rather than
+    // implying it follows the filters.
+    expect(screen.getByText("全部历史 · 不随筛选变化")).toBeInTheDocument()
     expect(screen.queryByLabelText("账号筛选")).not.toBeInTheDocument()
     await waitFor(() =>
       expect(getCodexUsage).toHaveBeenCalledWith({

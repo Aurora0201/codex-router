@@ -91,6 +91,31 @@ describe.sequential("CodexUsageService", () => {
     await service.close(); database.close();
   });
 
+  it("keeps the heatmap on the whole history whatever the filters select", async () => {
+    const { root, database, service } = await fixture();
+    const secondThread = "019fe159-caca-7b40-8641-bad1fd122cb8";
+    const directory = path.join(root, "sessions", "2026", "08", "20");
+    await writeFile(path.join(directory, `rollout-${thread}.jsonl`), `${row("2026-08-20T16:00:00.000Z", "session_meta", { id: thread, cwd: "D:\a" })}
+${row("2026-08-20T16:00:00.500Z", "turn_context", { model: "gpt-one", cwd: "D:\a" })}
+${tokens("2026-08-20T16:00:01.000Z", 10, 2, 3, 1)}
+`);
+    await writeFile(path.join(directory, `rollout-${secondThread}.jsonl`), `${row("2026-08-20T17:00:00.000Z", "session_meta", { id: secondThread, cwd: "D:\b" })}
+${row("2026-08-20T17:00:00.500Z", "turn_context", { model: "gpt-two", cwd: "D:\b" })}
+${tokens("2026-08-20T17:00:01.000Z", 8, 1, 4, 1)}
+`);
+    await service.scan();
+
+    const total = (dashboard: any) => dashboard.heatmap.reduce((sum: number, cell: any) => sum + cell.totalTokens, 0);
+    const unfiltered = service.getDashboard({ range: "all" }) as any;
+    // The summary narrows with the filter; the rhythm the heatmap describes
+    // belongs to the whole history and must not.
+    const narrowed = service.getDashboard({ range: "all", model: "gpt-one" }) as any;
+    expect(narrowed.summary.totalTokens).toBeLessThan(unfiltered.summary.totalTokens);
+    expect(total(narrowed)).toBe(total(unfiltered));
+    expect(narrowed.heatmap).toEqual(unfiltered.heatmap);
+    await service.close(); database.close();
+  });
+
   it("keeps an incomplete trailing line for the next incremental scan", async () => {
     const { root, database, service } = await fixture();
     const file = path.join(root, "sessions", "2026", "08", "20", `rollout-${thread}.jsonl`);
