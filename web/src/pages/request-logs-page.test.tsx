@@ -59,6 +59,9 @@ describe("RequestLogsPage", () => {
           outcome: "upstream_error",
         },
       ],
+      histogram: [],
+      failureSources: [],
+      diagnosticCodes: [],
       nextCursor: null,
       pagination: { page: 1, pageSize: 20, totalItems: 8, totalPages: 1 },
     })
@@ -95,21 +98,18 @@ describe("RequestLogsPage", () => {
     )
     expect(screen.getByText("81 ms")).not.toHaveClass("text-right")
     expect(screen.getByText("120 B / 40 B")).not.toHaveClass("text-right")
-    const recordsHeaderCard = screen
-      .getByText("请求记录")
-      .closest('[data-slot="card"]')
-    const tableCard = screen
-      .getByRole("button", { name: "查看请求 req-1" })
-      .closest('[data-slot="card"]')
-    expect(recordsHeaderCard).toHaveClass("rounded-b-none")
-    expect(recordsHeaderCard).toContainElement(
+    // One panel now, not two cards glued together: the toolbar, the rows and
+    // the pagination all sit on the same inset.
+    const records = screen
+      .getByRole("heading", { name: "请求记录" })
+      .closest("section") as HTMLElement
+    expect(records).toContainElement(
       screen.getByRole("button", { name: "更多筛选" })
     )
-    expect(tableCard).toHaveClass("gap-0", "rounded-t-none")
-    expect(tableCard?.querySelector('[data-slot="card-content"]')).toHaveClass(
-      "p-0",
-      "flex-1"
+    expect(records).toContainElement(
+      screen.getByRole("button", { name: "查看请求 req-1" })
     )
+    expect(records).toHaveClass("flex-1", "min-h-0")
     expect(
       screen
         .getByRole("button", { name: "查看请求 req-1" })
@@ -171,6 +171,9 @@ describe("RequestLogsPage", () => {
         averageDurationMs: null,
       },
       timeline: [],
+      histogram: [],
+      failureSources: [],
+      diagnosticCodes: [],
       nextCursor: null,
       pagination: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0 },
     })
@@ -239,6 +242,9 @@ describe("RequestLogsPage", () => {
         averageDurationMs: 12,
       },
       timeline: [],
+      histogram: [],
+      failureSources: [],
+      diagnosticCodes: [],
       nextCursor: null,
       pagination: { page: 1, pageSize: 20, totalItems: 1, totalPages: 1 },
     })
@@ -305,6 +311,9 @@ describe("RequestLogsPage", () => {
         averageDurationMs: 10,
       },
       timeline: [],
+      histogram: [],
+      failureSources: [],
+      diagnosticCodes: [],
       nextCursor: null,
       pagination: {
         page: filters.page ?? 1,

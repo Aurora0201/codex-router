@@ -3,6 +3,21 @@ export const zhCN = {
 } as const
 
 export const en = {
+  "{{range}}的请求": "Requests, {{range}}",
+  "{{percent}}% 成功": "{{percent}}% succeeded",
+  请求量与结果的时间分布: "Request volume and outcomes over time",
+  "{{time}} · 请求 {{requests}} · 故障 {{errors}}":
+    "{{time}} · requests {{requests}} · failures {{errors}}",
+  "{{time}} · 请求 {{requests}} · 故障 {{errors}} · 拒绝 {{rejected}}":
+    "{{time}} · requests {{requests}} · failures {{errors}} · rejected {{rejected}}",
+  "点选任意一格，把下方列表收窄到那一段":
+    "Click any bar to narrow the list below to that slice",
+  故障分布: "Failure breakdown",
+  "共 {{count}} 次": "{{count}} in total",
+  这段范围内没有故障: "No failures in this range",
+  最常见诊断码: "Most common diagnostic codes",
+  "{{from}} 起": "From {{from}}",
+  "按时间倒序 · 共 {{total}} 条": "Newest first · {{total}} in total",
   无可用账号: "No usable account",
   未选择账号: "No account selected",
   请求出口: "Request exit",

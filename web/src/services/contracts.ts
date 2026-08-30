@@ -263,6 +263,11 @@ export interface RequestLogsResponse {
     availabilityErrors: number
     averageDurationMs: number | null
   }
+  /**
+   * The timeline is a capped sample of recent requests, so anything that has
+   * to be counted or shaped over the whole window is aggregated server-side
+   * instead: `histogram` covers the range in 96 equal buckets.
+   */
   timeline: Array<{
     id: string
     createdAt: number
@@ -270,6 +275,16 @@ export interface RequestLogsResponse {
     statusCode: number | null
     outcome: RequestOutcome
   }>
+  histogram: Array<{
+    startedAt: number
+    endedAt: number
+    requests: number
+    errors: number
+    rejected: number
+    cancelled: number
+  }>
+  failureSources: Array<{ source: FailureSource; count: number }>
+  diagnosticCodes: Array<{ code: string; count: number }>
   nextCursor: string | null
   pagination: {
     page: number

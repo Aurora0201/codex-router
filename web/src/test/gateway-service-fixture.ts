@@ -129,6 +129,9 @@ export function createGatewayServiceFixture({
           averageDurationMs: null,
         },
         timeline: [],
+        histogram: [],
+        failureSources: [],
+        diagnosticCodes: [],
         nextCursor: null,
         pagination: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0 },
       }
