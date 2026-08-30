@@ -2,8 +2,7 @@ import { RadioIcon } from "lucide-react"
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { useTranslation } from "react-i18next"
 
-import { Badge } from "@/components/ui/badge"
-import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Panel } from "@/components/app/panel"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -137,7 +136,13 @@ function AnimatedCellValue({ value, children }: { value: string; children: React
   return <div ref={ref} data-slot="animated-cell-value" className="min-w-0 truncate">{children}</div>
 }
 
-export function WebSocketActivityCard({ connections }: { connections: WebSocketConnectionView[] }) {
+export function WebSocketActivityCard({
+  connections,
+  className,
+}: {
+  connections: WebSocketConnectionView[]
+  className?: string
+}) {
   const { t } = useTranslation()
   const [now, setNow] = useState(() => Date.now())
   const [tableScrolled, setTableScrolled] = useState(false)
@@ -221,15 +226,16 @@ export function WebSocketActivityCard({ connections }: { connections: WebSocketC
   }, [])
   const transmitting = connections.filter((connection) => connection.state === "transmitting").length
   return (
-    <Card aria-label={t("WebSocket 实时传输")} className="min-h-[18rem] gap-0 overflow-hidden py-0 lg:min-h-0 lg:flex-1 lg:basis-0">
-      <CardHeader className="shrink-0 py-(--card-spacing)">
-        <CardTitle>{t("WebSocket 实时传输")}</CardTitle>
-        <CardDescription>{t("每行代表一条尚未关闭的连接；流动效果只表示当前正在传输数据。")}</CardDescription>
-        <CardAction><Badge variant="outline" className="text-success">{t("{{connections}} 条连接 · {{transmitting}} 条传输中", { connections: connections.length, transmitting })}</Badge></CardAction>
-      </CardHeader>
-      <CardContent className="relative min-h-0 flex-1 overflow-hidden p-0">
+    <Panel
+      title={t("实时连接")}
+      icon={RadioIcon}
+      hint={t("{{connections}} 条连接 · {{transmitting}} 条传输中", { connections: connections.length, transmitting })}
+      className={className}
+      bodyClassName="h-72 min-h-0 overflow-hidden p-0"
+    >
+      <div className="relative min-h-0 flex-1 overflow-hidden" aria-label={t("WebSocket 实时传输") as string}>
         {connections.length === 0 ? (
-          <Empty className="h-full min-h-48 border-0"><EmptyHeader><EmptyMedia variant="icon"><RadioIcon /></EmptyMedia><EmptyTitle>{t("当前没有 WebSocket 连接")}</EmptyTitle><EmptyDescription>{t("Codex 建立连接后会显示在这里。")}</EmptyDescription></EmptyHeader></Empty>
+          <Empty className="h-full border-0 bg-transparent"><EmptyHeader><EmptyMedia variant="icon"><RadioIcon /></EmptyMedia><EmptyTitle>{t("当前没有 WebSocket 连接")}</EmptyTitle><EmptyDescription>{t("Codex 建立连接后会显示在这里。")}</EmptyDescription></EmptyHeader></Empty>
         ) : (
           <>
             <ScrollArea
@@ -241,10 +247,10 @@ export function WebSocketActivityCard({ connections }: { connections: WebSocketC
             >
               <Table className="min-w-[44rem] table-fixed text-sm">
                 <TableHeader><TableRow>
-                  <TableHead className="sticky top-0 z-10 w-[28%] bg-card pl-4">{t("对话")}</TableHead>
-                  <TableHead className="sticky top-0 z-10 w-[37%] bg-card">{t("当前活动")}</TableHead>
-                  <TableHead className="sticky top-0 z-10 w-[20%] bg-card">{t("状态")}</TableHead>
-                  <TableHead className="sticky top-0 z-10 w-[15%] bg-card">{t("连接时间")}</TableHead>
+                  <TableHead className="sticky top-0 z-10 w-[28%] bg-muted pl-4">{t("对话")}</TableHead>
+                  <TableHead className="sticky top-0 z-10 w-[37%] bg-muted">{t("当前活动")}</TableHead>
+                  <TableHead className="sticky top-0 z-10 w-[20%] bg-muted">{t("状态")}</TableHead>
+                  <TableHead className="sticky top-0 z-10 w-[15%] bg-muted">{t("连接时间")}</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>{orderedConnections.map((connection) => (
                   <TableRow
@@ -275,7 +281,7 @@ export function WebSocketActivityCard({ connections }: { connections: WebSocketC
             />
           </>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </Panel>
   )
 }

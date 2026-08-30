@@ -65,9 +65,12 @@ describe("App", () => {
     expect(pageContent).toHaveClass("lg:h-full", "lg:py-4")
     expect(pageContent).not.toHaveClass("lg:py-8")
 
+    // The runtime page is a grid taller than the viewport, so it scrolls as a
+    // page rather than pinning itself and scrolling inside.
     await user.click(screen.getByRole("button", { name: "运行状态" }))
     await screen.findByRole("heading", { name: "运行状态" })
-    expect(pageContent).toHaveClass("lg:h-full", "lg:py-4")
+    expect(pageContent).toHaveClass("lg:py-4")
+    expect(pageContent).not.toHaveClass("lg:h-full")
 
     await user.click(screen.getByRole("button", { name: "请求日志" }))
     await screen.findByRole("heading", { name: "请求日志" })

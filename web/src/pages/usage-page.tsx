@@ -14,7 +14,6 @@ import {
   MessageSquareIcon,
   PercentIcon,
   PlayIcon,
-  type LucideIcon,
 } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import { Bar, ComposedChart, Line } from "recharts"
@@ -24,6 +23,7 @@ import {
   TabsList,
   TabsTab,
 } from "@/components/animate-ui/components/base/tabs"
+import { Panel } from "@/components/app/panel"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -108,53 +108,6 @@ function formatDay(value: number): string {
 }
 function share(part: number, whole: number): number {
   return whole ? (part / whole) * 100 : 0
-}
-
-/** Every block is the same shell: a card wrapping one solid inset. */
-function Panel({
-  title,
-  icon: Icon,
-  hint,
-  className,
-  bodyClassName,
-  children,
-}: {
-  title: string
-  icon: LucideIcon
-  hint?: string
-  className?: string
-  bodyClassName?: string
-  children: React.ReactNode
-}) {
-  return (
-    <section
-      className={cn(
-        "flex flex-col rounded-2xl bg-card px-2 pb-2 ring-1 ring-foreground/10",
-        className
-      )}
-    >
-      {/* The complete top band is the header itself, so the icon, title and
-          hint are centred between the card edge and the inset body. */}
-      <header className="flex h-11 shrink-0 items-center justify-between gap-4 px-2">
-        <h2 className="flex min-w-0 items-center gap-2 text-sm font-semibold">
-          <Icon aria-hidden="true" className="size-4 text-muted-foreground" />
-          <span className="truncate">{title}</span>
-        </h2>
-        {hint ? (
-          <span className="truncate text-xs text-muted-foreground/70">
-            {hint}
-          </span>
-        ) : null}
-      </header>
-      {/* flex-1 would set flex-basis:0 and beat any height a caller asks for,
-          so stretching is opt-in rather than baked into the shell. */}
-      <div
-        className={cn("flex flex-col rounded-xl bg-muted p-3", bodyClassName)}
-      >
-        {children}
-      </div>
-    </section>
-  )
 }
 
 function Ranking({

@@ -20,7 +20,9 @@ The account routing page and the usage analytics page define the house style. Ne
 pages and reworked pages copy their surface system rather than inventing one.
 
 - `web/src/components/account/account-list.tsx` and `account-card.tsx` — the card grid, its route summary band, and its fixed-height scroll region.
-- `web/src/pages/usage-page.tsx` — the twelve-column analytics grid, the `Panel` shell, and the emphasis hero.
+- `web/src/pages/usage-page.tsx` — the twelve-column analytics grid and the emphasis hero.
+- `web/src/pages/settings-page.tsx` with `components/gateway/` — the same grid over live runtime data.
+- `web/src/components/app/panel.tsx` — the shell all of them are built from.
 
 When a rule below is ambiguous, these files settle it. When they contradict each
 other, one of them is wrong; fix it rather than choosing freely.
@@ -53,6 +55,7 @@ other, one of them is wrong; fix it rather than choosing freely.
 - Status must always include a text label; color is supplemental.
 - Accent tone follows what a state asks of the reader, not what kind of state it is: `--muted-foreground` when there is nothing to do (including every healthy default), `--warning` when it clears on its own or is only a reminder, `--destructive` when routing is blocked until someone acts, `--primary` for the account traffic is routed through. A default state never wears an accent, or the exceptions have nothing to stand out against.
 - `--warning` and `--destructive` are tuned to the same contrast weight (4.77:1 on the light card, ~6.2:1 on the dark one) so neither out-shouts the other. Re-check any change to these tokens against WCAG AA (4.5:1) in both themes.
+- Status on the emphasis panel uses `--emphasis-success` / `--emphasis-warning` / `--emphasis-destructive`, not the card tones. The card tones are tuned against a light ground and turn to smudges on the emphasis surface; the emphasis set keeps the same lightness in both themes because the panel stays dark in both.
 - Chart series that measure the same quantity share one hue across five lightness steps (`--chart-1` … `--chart-5`). Step 1 is the least prominent against the theme's ground and step 5 the most, which means the dark ramp runs the opposite direction from the light one — otherwise the smallest series shouts the loudest. Do not give such series separate hues.
 - Radii derive from `--radius`; do not introduce standalone radius values.
 
@@ -61,7 +64,7 @@ other, one of them is wrong; fix it rather than choosing freely.
 - shadcn primitives live in `web/src/components/ui/` and are owned by the shadcn CLI; do not edit them for product styling. Scope a deviation at the call site with an arbitrary variant (`[&_[data-slot=…]]:…`) instead — thinning the ScrollArea primitive once thinned every scrollbar in the app.
 - Business composite components live in `web/src/components/` (for example `account/`, `gateway/`) and compose shadcn primitives.
 - Pages live in `web/src/pages/` and compose existing components; they do not own reusable dialog, badge, button, or empty-state behavior.
-- A page may define a local layout shell (`Panel`, `Ranking` in `usage-page.tsx`) when the shape is that page's own. Promote it to `web/src/components/` the moment a second page needs it.
+- A page may define a local layout shell (`Ranking` in `usage-page.tsx`) when the shape is that page's own. Promote it to `web/src/components/` the moment a second page needs it — that is how `Panel` reached `components/app/panel.tsx`.
 - Shared API types and fetch behavior live in `web/src/lib/api.ts`; formatting helpers live in `web/src/lib/format.ts`; state predicates and thresholds live in `web/src/lib/account-state.ts`.
 
 ## Reuse gate
@@ -129,6 +132,18 @@ other, one of them is wrong; fix it rather than choosing freely.
 - Coverage is reference material, not a comparison. It reads as one short wide strip of all sixteen diagnostics in 2/3/4 columns with no scroll of its own, not as a tall column beside a wide chart.
 - The range switcher is animate-ui Tabs, matching the accounts page. Ranges are `1d`/`7d`/`14d`/`30d`/`90d`/`all` and the set is shared with the server's `CodexUsageRange`.
 - Model and project names are labels people read, so they are not monospaced; the measured numbers beside them are.
+
+## Runtime page rules
+
+- The page answers one question — are Codex's requests going through us — and the hero answers it with the count we forwarded, because a topology diagram of three boxes drew peer machines when nothing is added to the path: two values are substituted on the way out.
+- The substitution is a pair of figures beside the headline (`请求出口`, `请求身份`), never a chain of nodes with arrows.
+- Nothing reaches the gateway before the config is rewritten, so an un-applied takeover reports zero forwarded rather than borrowing the gateway's own totals. The same rule governs the sparkline and the "latest request" stamp.
+- The runtime state is derived in `lib/codex-runtime.ts`, not re-derived per component, so the hero, its buttons and any future consumer cannot disagree about which of the six states is live.
+- Actions on the takeover live in the hero's own panel footer beside the facts, and change with the state: apply before takeover, restore once a backup exists, restart while running, "go to accounts" when routing is blocked. A state with no usable action shows none.
+- One range switch in the page header feeds the hero, the outcome breakdown and the availability strip: they are three readings of the same window, and per-panel controls could disagree with each other.
+- Availability cells are coloured by upstream failures only. Rejections are the gateway refusing and are already excluded from the percentage; colouring cells with them turned a day of ordinary traffic into a wall of amber.
+- Any two percentages describing the same thing must be the same number: the outcome panel's success share is `successful / countable`, matching the availability headline, not a share of all traffic.
+- Runtime facts are file paths and URLs, so the environment strip stacks label over value; side by side, the label is the half that gets crushed.
 
 ## Interaction and accessibility
 
