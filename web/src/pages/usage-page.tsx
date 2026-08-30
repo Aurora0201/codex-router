@@ -106,9 +106,6 @@ function formatDate(value: number | null): string {
 function formatDay(value: number): string {
   return new Date(value).toLocaleDateString()
 }
-function isProjectIdentifier(key: string): boolean {
-  return key !== "uncategorized-conversation" && key !== "other"
-}
 function share(part: number, whole: number): number {
   return whole ? (part / whole) * 100 : 0
 }
@@ -166,7 +163,6 @@ function Ranking({
   listLabel,
   emptyTitle,
   emptyDescription,
-  mono,
 }: {
   rows: Array<{
     key: string
@@ -178,7 +174,6 @@ function Ranking({
   listLabel: string
   emptyTitle: string
   emptyDescription: string
-  mono?: (key: string) => boolean
 }) {
   const { t } = useTranslation()
   if (!rows.length)
@@ -207,10 +202,7 @@ function Ranking({
                     render={
                       <span
                         tabIndex={0}
-                        className={cn(
-                          "min-w-0 truncate rounded-sm font-medium outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-                          mono?.(row.key) && "font-mono"
-                        )}
+                        className="min-w-0 truncate rounded-sm font-medium outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
                       />
                     }
                   >
@@ -432,7 +424,7 @@ export function UsagePage({
           className="h-9 w-44 rounded-md"
           aria-label={t("模型筛选")}
         >
-          <SelectValue className={cn(model !== "all" && "font-mono")}>
+          <SelectValue>
             {model === "all" ? t("全部模型") : model}
           </SelectValue>
         </SelectTrigger>
@@ -440,7 +432,7 @@ export function UsagePage({
           <SelectGroup>
             <SelectItem value="all">{t("全部模型")}</SelectItem>
             {data?.filters.models.map((item) => (
-              <SelectItem className="font-mono" key={item} value={item}>
+              <SelectItem key={item} value={item}>
                 {item}
               </SelectItem>
             ))}
@@ -459,14 +451,7 @@ export function UsagePage({
               className="h-9 w-full min-w-0 overflow-hidden rounded-md"
               aria-label={t("项目筛选")}
             >
-              <SelectValue
-                className={cn(
-                  "min-w-0 overflow-hidden",
-                  selectedProject &&
-                    isProjectIdentifier(selectedProject.key) &&
-                    "font-mono"
-                )}
-              >
+              <SelectValue className="min-w-0 overflow-hidden">
                 <span className="min-w-0 flex-1 truncate">
                   {selectedProjectLabel}
                 </span>
@@ -487,10 +472,7 @@ export function UsagePage({
               <SelectItem
                 aria-label={item.label}
                 title={item.label}
-                className={cn(
-                  "max-w-full min-w-0 overflow-hidden [&>span:first-child]:min-w-0 [&>span:first-child]:shrink [&>span:first-child]:overflow-hidden",
-                  isProjectIdentifier(item.key) && "font-mono"
-                )}
+                className="max-w-full min-w-0 overflow-hidden [&>span:first-child]:min-w-0 [&>span:first-child]:shrink [&>span:first-child]:overflow-hidden"
                 key={item.key}
                 value={item.key}
               >
@@ -776,7 +758,6 @@ export function UsagePage({
               rows={data.models}
               scrollLabel={t("模型分布滚动区域")}
               listLabel={t("模型分布排名")}
-              mono={() => true}
               emptyTitle={t("暂无分布数据")}
               emptyDescription={t("当前筛选范围内没有可比较的数据。")}
             />
@@ -793,7 +774,6 @@ export function UsagePage({
               rows={data.projects}
               scrollLabel={t("项目分布滚动区域")}
               listLabel={t("项目分布排名")}
-              mono={isProjectIdentifier}
               emptyTitle={t("暂无分布数据")}
               emptyDescription={t("当前筛选范围内没有可比较的数据。")}
             />

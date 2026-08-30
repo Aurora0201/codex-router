@@ -49,7 +49,7 @@ function Fact({
         <Icon aria-hidden="true" className="size-4" />
       </span>
       <dt className="shrink-0 text-sm text-muted-foreground">{label}：</dt>
-      <dd className="ml-auto text-right font-mono text-sm">{value}</dd>
+      <dd className="ml-auto text-right text-sm">{value}</dd>
     </div>
   )
 }
@@ -77,7 +77,7 @@ export function AccountDetailSheet({
     <Sheet open={account !== null} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-lg">
         <SheetHeader>
-          <SheetTitle className="font-mono">
+          <SheetTitle>
             {shortAccountId(account?.chatgptAccountId ?? null)}
           </SheetTitle>
           <SheetDescription>

@@ -166,7 +166,7 @@ export function AccountList({
               <p
                 className={cn(
                   "truncate text-sm font-semibold",
-                  active ? "font-mono" : "font-normal text-muted-foreground"
+                  !active && "font-normal text-muted-foreground"
                 )}
               >
                 {active

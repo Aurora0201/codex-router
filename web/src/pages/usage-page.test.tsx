@@ -119,6 +119,14 @@ describe("UsagePage", () => {
     expect(
       screen.getByLabelText("2026年08月22日 00:00 · 0 Token")
     ).toBeInTheDocument()
+    expect(
+      within(screen.getByLabelText("模型分布排名")).getByText("gpt-test")
+    ).not.toHaveClass("font-mono")
+    const modelFilter = screen.getByRole("combobox", { name: "模型筛选" })
+    await userEvent.click(modelFilter)
+    expect(await screen.findByRole("option", { name: "gpt-test" })).not.toHaveClass(
+      "font-mono"
+    )
     expect(screen.queryByLabelText("账号筛选")).not.toBeInTheDocument()
     await waitFor(() =>
       expect(getCodexUsage).toHaveBeenCalledWith({
@@ -184,8 +192,9 @@ describe("UsagePage", () => {
         name: `${longName} Token 占比 90.0%`,
       })
     ).toBeInTheDocument()
-    // A project identifier is monospaced; a synthetic bucket is not.
-    expect(label).toHaveClass("font-mono")
+    // Project names are readable labels, so both real projects and synthetic
+    // buckets inherit the body face instead of the technical-data face.
+    expect(label).not.toHaveClass("font-mono")
     expect(within(ranking).getByText("无分类对话")).not.toHaveClass("font-mono")
 
     const projectFilter = screen.getByRole("combobox", { name: "项目筛选" })
@@ -206,9 +215,9 @@ describe("UsagePage", () => {
     expect(longProjectOption).toHaveClass(
       "min-w-0",
       "max-w-full",
-      "overflow-hidden",
-      "font-mono"
+      "overflow-hidden"
     )
+    expect(longProjectOption).not.toHaveClass("font-mono")
     expect(within(longProjectOption).getByText(longName)).toHaveClass(
       "truncate"
     )
@@ -291,7 +300,7 @@ describe("UsagePage", () => {
     const projectRanking = screen.getByLabelText("项目分布排名")
     expect(
       within(projectRanking).getByText("codespace/codex-router")
-    ).toHaveClass("font-mono")
+    ).not.toHaveClass("font-mono")
     expect(within(projectRanking).getByText("其他")).not.toHaveClass(
       "font-mono"
     )

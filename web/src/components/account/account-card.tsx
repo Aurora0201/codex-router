@@ -136,7 +136,7 @@ export function AccountCard({
                 render={
                   <button
                     type="button"
-                    className="min-w-0 truncate rounded-sm text-left font-mono text-sm font-semibold underline-offset-4 outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
+                    className="min-w-0 truncate rounded-sm text-left text-sm font-semibold underline-offset-4 outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
                     onClick={() => onAction("detail")}
                   />
                 }

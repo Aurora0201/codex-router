@@ -126,6 +126,10 @@ describe("AccountList", () => {
       .getByText("当前请求路由")
       .closest("div")!.parentElement!
     expect(summary).toHaveTextContent("acct-live")
+    expect(within(summary).getByText("acct-live")).not.toHaveClass("font-mono")
+    expect(within(card("acct-live")).getByText("acct-live")).not.toHaveClass(
+      "font-mono"
+    )
     expect(screen.getByText("紧要额度").nextElementSibling).toHaveTextContent(
       "38%"
     )
