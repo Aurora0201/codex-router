@@ -34,6 +34,8 @@ import type {
   UsageWindowView,
 } from "@/services/contracts"
 
+const SECTION_TITLE = "font-heading font-medium"
+
 function Fact({
   icon: Icon,
   label,
@@ -87,10 +89,8 @@ export function AccountDetailSheet({
         {account ? (
           <ScrollArea className="min-h-0 flex-1">
             <div className="flex flex-col gap-6 px-4 pb-6">
-              <section className="flex flex-col gap-2">
-                <h3 className="px-2 text-xs font-medium text-muted-foreground">
-                  {t("账号信息")}
-                </h3>
+              <section className="flex flex-col gap-3">
+                <h3 className={SECTION_TITLE}>{t("账号信息")}</h3>
                 <dl className="flex flex-col gap-0.5 rounded-xl bg-muted/60 p-2">
                   <Fact
                     icon={Layers3Icon}
@@ -128,7 +128,7 @@ export function AccountDetailSheet({
 
               <section className="flex flex-col gap-3">
                 <div className="flex items-baseline justify-between gap-3">
-                  <h3 className="font-heading font-medium">
+                  <h3 className={SECTION_TITLE}>
                     {t("全部额度窗口")}
                   </h3>
                   <span className="text-xs text-muted-foreground">
@@ -201,7 +201,7 @@ export function AccountDetailSheet({
               </section>
 
               <section className="flex flex-col gap-3">
-                <h3 className="font-heading font-medium">{t("额度重置券")}</h3>
+                <h3 className={SECTION_TITLE}>{t("额度重置券")}</h3>
                 {account.limits.resetCredits?.credits?.length ? (
                   [...account.limits.resetCredits.credits]
                     .sort(

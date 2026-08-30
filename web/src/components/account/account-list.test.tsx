@@ -395,7 +395,12 @@ describe("AccountList", () => {
 
     await user.click(screen.getByRole("button", { name: /acct-alpha/ }))
     const sheet = screen.getByRole("dialog")
-    expect(within(sheet).getByText("账号信息")).toBeInTheDocument()
+    for (const title of ["账号信息", "全部额度窗口", "额度重置券"]) {
+      expect(within(sheet).getByText(title)).toHaveClass(
+        "font-heading",
+        "font-medium"
+      )
+    }
     expect(within(sheet).getByText("订阅等级：").parentElement).toHaveClass(
       "min-h-8",
       "py-0.5"
