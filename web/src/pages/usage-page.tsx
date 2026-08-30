@@ -3,6 +3,11 @@ import { AlertTriangleIcon, DatabaseIcon, InfoIcon } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import { Bar, ComposedChart, Line } from "recharts"
 
+import {
+  Tabs,
+  TabsList,
+  TabsTab,
+} from "@/components/animate-ui/components/base/tabs"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -53,6 +58,7 @@ const trendConfig = {
 } satisfies ChartConfig
 
 const ranges: Array<{ value: CodexUsageRange; label: string }> = [
+  { value: "1d", label: "当天" },
   { value: "7d", label: "最近 7 天" },
   { value: "14d", label: "最近 14 天" },
   { value: "30d", label: "最近 30 天" },
@@ -163,50 +169,61 @@ function Ranking({
       </Empty>
     )
   return (
-    <ScrollArea className="h-full" aria-label={scrollLabel}>
-      <ul className="grid gap-3 pr-2" aria-label={listLabel}>
-        {rows.map((row) => (
-          <li className="grid gap-1.5" key={row.key}>
-            <div className="flex items-baseline justify-between gap-4 text-xs">
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <span
-                      tabIndex={0}
-                      className={cn(
-                        "min-w-0 truncate rounded-sm font-medium outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-                        mono?.(row.key) && "font-mono"
-                      )}
-                    />
-                  }
-                >
-                  {row.label}
-                </TooltipTrigger>
-                <TooltipContent className="max-w-sm break-all">
-                  {row.label}
-                </TooltipContent>
-              </Tooltip>
-              <span className="shrink-0 font-mono text-muted-foreground tabular-nums">
-                {formatTokens(row.totalTokens)}
-              </span>
-            </div>
-            <div
-              className="h-1.5 overflow-hidden rounded-full bg-foreground/10"
-              role="img"
-              aria-label={t("{{project}} Token 占比 {{percent}}", {
-                project: row.label,
-                percent: `${(row.share * 100).toFixed(1)}%`,
-              })}
-            >
+    <div className="relative min-h-0 flex-1">
+      <ScrollArea
+        // The fade below carries "there is more"; a bar as well would be two
+        // ways of saying it.
+        className="h-full [&_[data-slot=scroll-area-scrollbar]]:hidden"
+        aria-label={scrollLabel}
+      >
+        <ul className="grid gap-3 pb-5" aria-label={listLabel}>
+          {rows.map((row) => (
+            <li className="grid gap-1.5" key={row.key}>
+              <div className="flex items-baseline justify-between gap-4 text-xs">
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <span
+                        tabIndex={0}
+                        className={cn(
+                          "min-w-0 truncate rounded-sm font-medium outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                          mono?.(row.key) && "font-mono"
+                        )}
+                      />
+                    }
+                  >
+                    {row.label}
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-sm break-all">
+                    {row.label}
+                  </TooltipContent>
+                </Tooltip>
+                <span className="shrink-0 font-mono text-muted-foreground tabular-nums">
+                  {formatTokens(row.totalTokens)}
+                </span>
+              </div>
               <div
-                className="h-full rounded-full bg-chart-4"
-                style={{ width: `${Math.max(row.share * 100, 1)}%` }}
-              />
-            </div>
-          </li>
-        ))}
-      </ul>
-    </ScrollArea>
+                className="h-1.5 overflow-hidden rounded-full bg-foreground/10"
+                role="img"
+                aria-label={t("{{project}} Token 占比 {{percent}}", {
+                  project: row.label,
+                  percent: `${(row.share * 100).toFixed(1)}%`,
+                })}
+              >
+                <div
+                  className="h-full rounded-full bg-chart-4"
+                  style={{ width: `${Math.max(row.share * 100, 1)}%` }}
+                />
+              </div>
+            </li>
+          ))}
+        </ul>
+      </ScrollArea>
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-linear-to-t from-muted to-transparent"
+      />
+    </div>
   )
 }
 
@@ -309,24 +326,20 @@ export function UsagePage({
       className="flex flex-wrap items-center gap-2"
       aria-label={t("用量筛选") as string}
     >
-      <div className="flex rounded-xl bg-card p-1 ring-1 ring-foreground/10">
-        {ranges.map((item) => (
-          <button
-            key={item.value}
-            type="button"
-            aria-pressed={item.value === range}
-            className={cn(
-              "h-7 rounded-lg px-2.5 text-xs font-medium outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-              item.value === range
-                ? "bg-muted text-foreground"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-            onClick={() => setRange(item.value)}
-          >
-            {t(item.label)}
-          </button>
-        ))}
-      </div>
+      {/* The same animated Tabs the logs and preferences pages use, rather than
+          a second hand-rolled switcher that drifts from them. */}
+      <Tabs
+        value={range}
+        onValueChange={(value) => setRange(value as CodexUsageRange)}
+      >
+        <TabsList aria-label={t("时间范围") as string}>
+          {ranges.map((item) => (
+            <TabsTab key={item.value} value={item.value}>
+              {t(item.label)}
+            </TabsTab>
+          ))}
+        </TabsList>
+      </Tabs>
       <Select value={model} onValueChange={(value) => value && setModel(value)}>
         <SelectTrigger
           className="h-9 w-44 rounded-xl"
@@ -514,6 +527,9 @@ export function UsagePage({
                   <ChartTooltip
                     content={
                       <ChartTooltipContent
+                        // Inside the ink panel this would inherit
+                        // --ink-foreground onto its own light background.
+                        className="text-foreground"
                         formatter={(value, name) => (
                           <div className="flex min-w-36 justify-between gap-3">
                             <span className="text-muted-foreground">
@@ -534,17 +550,20 @@ export function UsagePage({
                     dataKey="cachedInputTokens"
                     stackId="tokens"
                     fill="var(--color-cachedInputTokens)"
+                    isAnimationActive={false}
                   />
                   <Bar
                     dataKey="uncachedInputTokens"
                     stackId="tokens"
                     fill="var(--color-uncachedInputTokens)"
+                    isAnimationActive={false}
                   />
                   <Bar
                     dataKey="outputTokens"
                     stackId="tokens"
                     fill="var(--color-outputTokens)"
                     radius={[3, 3, 0, 0]}
+                    isAnimationActive={false}
                   />
                   <Line
                     dataKey="rollingAverage7d"
@@ -553,6 +572,7 @@ export function UsagePage({
                     strokeWidth={1.5}
                     strokeDasharray="4 3"
                     dot={false}
+                    isAnimationActive={false}
                   />
                 </ComposedChart>
               </ChartContainer>
@@ -695,7 +715,10 @@ export function UsagePage({
             className="col-span-12 xl:col-span-8"
             bodyClassName="flex-1"
           >
-            <ScrollArea aria-label={t("活跃热力图滚动区域") as string}>
+            <ScrollArea
+              className="[&_[data-slot=scroll-area-scrollbar]]:h-1.5"
+              aria-label={t("活跃热力图滚动区域") as string}
+            >
               <div
                 className="grid min-w-[38rem] gap-1"
                 role="img"
@@ -773,7 +796,7 @@ export function UsagePage({
               {/* The full diagnostic set stays available; the panel scrolls
                   rather than dropping the rarely-read half of it. */}
               <ScrollArea
-                className="min-h-24 flex-1"
+                className="min-h-24 flex-1 [&_[data-slot=scroll-area-scrollbar]]:w-1.5"
                 aria-label={t("数据覆盖滚动区域") as string}
               >
                 <dl className="grid gap-2 pr-2">

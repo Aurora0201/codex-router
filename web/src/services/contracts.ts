@@ -170,7 +170,7 @@ export interface GatewaySnapshot {
 export type GatewayResource =
   "accounts" | "stats" | "settings" | "codex" | "logs" | "websocketConnections" | "usage"
 
-export type CodexUsageRange = "7d" | "14d" | "30d" | "90d" | "all"
+export type CodexUsageRange = "1d" | "7d" | "14d" | "30d" | "90d" | "all"
 export interface CodexUsageFilters { range: CodexUsageRange; model?: string; project?: string }
 export interface CodexUsageDashboard {
   status: "scanning" | "ready" | "partial"

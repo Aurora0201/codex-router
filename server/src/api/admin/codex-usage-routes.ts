@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import type { AdminContext } from "./context.js";
 import type { CodexUsageRange } from "../../codex/codex-usage-service.js";
 
-const ranges = new Set<CodexUsageRange>(["7d", "14d", "30d", "90d", "all"]);
+const ranges = new Set<CodexUsageRange>(["1d", "7d", "14d", "30d", "90d", "all"]);
 
 export function registerCodexUsageRoutes(app: FastifyInstance, ctx: AdminContext): void {
   app.get<{ Querystring: { range?: string; model?: string; project?: string } }>("/api/codex-usage", async (request, reply) => {

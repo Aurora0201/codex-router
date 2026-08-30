@@ -8,7 +8,7 @@ import type Database from "better-sqlite3";
 import { codexHomeDir } from "./codex-config.js";
 import { CodexUsageStore } from "./codex-usage-store.js";
 
-export type CodexUsageRange = "7d" | "14d" | "30d" | "90d" | "all";
+export type CodexUsageRange = "1d" | "7d" | "14d" | "30d" | "90d" | "all";
 export interface CodexUsageFilters { range: CodexUsageRange; model?: string; project?: string }
 export interface CodexUsageEvent {
   occurredAt: number; kind: "token_usage" | "task_started" | "task_completed" | "turn_aborted" | "context_compacted";

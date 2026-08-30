@@ -249,12 +249,17 @@ describe("UsagePage", () => {
     expect(screen.getByLabelText("活跃热力图滚动区域")).toBeInTheDocument()
 
     // Both cards pin the same body height, so an uneven list cannot skew them.
-    const bodies = ["模型分布滚动区域", "项目分布滚动区域"].map(
-      (label) =>
-        screen.getByLabelText(label).closest("[data-slot=scroll-area]")
-          ?.parentElement
-    )
-    for (const body of bodies) expect(body).toHaveClass("h-60")
+    for (const label of ["模型分布滚动区域", "项目分布滚动区域"]) {
+      const region = screen.getByLabelText(label)
+      expect(region.closest(".h-60")).not.toBeNull()
+      // A fade says "there is more" instead of a second scrollbar.
+      expect(
+        region.parentElement?.querySelector(".bg-linear-to-t")
+      ).not.toBeNull()
+      expect(region).toHaveClass(
+        "[&_[data-slot=scroll-area-scrollbar]]:hidden"
+      )
+    }
 
     const projectRanking = screen.getByLabelText("项目分布排名")
     expect(
