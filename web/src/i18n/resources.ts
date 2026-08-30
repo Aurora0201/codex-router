@@ -576,6 +576,7 @@ export const en = {
   额度数据不可用: "Limit data unavailable",
   认证数据已陈旧: "Authentication data is stale",
   "额度读数 {{time}}": "Limits read {{time}}",
+  账号信息: "Account information",
   订阅等级: "Plan",
   认证模式: "Authentication mode",
   订阅到期: "Subscription expires",

@@ -1,7 +1,11 @@
 import { useTranslation } from "react-i18next"
 
 import { Progress, ProgressValue } from "@/components/ui/progress"
-import { QUOTA_TIGHT_PERCENT, remainingPercent } from "@/lib/account-state"
+import {
+  QUOTA_CRITICAL_PERCENT,
+  QUOTA_TIGHT_PERCENT,
+  remainingPercent,
+} from "@/lib/account-state"
 import { formatCountdown, formatUsageWindow } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { UsageWindowView } from "@/services/contracts"
@@ -89,7 +93,8 @@ export function QuotaMeter({
   }
 
   const empty = remaining <= 0
-  const tight = !empty && remaining <= QUOTA_TIGHT_PERCENT
+  const critical = remaining <= QUOTA_CRITICAL_PERCENT
+  const tight = !critical && remaining <= QUOTA_TIGHT_PERCENT
 
   return (
     <Progress
@@ -99,7 +104,7 @@ export function QuotaMeter({
       className={cn(
         METER,
         TRACK,
-        empty
+        critical
           ? "[&_[data-slot=progress-indicator]]:bg-destructive"
           : tight
             ? "[&_[data-slot=progress-indicator]]:bg-warning"
@@ -114,7 +119,7 @@ export function QuotaMeter({
         <ProgressValue
           className={cn(
             "ml-0 shrink-0 tabular-nums",
-            empty
+            critical
               ? "text-destructive"
               : tight
                 ? "text-warning"
