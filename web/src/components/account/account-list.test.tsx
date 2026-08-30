@@ -126,6 +126,10 @@ describe("AccountList", () => {
       .getByText("当前请求路由")
       .closest("div")!.parentElement!
     expect(summary).toHaveTextContent("acct-live")
+    expect(within(summary).getByText("acct-live")).not.toHaveClass("font-mono")
+    expect(within(card("acct-live")).getByText("acct-live")).not.toHaveClass(
+      "font-mono"
+    )
     expect(screen.getByText("紧要额度").nextElementSibling).toHaveTextContent(
       "38%"
     )
@@ -277,7 +281,7 @@ describe("AccountList", () => {
     renderList([
       account(),
     ])
-    expect(screen.getByRole("button", { name: "需处理（0）" })).toBeInTheDocument()
+    expect(screen.getByRole("tab", { name: "需处理（0）" })).toBeInTheDocument()
   })
 
   it("names the missing window by its role, whichever one upstream omitted", () => {
@@ -355,7 +359,9 @@ describe("AccountList", () => {
     expect(cards()).toHaveLength(1)
     await user.clear(search)
 
-    await user.click(screen.getByRole("button", { name: "已停用（1）" }))
+    const filters = screen.getByRole("tablist", { name: "账号状态筛选" })
+    expect(filters.closest('[data-slot="animate-tabs"]')).not.toBeNull()
+    await user.click(within(filters).getByRole("tab", { name: "已停用（1）" }))
     expect(cards()).toHaveLength(1)
     expect(screen.getByText("acct-off")).toBeInTheDocument()
     expect(screen.queryByText("acct-ready")).not.toBeInTheDocument()
@@ -389,6 +395,16 @@ describe("AccountList", () => {
 
     await user.click(screen.getByRole("button", { name: /acct-alpha/ }))
     const sheet = screen.getByRole("dialog")
+    for (const title of ["账号信息", "全部额度窗口", "额度重置券"]) {
+      expect(within(sheet).getByText(title)).toHaveClass(
+        "font-heading",
+        "font-medium"
+      )
+    }
+    expect(within(sheet).getByText("订阅等级：").parentElement).toHaveClass(
+      "min-h-8",
+      "py-0.5"
+    )
     expect(within(sheet).getByText("全部额度窗口")).toBeInTheDocument()
     await user.click(within(sheet).getByRole("button", { name: "使用重置券" }))
     await user.click(screen.getByRole("button", { name: "确认使用" }))

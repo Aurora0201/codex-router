@@ -3,6 +3,63 @@ export const zhCN = {
 } as const
 
 export const en = {
+  无可用账号: "No usable account",
+  未选择账号: "No account selected",
+  请求出口: "Request exit",
+  "Codex 默认出口": "Codex default exit",
+  请求身份: "Request identity",
+  最近请求: "Latest request",
+  暂无记录: "No records yet",
+  恢复原始配置: "Restore original configuration",
+  "{{range}}经 Router 转发": "Forwarded through Router, {{range}}",
+  "{{range}}每小时经 Router 转发的请求数":
+    "Requests forwarded through Router per hour, {{range}}",
+  "这段时间内没有请求经过 Router":
+    "No requests passed through Router in this window",
+  "Codex 仍在直接访问上游，没有请求经过 Router":
+    "Codex is still calling upstream directly; no requests pass through Router",
+  已运行: "Uptime",
+  "Router 已运行 {{uptime}}": "Router up {{uptime}}",
+  "{{seconds}} 秒": "{{seconds}}s",
+  "{{minutes}} 分 {{seconds}} 秒": "{{minutes}}m {{seconds}}s",
+  请求结果构成: "Request outcomes",
+  拒绝与取消不计入可用性:
+    "Rejections and cancellations are excluded from availability",
+  "请求元数据记录已关闭，无法统计请求结果。":
+    "Request metadata logging is off, so request outcomes cannot be counted.",
+  有效请求: "Countable requests",
+  成功请求: "Successful requests",
+  "{{time}} · 请求 {{requests}} · 故障 {{errors}} · 拒绝 {{rejected}} · 平均 {{average}}":
+    "{{time}} · requests {{requests}} · failures {{errors}} · rejected {{rejected}} · average {{average}}",
+  统计请求: "Counted requests",
+  故障: "Failures",
+  拒绝: "Rejected",
+  连接总数: "Connections",
+  平均连接时长: "Average connection age",
+  最长连接时长: "Longest connection",
+  连接概览: "Connection overview",
+  实时: "Live",
+  "Router 入口": "Router entry point",
+  上游: "Upstream",
+  "当前 openai_base_url": "Current openai_base_url",
+  "Router 版本": "Router version",
+  配置文件: "Configuration file",
+  备份文件: "Backup file",
+  尚未备份: "Not backed up yet",
+  配置已改写: "Configuration rewritten",
+  今日请求: "Requests today",
+  今日错误: "Errors today",
+  就绪账号: "Ready accounts",
+  元数据记录: "Metadata logging",
+  日志级别: "Log level",
+  数据库: "Database",
+  日志文件: "Log file",
+  运行环境: "Runtime environment",
+  "配置由 Codex Router 写入并可随时恢复":
+    "Written by Codex Router and restorable at any time",
+  实时连接: "Live connections",
+  "确认当前接管模式、请求表现和关键连接配置。":
+    "Confirm the active takeover mode, request behaviour, and key connection settings.",
   languageName: "English",
   账号路由: "Account Routing",
   "确认当前接管模式、运行表现和关键连接配置。":
@@ -107,9 +164,12 @@ export const en = {
   缓存命中率: "Cache hit rate",
   "输入与输出之和，不重复计算缓存和推理子集。":
     "Input plus output, without double-counting cached or reasoning subsets.",
-  "今天仍在进行中，数值会持续更新。": "Today is still in progress and will continue updating.",
-  "按所选自然日计算，包含零用量日期。": "Calculated across selected calendar days, including zero-usage days.",
-  "缓存输入占全部输入 Token 的比例。": "Cached input as a percentage of all input tokens.",
+  "今天仍在进行中，数值会持续更新。":
+    "Today is still in progress and will continue updating.",
+  "按所选自然日计算，包含零用量日期。":
+    "Calculated across selected calendar days, including zero-usage days.",
+  "缓存输入占全部输入 Token 的比例。":
+    "Cached input as a percentage of all input tokens.",
   "每日 Token 趋势": "Daily token trend",
   "堆叠序列可以相加；7 日均线用于观察变化方向。":
     "Stacked series are additive; the 7-day average shows the direction of change.",
@@ -122,7 +182,8 @@ export const en = {
   "本机数据始于 {{date}}；更早的本地记录不可恢复。":
     "Local data starts on {{date}}; earlier local records cannot be recovered.",
   "7 日均线": "7-day average",
-  "{{date}} {{hour}}:00 · {{tokens}} Token": "{{date}} {{hour}}:00 · {{tokens}} tokens",
+  "{{date}} {{hour}}:00 · {{tokens}} Token":
+    "{{date}} {{hour}}:00 · {{tokens}} tokens",
   "{{year}}年{{month}}月{{day}}日": "{{year}}-{{month}}-{{day}}",
   "全部历史 · 不随筛选变化": "All history · unaffected by filters",
   最活跃日期: "Busiest day",
@@ -136,7 +197,8 @@ export const en = {
   日均: "Daily average",
   缓存命中: "Cache hits",
   输出: "Output",
-  "缓存属于输入，推理属于输出": "Cache is part of input, reasoning part of output",
+  "缓存属于输入，推理属于输出":
+    "Cache is part of input, reasoning part of output",
   工作负载与覆盖: "Workload and coverage",
   同一筛选范围: "Same filters",
   "按本机时区，星期 × 小时": "Local time zone, weekday x hour",
@@ -150,21 +212,23 @@ export const en = {
   推理输出: "Reasoning output",
   模型分布: "Model distribution",
   项目分布: "Project distribution",
-  无分类对话: "Uncategorized conversations",
+  非项目类对话: "Non-project conversations",
   项目分布排名: "Project usage ranking",
   项目分布滚动区域: "Scrollable project usage ranking",
   活跃热力图滚动区域: "Scrollable activity heatmap",
-  "无分类对话单独汇总；长项目名可悬停或聚焦查看完整内容。":
-    "Uncategorized conversations are grouped separately; hover or focus a long project name to see it in full.",
+  "非项目类对话单独汇总；长项目名可悬停或聚焦查看完整内容。":
+    "Non-project conversations are grouped separately; hover or focus a long project name to see it in full.",
   "{{project}} Token 占比 {{percent}}": "{{project}} token share {{percent}}",
   "保留全部模型用于比较，仅应用日期和项目筛选。":
     "Keeps all models for comparison and applies only date and project filters.",
   "仅显示末两级目录；前 8 名之外合并为其他。":
     "Shows only the last two path segments; entries beyond the top eight are grouped as Other.",
   暂无分布数据: "No distribution data",
-  "当前筛选范围内没有可比较的数据。": "There is no comparable data in the current range.",
+  "当前筛选范围内没有可比较的数据。":
+    "There is no comparable data in the current range.",
   工作负载: "Workload",
-  "任务与会话活动使用同一筛选范围。": "Task and session activity use the same filters.",
+  "任务与会话活动使用同一筛选范围。":
+    "Task and session activity use the same filters.",
   会话: "Sessions",
   任务启动: "Tasks started",
   任务完成: "Tasks completed",
@@ -176,7 +240,8 @@ export const en = {
     "Daily token intensity in the local time zone.",
   "日期和小时 Token 热力图": "Token heatmap by date and hour",
   数据覆盖: "Data coverage",
-  "用于判断统计的新鲜度和完整性。": "Use this to assess data freshness and completeness.",
+  "用于判断统计的新鲜度和完整性。":
+    "Use this to assess data freshness and completeness.",
   "白名单派生历史永久保留，不会随 Codex 会话文件清理而删除。":
     "Allowlisted derived history is retained permanently and is not removed when Codex session files are cleaned up.",
   统计会话: "Tracked sessions",
@@ -523,7 +588,8 @@ export const en = {
   "重启 Codex": "Restart Codex",
   "应用 Codex Router": "Apply Codex Router",
   账号状态刷新已开始: "Account status refresh started",
-  "页面会随着各账号检查完成逐步更新。": "The page updates as each account check completes.",
+  "页面会随着各账号检查完成逐步更新。":
+    "The page updates as each account check completes.",
   刷新全部状态失败: "Could not refresh all account statuses",
   额度已重置: "Rate limit reset",
   该重置券已经使用: "This reset credit was already redeemed",
@@ -576,6 +642,7 @@ export const en = {
   额度数据不可用: "Limit data unavailable",
   认证数据已陈旧: "Authentication data is stale",
   "额度读数 {{time}}": "Limits read {{time}}",
+  账号信息: "Account information",
   订阅等级: "Plan",
   认证模式: "Authentication mode",
   订阅到期: "Subscription expires",

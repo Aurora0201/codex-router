@@ -6,6 +6,11 @@ import { AccountCard } from "./account-card"
 import { AccountDetailSheet } from "./account-detail-sheet"
 import { AccountStatus } from "./account-status-badge"
 import type { AccountAction } from "./account-actions"
+import {
+  Tabs,
+  TabsList,
+  TabsTab,
+} from "@/components/animate-ui/components/base/tabs"
 import { Button } from "@/components/ui/button"
 import {
   AlertDialog,
@@ -166,7 +171,7 @@ export function AccountList({
               <p
                 className={cn(
                   "truncate text-sm font-semibold",
-                  active ? "font-mono" : "font-normal text-muted-foreground"
+                  !active && "font-normal text-muted-foreground"
                 )}
               >
                 {active
@@ -221,31 +226,33 @@ export function AccountList({
             />
           </label>
 
-          <div className="flex rounded-xl bg-muted p-1">
-            {options.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                aria-pressed={filter === option.value}
-                aria-label={t("{{label}}（{{count}}）", {
-                  label: option.label,
-                  count: option.count,
-                })}
-                onClick={() => setFilter(option.value)}
-                className={cn(
-                  "h-7 cursor-pointer rounded-lg px-2.5 text-xs font-medium outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-                  filter === option.value
-                    ? "bg-card text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                <span aria-hidden="true">{option.label}</span>{" "}
-                <span aria-hidden="true" className="tabular-nums opacity-60">
-                  {option.count}
-                </span>
-              </button>
-            ))}
-          </div>
+          <Tabs
+            value={filter}
+            onValueChange={(value) => {
+              const next = options.find((option) => option.value === value)
+              if (next) setFilter(next.value)
+            }}
+            className="gap-0"
+          >
+            <TabsList aria-label={t("账号状态筛选")}>
+              {options.map((option) => (
+                <TabsTab
+                  key={option.value}
+                  value={option.value}
+                  aria-label={t("{{label}}（{{count}}）", {
+                    label: option.label,
+                    count: option.count,
+                  })}
+                  className="text-xs"
+                >
+                  <span aria-hidden="true">{option.label}</span>
+                  <span aria-hidden="true" className="tabular-nums opacity-60">
+                    {option.count}
+                  </span>
+                </TabsTab>
+              ))}
+            </TabsList>
+          </Tabs>
         </div>
 
         <div className="relative min-h-0 flex-1">

@@ -14,7 +14,6 @@ import {
   MessageSquareIcon,
   PercentIcon,
   PlayIcon,
-  type LucideIcon,
 } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import { Bar, ComposedChart, Line } from "recharts"
@@ -24,6 +23,7 @@ import {
   TabsList,
   TabsTab,
 } from "@/components/animate-ui/components/base/tabs"
+import { Panel } from "@/components/app/panel"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -70,7 +70,7 @@ const trendConfig = {
   cachedInputTokens: { label: "缓存输入", color: "var(--chart-1)" },
   uncachedInputTokens: { label: "非缓存输入", color: "var(--chart-3)" },
   outputTokens: { label: "输出", color: "var(--chart-5)" },
-  rollingAverage7d: { label: "7 日均线", color: "var(--ink-muted)" },
+  rollingAverage7d: { label: "7 日均线", color: "var(--emphasis-muted)" },
 } satisfies ChartConfig
 
 const ranges: Array<{ value: CodexUsageRange; label: string }> = [
@@ -106,58 +106,8 @@ function formatDate(value: number | null): string {
 function formatDay(value: number): string {
   return new Date(value).toLocaleDateString()
 }
-function isProjectIdentifier(key: string): boolean {
-  return key !== "uncategorized-conversation" && key !== "other"
-}
 function share(part: number, whole: number): number {
   return whole ? (part / whole) * 100 : 0
-}
-
-/** Every block is the same shell: a card wrapping one solid inset. */
-function Panel({
-  title,
-  icon: Icon,
-  hint,
-  className,
-  bodyClassName,
-  children,
-}: {
-  title: string
-  icon: LucideIcon
-  hint?: string
-  className?: string
-  bodyClassName?: string
-  children: React.ReactNode
-}) {
-  return (
-    <section
-      className={cn(
-        "flex flex-col rounded-2xl bg-card px-2 pb-2 ring-1 ring-foreground/10",
-        className
-      )}
-    >
-      {/* The complete top band is the header itself, so the icon, title and
-          hint are centred between the card edge and the inset body. */}
-      <header className="flex h-11 shrink-0 items-center justify-between gap-4 px-2">
-        <h2 className="flex min-w-0 items-center gap-2 text-sm font-semibold">
-          <Icon aria-hidden="true" className="size-4 text-muted-foreground" />
-          <span className="truncate">{title}</span>
-        </h2>
-        {hint ? (
-          <span className="truncate text-xs text-muted-foreground/70">
-            {hint}
-          </span>
-        ) : null}
-      </header>
-      {/* flex-1 would set flex-basis:0 and beat any height a caller asks for,
-          so stretching is opt-in rather than baked into the shell. */}
-      <div
-        className={cn("flex flex-col rounded-xl bg-muted p-3", bodyClassName)}
-      >
-        {children}
-      </div>
-    </section>
-  )
 }
 
 function Ranking({
@@ -166,7 +116,6 @@ function Ranking({
   listLabel,
   emptyTitle,
   emptyDescription,
-  mono,
 }: {
   rows: Array<{
     key: string
@@ -178,7 +127,6 @@ function Ranking({
   listLabel: string
   emptyTitle: string
   emptyDescription: string
-  mono?: (key: string) => boolean
 }) {
   const { t } = useTranslation()
   if (!rows.length)
@@ -207,10 +155,7 @@ function Ranking({
                     render={
                       <span
                         tabIndex={0}
-                        className={cn(
-                          "min-w-0 truncate rounded-sm font-medium outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-                          mono?.(row.key) && "font-mono"
-                        )}
+                        className="min-w-0 truncate rounded-sm font-medium outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
                       />
                     }
                   >
@@ -432,7 +377,7 @@ export function UsagePage({
           className="h-9 w-44 rounded-md"
           aria-label={t("模型筛选")}
         >
-          <SelectValue className={cn(model !== "all" && "font-mono")}>
+          <SelectValue>
             {model === "all" ? t("全部模型") : model}
           </SelectValue>
         </SelectTrigger>
@@ -440,7 +385,7 @@ export function UsagePage({
           <SelectGroup>
             <SelectItem value="all">{t("全部模型")}</SelectItem>
             {data?.filters.models.map((item) => (
-              <SelectItem className="font-mono" key={item} value={item}>
+              <SelectItem key={item} value={item}>
                 {item}
               </SelectItem>
             ))}
@@ -459,14 +404,7 @@ export function UsagePage({
               className="h-9 w-full min-w-0 overflow-hidden rounded-md"
               aria-label={t("项目筛选")}
             >
-              <SelectValue
-                className={cn(
-                  "min-w-0 overflow-hidden",
-                  selectedProject &&
-                    isProjectIdentifier(selectedProject.key) &&
-                    "font-mono"
-                )}
-              >
+              <SelectValue className="min-w-0 overflow-hidden">
                 <span className="min-w-0 flex-1 truncate">
                   {selectedProjectLabel}
                 </span>
@@ -487,10 +425,7 @@ export function UsagePage({
               <SelectItem
                 aria-label={item.label}
                 title={item.label}
-                className={cn(
-                  "max-w-full min-w-0 overflow-hidden [&>span:first-child]:min-w-0 [&>span:first-child]:shrink [&>span:first-child]:overflow-hidden",
-                  isProjectIdentifier(item.key) && "font-mono"
-                )}
+                className="max-w-full min-w-0 overflow-hidden [&>span:first-child]:min-w-0 [&>span:first-child]:shrink [&>span:first-child]:overflow-hidden"
                 key={item.key}
                 value={item.key}
               >
@@ -564,12 +499,12 @@ export function UsagePage({
         <div className="grid grid-cols-12 gap-4">
           {/* The one dark block on the page: the headline number and its shape.
               Everything else stays on light surfaces so this reads as the hero. */}
-          <section className="col-span-12 rounded-2xl bg-ink p-2 text-ink-foreground xl:col-span-8">
+          <section className="col-span-12 rounded-2xl bg-emphasis p-2 text-emphasis-foreground xl:col-span-8">
             <div className="flex flex-wrap items-start justify-between gap-4 px-3 py-2.5">
               <div>
-                <p className="text-xs text-ink-muted">{t("区间总 Token")}</p>
+                <p className="text-xs text-emphasis-muted">{t("区间总 Token")}</p>
                 <p
-                  className="mt-1 font-brand text-3xl leading-none font-semibold tabular-nums"
+                  className="mt-1 text-3xl leading-none font-semibold tabular-nums"
                   title={fullTokens(summary.totalTokens)}
                 >
                   {formatTokens(summary.totalTokens)}
@@ -591,7 +526,7 @@ export function UsagePage({
                   },
                 ].map((item) => (
                   <li key={item.label}>
-                    <p className="text-xs text-ink-muted">{item.label}</p>
+                    <p className="text-xs text-emphasis-muted">{item.label}</p>
                     <p className="mt-0.5 text-sm font-semibold tabular-nums">
                       {item.value}
                     </p>
@@ -600,7 +535,7 @@ export function UsagePage({
               </ul>
             </div>
 
-            <div className="rounded-xl bg-ink-panel p-3">
+            <div className="rounded-xl bg-emphasis-surface p-3">
               <ChartContainer
                 config={trendConfig}
                 className="h-44 w-full"
@@ -614,8 +549,8 @@ export function UsagePage({
                   <ChartTooltip
                     content={
                       <ChartTooltipContent
-                        // Inside the ink panel this would inherit
-                        // --ink-foreground onto its own light background.
+                        // Inside the emphasis panel this would inherit
+                        // --emphasis-foreground onto its own light background.
                         className="text-foreground"
                         formatter={(value, name) => (
                           <div className="flex min-w-36 justify-between gap-3">
@@ -663,7 +598,7 @@ export function UsagePage({
                   />
                 </ComposedChart>
               </ChartContainer>
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-[11px] text-ink-muted">
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-[11px] text-emphasis-muted">
                 <span className="font-mono tabular-nums">
                   {data.daily[0]?.date.slice(5)}
                 </span>
@@ -681,7 +616,7 @@ export function UsagePage({
                     </li>
                   ))}
                   <li className="flex items-center gap-1.5">
-                    <span className="h-px w-4 bg-ink-muted" />
+                    <span className="h-px w-4 bg-emphasis-muted" />
                     {t("7 日均线")}
                   </li>
                 </ul>
@@ -776,7 +711,6 @@ export function UsagePage({
               rows={data.models}
               scrollLabel={t("模型分布滚动区域")}
               listLabel={t("模型分布排名")}
-              mono={() => true}
               emptyTitle={t("暂无分布数据")}
               emptyDescription={t("当前筛选范围内没有可比较的数据。")}
             />
@@ -793,7 +727,6 @@ export function UsagePage({
               rows={data.projects}
               scrollLabel={t("项目分布滚动区域")}
               listLabel={t("项目分布排名")}
-              mono={isProjectIdentifier}
               emptyTitle={t("暂无分布数据")}
               emptyDescription={t("当前筛选范围内没有可比较的数据。")}
             />

@@ -34,6 +34,8 @@ import type {
   UsageWindowView,
 } from "@/services/contracts"
 
+const SECTION_TITLE = "font-heading font-medium"
+
 function Fact({
   icon: Icon,
   label,
@@ -44,12 +46,12 @@ function Fact({
   value: string
 }) {
   return (
-    <div className="flex min-h-10 items-center gap-2.5 rounded-lg px-2 py-1.5">
-      <span className="grid size-7 shrink-0 place-items-center rounded-md bg-background text-primary">
-        <Icon aria-hidden="true" className="size-4" />
+    <div className="flex min-h-8 items-center gap-2 rounded-md px-2 py-0.5">
+      <span className="grid size-6 shrink-0 place-items-center rounded-md bg-background text-primary">
+        <Icon aria-hidden="true" className="size-3.5" />
       </span>
-      <dt className="shrink-0 text-sm text-muted-foreground">{label}：</dt>
-      <dd className="ml-auto text-right font-mono text-sm">{value}</dd>
+      <dt className="shrink-0 text-xs text-muted-foreground">{label}：</dt>
+      <dd className="ml-auto text-right text-xs">{value}</dd>
     </div>
   )
 }
@@ -77,7 +79,7 @@ export function AccountDetailSheet({
     <Sheet open={account !== null} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-lg">
         <SheetHeader>
-          <SheetTitle className="font-mono">
+          <SheetTitle>
             {shortAccountId(account?.chatgptAccountId ?? null)}
           </SheetTitle>
           <SheetDescription>
@@ -87,43 +89,46 @@ export function AccountDetailSheet({
         {account ? (
           <ScrollArea className="min-h-0 flex-1">
             <div className="flex flex-col gap-6 px-4 pb-6">
-              <section className="flex flex-col gap-1 rounded-xl bg-muted/60 p-2">
-                <Fact
-                  icon={Layers3Icon}
-                  label={t("订阅等级")}
-                  value={account.planType ?? t("未知")}
-                />
-                <Fact
-                  icon={KeyRoundIcon}
-                  label={t("认证模式")}
-                  value={account.auth.mode ?? t("未知")}
-                />
-                <Fact
-                  icon={CircleDollarSignIcon}
-                  label={t("下次自动续订")}
-                  value={nextBilling === null
-                    ? t("未设置")
-                    : `${formatDateOnly(nextBilling)} · ${formatBillingCountdown(nextBilling, now)}`}
-                />
-                <Fact
-                  icon={CalendarClockIcon}
-                  label={t("付款周期")}
-                  value={account.billing.cadence === "monthly"
-                    ? t("每月")
-                    : account.billing.cadence === "annual"
-                      ? t("每年")
-                      : t("未设置")}
-                />
-                <Fact
-                  icon={BadgeCheckIcon}
-                  label={t("最近成功认证")}
-                  value={formatRelativeTime(account.auth.lastSuccessfulAt)}
-                />
+              <section className="flex flex-col gap-3">
+                <h3 className={SECTION_TITLE}>{t("账号信息")}</h3>
+                <dl className="flex flex-col gap-0.5 rounded-xl bg-muted/60 p-2">
+                  <Fact
+                    icon={Layers3Icon}
+                    label={t("订阅等级")}
+                    value={account.planType ?? t("未知")}
+                  />
+                  <Fact
+                    icon={KeyRoundIcon}
+                    label={t("认证模式")}
+                    value={account.auth.mode ?? t("未知")}
+                  />
+                  <Fact
+                    icon={CircleDollarSignIcon}
+                    label={t("下次自动续订")}
+                    value={nextBilling === null
+                      ? t("未设置")
+                      : `${formatDateOnly(nextBilling)} · ${formatBillingCountdown(nextBilling, now)}`}
+                  />
+                  <Fact
+                    icon={CalendarClockIcon}
+                    label={t("付款周期")}
+                    value={account.billing.cadence === "monthly"
+                      ? t("每月")
+                      : account.billing.cadence === "annual"
+                        ? t("每年")
+                        : t("未设置")}
+                  />
+                  <Fact
+                    icon={BadgeCheckIcon}
+                    label={t("最近成功认证")}
+                    value={formatRelativeTime(account.auth.lastSuccessfulAt)}
+                  />
+                </dl>
               </section>
 
               <section className="flex flex-col gap-3">
                 <div className="flex items-baseline justify-between gap-3">
-                  <h3 className="font-heading font-medium">
+                  <h3 className={SECTION_TITLE}>
                     {t("全部额度窗口")}
                   </h3>
                   <span className="text-xs text-muted-foreground">
@@ -196,7 +201,7 @@ export function AccountDetailSheet({
               </section>
 
               <section className="flex flex-col gap-3">
-                <h3 className="font-heading font-medium">{t("额度重置券")}</h3>
+                <h3 className={SECTION_TITLE}>{t("额度重置券")}</h3>
                 {account.limits.resetCredits?.credits?.length ? (
                   [...account.limits.resetCredits.credits]
                     .sort(

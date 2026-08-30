@@ -60,6 +60,37 @@ describe("QuotaMeter", () => {
     expect(screen.getByText("3 小时后重置")).toHaveClass("text-foreground")
   })
 
+  it.each([
+    {
+      remaining: 25,
+      tone: "warning",
+      indicator: "[&_[data-slot=progress-indicator]]:bg-warning",
+    },
+    {
+      remaining: 10,
+      tone: "destructive",
+      indicator: "[&_[data-slot=progress-indicator]]:bg-destructive",
+    },
+  ])(
+    "uses the $tone semantic color at $remaining% remaining",
+    ({ remaining, tone, indicator }) => {
+      const { container } = render(
+        <QuotaMeter
+          window={{
+            usedPercent: 100 - remaining,
+            resetsAt: Date.now() + HOUR,
+            windowDurationMins: 300,
+          }}
+        />
+      )
+
+      expect(screen.getByText(`${remaining}%`)).toHaveClass(`text-${tone}`)
+      expect(container.querySelector("[data-slot=quota-meter]")).toHaveClass(
+        indicator
+      )
+    }
+  )
+
   it("names an absent window and draws it full when there is no cap", () => {
     const { container } = render(
       <QuotaMeter window={null} placeholderMins={300} />

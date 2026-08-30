@@ -28,7 +28,7 @@ describe("application shell", () => {
     )
 
     expect(container.querySelector('[data-slot="sidebar-rail"]')).toBeNull()
-    expect(screen.getByText("Codex Router")).toHaveClass("font-brand")
+    expect(screen.getByText("Codex Router")).toHaveClass("font-logo")
     const brandMark = container.querySelector('[data-slot="brand-mark"]')
     expect(brandMark).toHaveClass("bg-current", "text-sidebar-foreground")
     expect(brandMark).toHaveClass("size-6")

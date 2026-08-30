@@ -145,7 +145,6 @@ export function App({
     setPage(nextPage)
   }
   const fixedLogsLayout = page === "logs" && Boolean(snapshot) && !error
-  const gatewayLayout = page === "gateway" && Boolean(snapshot) && !error
   // The account list scrolls inside its own card, so the page itself must not.
   const accountsLayout = page === "accounts" && Boolean(snapshot) && !error
 
@@ -174,7 +173,6 @@ export function App({
             className={cn(
               "mx-auto w-full max-w-[88rem] px-4 py-6 sm:px-6 lg:px-8 lg:py-4",
               fixedLogsLayout && "lg:h-full",
-              gatewayLayout && "lg:h-full",
               accountsLayout && "lg:h-full"
             )}
           >

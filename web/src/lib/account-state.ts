@@ -7,6 +7,8 @@ import type {
 export const QUOTA_STALE_MS = 10 * 60_000
 /** Remaining quota at or below this share turns the meter into a warning. */
 export const QUOTA_TIGHT_PERCENT = 25
+/** Remaining quota at or below this share is unlikely to sustain another task. */
+export const QUOTA_CRITICAL_PERCENT = 10
 const DAY_MINS = 1440
 /**
  * Codex reports a 5-hour and a 7-day window per bucket. These name a slot the

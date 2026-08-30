@@ -6,7 +6,7 @@ import Database from "better-sqlite3";
 type LogLike = { warn(values: Record<string, unknown>, message: string): void };
 type AuditEvent = "baseline" | "source_missing" | "source_restored" | "source_changed" | "backup_created" | "database_recovered";
 
-const USAGE_SCHEMA_VERSION = 2;
+const USAGE_SCHEMA_VERSION = 3;
 const EMPTY_HASH = "0".repeat(64);
 
 const SCHEMA = `
@@ -179,6 +179,10 @@ export class CodexUsageStore {
     raw.exec(SCHEMA);
     const auditColumns = raw.pragma("table_info(codex_usage_audit_event)") as Array<{ name: string }>;
     if (!auditColumns.some((column) => column.name === "version")) raw.exec("ALTER TABLE codex_usage_audit_event ADD COLUMN version INTEGER NOT NULL DEFAULT 1");
+    // Active rollout rows are derived from source files. Version 3 changes
+    // projectless-workspace classification, so discard the cached derivation
+    // and let the startup scan rebuild it with the corrected identity.
+    if (storedVersion > 0 && storedVersion < 3) raw.exec("DELETE FROM codex_usage_rollout");
     raw.prepare("INSERT OR REPLACE INTO usage_meta(key,value) VALUES('schema_version',?)").run(String(USAGE_SCHEMA_VERSION));
     let secretHex = (raw.prepare("SELECT value FROM usage_meta WHERE key='hmac_secret'").get() as { value: string } | undefined)?.value;
     if (!secretHex) { secretHex = randomBytes(32).toString("hex"); raw.prepare("INSERT INTO usage_meta(key,value) VALUES('hmac_secret',?)").run(secretHex); }
