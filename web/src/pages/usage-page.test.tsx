@@ -272,6 +272,30 @@ describe("UsagePage", () => {
     )
   })
 
+  it("gives every panel title an icon and one band to sit centred in", async () => {
+    const service = createGatewayServiceFixture()
+    const base = await service.getCodexUsage({ range: "14d" })
+    vi.spyOn(service, "getCodexUsage").mockResolvedValue({
+      ...base,
+      coverage: { ...base.coverage, rollouts: 3 },
+    })
+    render(
+      <TooltipProvider>
+        <UsagePage service={service} />
+      </TooltipProvider>
+    )
+
+    await screen.findByText("区间总 Token")
+    const headings = screen.getAllByRole("heading", { level: 2 })
+    expect(headings).toHaveLength(6)
+    for (const heading of headings) {
+      expect(heading.querySelector("svg")).not.toBeNull()
+      // A fixed band, not padding: the hint is smaller than the title, so only
+      // a shared box centres both instead of sitting them on one baseline.
+      expect(heading.parentElement).toHaveClass("h-9", "items-center")
+    }
+  })
+
   it("spends its one dark panel on the headline and keeps every series on one hue", async () => {
     const service = createGatewayServiceFixture()
     const base = await service.getCodexUsage({ range: "14d" })

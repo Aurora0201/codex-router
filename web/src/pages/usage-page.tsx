@@ -1,14 +1,20 @@
 import { useEffect, useMemo, useState } from "react"
 import {
+  ActivityIcon,
   AlertTriangleIcon,
   BadgeCheckIcon,
   CircleOffIcon,
+  CpuIcon,
   DatabaseIcon,
   FoldVerticalIcon,
+  FolderIcon,
+  GaugeIcon,
   InfoIcon,
+  LayersIcon,
   MessageSquareIcon,
   PercentIcon,
   PlayIcon,
+  type LucideIcon,
 } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import { Bar, ComposedChart, Line } from "recharts"
@@ -116,12 +122,14 @@ function share(part: number, whole: number): number {
 /** Every block is the same shell: a card wrapping one solid inset. */
 function Panel({
   title,
+  icon: Icon,
   hint,
   className,
   bodyClassName,
   children,
 }: {
   title: string
+  icon: LucideIcon
   hint?: string
   className?: string
   bodyClassName?: string
@@ -134,8 +142,13 @@ function Panel({
         className
       )}
     >
-      <header className="flex items-baseline justify-between gap-4 px-2 py-1.5">
-        <h2 className="text-sm font-semibold">{title}</h2>
+      {/* A fixed band rather than padding around the text: the title and the
+          hint are different sizes, so only a shared box centres them both. */}
+      <header className="flex h-9 shrink-0 items-center justify-between gap-4 px-2">
+        <h2 className="flex min-w-0 items-center gap-2 text-sm font-semibold">
+          <Icon aria-hidden="true" className="size-4 text-muted-foreground" />
+          <span className="truncate">{title}</span>
+        </h2>
         {hint ? (
           <span className="truncate text-xs text-muted-foreground/70">
             {hint}
@@ -649,6 +662,7 @@ export function UsagePage({
 
           <Panel
             title={t("用量结构")}
+            icon={LayersIcon}
             hint={t("缓存属于输入，推理属于输出")}
             className="col-span-12 self-start xl:col-span-4"
           >
@@ -721,6 +735,7 @@ export function UsagePage({
 
           <Panel
             title={t("模型分布")}
+            icon={CpuIcon}
             hint={t("{{count}} 项", { count: data.models.length })}
             className="col-span-12 md:col-span-6"
             bodyClassName="h-60"
@@ -737,6 +752,7 @@ export function UsagePage({
 
           <Panel
             title={t("项目分布")}
+            icon={FolderIcon}
             hint={t("{{count}} 项", { count: data.projects.length })}
             className="col-span-12 md:col-span-6"
             bodyClassName="h-60"
@@ -753,6 +769,7 @@ export function UsagePage({
 
           <Panel
             title={t("活跃热力图")}
+            icon={ActivityIcon}
             hint={t("全部历史 · 不随筛选变化")}
             className="col-span-12 xl:col-span-8"
             bodyClassName="flex-1"
@@ -842,6 +859,7 @@ export function UsagePage({
 
           <Panel
             title={t("工作负载")}
+            icon={GaugeIcon}
             hint={t("同一筛选范围")}
             className="col-span-12 xl:col-span-4"
             bodyClassName="flex-1"
@@ -906,6 +924,7 @@ export function UsagePage({
               and every field fits without a scroll of its own. */}
           <Panel
             title={t("数据覆盖")}
+            icon={DatabaseIcon}
             hint={t("白名单派生历史永久保留")}
             className="col-span-12"
           >
