@@ -1,87 +1,236 @@
 import { useEffect, useMemo, useState } from "react"
 import { AlertTriangleIcon, DatabaseIcon, InfoIcon } from "lucide-react"
 import { useTranslation } from "react-i18next"
-import { Bar, BarChart, CartesianGrid, ComposedChart, Line, XAxis, YAxis } from "recharts"
+import { Bar, ComposedChart, Line } from "recharts"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart"
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
-import { Progress, ProgressLabel, ProgressValue } from "@/components/ui/progress"
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@/components/ui/chart"
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
-import type { CodexUsageDashboard, CodexUsageRange, GatewayService } from "@/services/contracts"
+import type {
+  CodexUsageDashboard,
+  CodexUsageRange,
+  GatewayService,
+} from "@/services/contracts"
 
+/**
+ * Cached input sits under uncached input, which sits under output: they are
+ * nested parts of one total, so the stack order is the ramp order.
+ */
 const trendConfig = {
   cachedInputTokens: { label: "缓存输入", color: "var(--chart-1)" },
-  uncachedInputTokens: { label: "非缓存输入", color: "var(--chart-2)" },
-  outputTokens: { label: "输出", color: "var(--chart-3)" },
-  rollingAverage7d: { label: "7 日均线", color: "var(--chart-5)" },
+  uncachedInputTokens: { label: "非缓存输入", color: "var(--chart-3)" },
+  outputTokens: { label: "输出", color: "var(--chart-5)" },
+  rollingAverage7d: { label: "7 日均线", color: "var(--ink-muted)" },
 } satisfies ChartConfig
-const rankingConfig = { totalTokens: { label: "Token", color: "var(--chart-2)" } } satisfies ChartConfig
-const modelColors = Array.from({ length: 8 }, (_, index) => `var(--chart-${index + 1})`)
+
 const ranges: Array<{ value: CodexUsageRange; label: string }> = [
-  { value: "7d", label: "最近 7 天" }, { value: "14d", label: "最近 14 天" }, { value: "30d", label: "最近 30 天" },
-  { value: "90d", label: "最近 90 天" }, { value: "all", label: "全部历史" },
+  { value: "7d", label: "最近 7 天" },
+  { value: "14d", label: "最近 14 天" },
+  { value: "30d", label: "最近 30 天" },
+  { value: "90d", label: "最近 90 天" },
+  { value: "all", label: "全部历史" },
 ]
 const weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-const weekdayLabels: Record<string, string> = { Mon: "一", Tue: "二", Wed: "三", Thu: "四", Fri: "五", Sat: "六", Sun: "日" }
+const weekdayLabels: Record<string, string> = {
+  Mon: "一",
+  Tue: "二",
+  Wed: "三",
+  Thu: "四",
+  Fri: "五",
+  Sat: "六",
+  Sun: "日",
+}
 
 function formatTokens(value: number): string {
-  return new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: value >= 1_000_000 ? 1 : 0 }).format(value)
+  return new Intl.NumberFormat(undefined, {
+    notation: "compact",
+    maximumFractionDigits: value >= 1_000_000 ? 1 : 0,
+  }).format(value)
 }
-function fullTokens(value: number): string { return new Intl.NumberFormat().format(value) }
-function formatDate(value: number | null): string { return value ? new Date(value).toLocaleString() : "—" }
-function formatDay(value: number): string { return new Date(value).toLocaleDateString() }
-function isProjectIdentifier(key: string): boolean { return key !== "uncategorized-conversation" && key !== "other" }
+function fullTokens(value: number): string {
+  return new Intl.NumberFormat().format(value)
+}
+function formatDate(value: number | null): string {
+  return value ? new Date(value).toLocaleString() : "—"
+}
+function formatDay(value: number): string {
+  return new Date(value).toLocaleDateString()
+}
+function isProjectIdentifier(key: string): boolean {
+  return key !== "uncategorized-conversation" && key !== "other"
+}
+function share(part: number, whole: number): number {
+  return whole ? (part / whole) * 100 : 0
+}
+
+/** Every block is the same shell: a card wrapping one solid inset. */
+function Panel({
+  title,
+  hint,
+  className,
+  bodyClassName,
+  children,
+}: {
+  title: string
+  hint?: string
+  className?: string
+  bodyClassName?: string
+  children: React.ReactNode
+}) {
+  return (
+    <section
+      className={cn(
+        "flex flex-col rounded-2xl bg-card p-2 ring-1 ring-foreground/10",
+        className
+      )}
+    >
+      <header className="flex items-baseline justify-between gap-4 px-2 py-1.5">
+        <h2 className="text-sm font-semibold">{title}</h2>
+        {hint ? (
+          <span className="truncate text-xs text-muted-foreground/70">
+            {hint}
+          </span>
+        ) : null}
+      </header>
+      {/* flex-1 would set flex-basis:0 and beat any height a caller asks for,
+          so stretching is opt-in rather than baked into the shell. */}
+      <div
+        className={cn("flex flex-col rounded-xl bg-muted p-3", bodyClassName)}
+      >
+        {children}
+      </div>
+    </section>
+  )
+}
+
+function Ranking({
+  rows,
+  scrollLabel,
+  listLabel,
+  emptyTitle,
+  emptyDescription,
+  mono,
+}: {
+  rows: Array<{
+    key: string
+    label: string
+    totalTokens: number
+    share: number
+  }>
+  scrollLabel: string
+  listLabel: string
+  emptyTitle: string
+  emptyDescription: string
+  mono?: (key: string) => boolean
+}) {
+  const { t } = useTranslation()
+  if (!rows.length)
+    return (
+      <Empty className="h-full">
+        <EmptyHeader>
+          <EmptyTitle>{emptyTitle}</EmptyTitle>
+          <EmptyDescription>{emptyDescription}</EmptyDescription>
+        </EmptyHeader>
+      </Empty>
+    )
+  return (
+    <ScrollArea className="h-full" aria-label={scrollLabel}>
+      <ul className="grid gap-3 pr-2" aria-label={listLabel}>
+        {rows.map((row) => (
+          <li className="grid gap-1.5" key={row.key}>
+            <div className="flex items-baseline justify-between gap-4 text-xs">
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <span
+                      tabIndex={0}
+                      className={cn(
+                        "min-w-0 truncate rounded-sm font-medium outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                        mono?.(row.key) && "font-mono"
+                      )}
+                    />
+                  }
+                >
+                  {row.label}
+                </TooltipTrigger>
+                <TooltipContent className="max-w-sm break-all">
+                  {row.label}
+                </TooltipContent>
+              </Tooltip>
+              <span className="shrink-0 font-mono text-muted-foreground tabular-nums">
+                {formatTokens(row.totalTokens)}
+              </span>
+            </div>
+            <div
+              className="h-1.5 overflow-hidden rounded-full bg-foreground/10"
+              role="img"
+              aria-label={t("{{project}} Token 占比 {{percent}}", {
+                project: row.label,
+                percent: `${(row.share * 100).toFixed(1)}%`,
+              })}
+            >
+              <div
+                className="h-full rounded-full bg-chart-4"
+                style={{ width: `${Math.max(row.share * 100, 1)}%` }}
+              />
+            </div>
+          </li>
+        ))}
+      </ul>
+    </ScrollArea>
+  )
+}
 
 function LoadingDashboard() {
-  return <div className="grid grid-cols-1 gap-4 lg:grid-cols-12" aria-label="正在扫描本机 Codex 用量">
-    {[0, 1, 2, 3].map((item) => <Skeleton key={item} className="h-28 lg:col-span-3" />)}
-    <Skeleton className="h-96 lg:col-span-8" /><Skeleton className="h-96 lg:col-span-4" />
-  </div>
+  return (
+    <div
+      className="grid grid-cols-12 gap-4"
+      aria-label="正在扫描本机 Codex 用量"
+    >
+      <Skeleton className="col-span-12 h-72 rounded-2xl xl:col-span-8" />
+      <Skeleton className="col-span-12 h-72 rounded-2xl xl:col-span-4" />
+      <Skeleton className="col-span-12 h-64 rounded-2xl md:col-span-6" />
+      <Skeleton className="col-span-12 h-64 rounded-2xl md:col-span-6" />
+    </div>
+  )
 }
 
-function MetricCard({ label, value, description }: { label: string; value: string; description: string }) {
-  return <Card className="lg:col-span-3"><CardHeader><CardDescription>{label}</CardDescription><CardTitle className="font-mono text-2xl tabular-nums">{value}</CardTitle></CardHeader><CardContent className="text-xs text-muted-foreground">{description}</CardContent></Card>
-}
-
-function ModelRankingCard({ title, description, data }: { title: string; description: string; data: CodexUsageDashboard["models"] }) {
-  return <Card className="min-h-0 lg:col-span-6 lg:h-full"><CardHeader><CardTitle>{title}</CardTitle><CardDescription>{description}</CardDescription></CardHeader><CardContent className="min-h-0 lg:flex-1">
-    {data.length ? <ScrollArea className="lg:h-full" aria-label={`${title}滚动区域`}>
-      <ChartContainer config={rankingConfig} className="h-64 min-h-full w-full pr-3 font-mono" style={{ height: Math.max(256, data.length * 44) }} aria-label={title}>
-      <BarChart accessibilityLayer data={data} layout="vertical" margin={{ left: 8, right: 32 }}>
-        <CartesianGrid horizontal={false} /><YAxis dataKey="label" type="category" tickLine={false} axisLine={false} width={144} tick={{ className: "font-mono" }} tickFormatter={(value) => String(value).slice(0, 18)} />
-        <XAxis type="number" hide /><ChartTooltip content={<ChartTooltipContent formatter={(value) => <span className="font-mono tabular-nums">{fullTokens(Number(value))}</span>} />} />
-        <Bar dataKey="totalTokens" fill="var(--color-totalTokens)" radius={4} />
-      </BarChart>
-      </ChartContainer>
-    </ScrollArea> : <Empty className="h-64 lg:h-full"><EmptyHeader><EmptyTitle>暂无分布数据</EmptyTitle><EmptyDescription>当前筛选范围内没有可比较的数据。</EmptyDescription></EmptyHeader></Empty>}
-  </CardContent></Card>
-}
-
-function ProjectRankingCard({ data }: { data: CodexUsageDashboard["projects"] }) {
-  const { t } = useTranslation()
-  return <Card className="min-h-0 lg:col-span-6 lg:h-full"><CardHeader><CardTitle>{t("项目分布")}</CardTitle><CardDescription>{t("无分类对话单独汇总；长项目名可悬停或聚焦查看完整内容。")}</CardDescription></CardHeader><CardContent className="min-h-0 lg:flex-1">
-    {data.length ? <ScrollArea className="lg:h-full" aria-label={t("项目分布滚动区域") as string}><div className="flex min-h-64 flex-col gap-4 pr-3 lg:min-h-0" aria-label={t("项目分布排名") as string}>
-      {data.map((item, index) => <div key={item.key} className="grid grid-cols-[1.5rem_minmax(0,1fr)] gap-x-2 gap-y-2">
-        <span className="row-span-2 pt-0.5 font-mono text-xs text-muted-foreground tabular-nums">{index + 1}</span>
-        <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-          <Tooltip><TooltipTrigger render={<span tabIndex={0} className={cn("min-w-0 truncate text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring", isProjectIdentifier(item.key) && "font-mono")} />}>{item.label}</TooltipTrigger><TooltipContent className={cn(isProjectIdentifier(item.key) && "font-mono")}>{item.label}</TooltipContent></Tooltip>
-          <span className="shrink-0 font-mono text-xs text-muted-foreground tabular-nums">{formatTokens(item.totalTokens)} · {(item.share * 100).toFixed(1)}%</span>
-        </div>
-        <Progress value={item.share * 100} aria-label={t("{{project}} Token 占比 {{percent}}", { project: item.label, percent: `${(item.share * 100).toFixed(1)}%` })} />
-      </div>)}
-    </div></ScrollArea> : <Empty className="h-64 lg:h-full"><EmptyHeader><EmptyTitle>{t("暂无分布数据")}</EmptyTitle><EmptyDescription>{t("当前筛选范围内没有可比较的数据。")}</EmptyDescription></EmptyHeader></Empty>}
-  </CardContent></Card>
-}
-
-export function UsagePage({ service, revision = 0 }: { service: GatewayService; revision?: number }) {
+export function UsagePage({
+  service,
+  revision = 0,
+}: {
+  service: GatewayService
+  revision?: number
+}) {
   const { t } = useTranslation()
   const [range, setRange] = useState<CodexUsageRange>("14d")
   const [model, setModel] = useState("all")
@@ -92,121 +241,618 @@ export function UsagePage({ service, revision = 0 }: { service: GatewayService; 
 
   useEffect(() => {
     let cancelled = false
-    void service.getCodexUsage({ range, model: model === "all" ? undefined : model, project: project === "all" ? undefined : project })
-      .then((next) => { if (!cancelled) { setData(next); setError(null) } })
-      .catch((reason: Error) => { if (!cancelled) setError(reason.message) })
-    return () => { cancelled = true }
+    void service
+      .getCodexUsage({
+        range,
+        model: model === "all" ? undefined : model,
+        project: project === "all" ? undefined : project,
+      })
+      .then((next) => {
+        if (!cancelled) {
+          setData(next)
+          setError(null)
+        }
+      })
+      .catch((reason: Error) => {
+        if (!cancelled) setError(reason.message)
+      })
+    return () => {
+      cancelled = true
+    }
   }, [service, range, model, project, revision, request])
 
-  const heat = useMemo(() => new Map(data?.heatmap.map((item) => [`${item.weekday}|${item.hour}`, item.totalTokens]) ?? []), [data])
+  const heat = useMemo(
+    () =>
+      new Map(
+        data?.heatmap.map((item) => [
+          `${item.weekday}|${item.hour}`,
+          item.totalTokens,
+        ]) ?? []
+      ),
+    [data]
+  )
   const heatMax = Math.max(0, ...heat.values())
-  const modelTrend = useMemo(() => {
-    const series = data?.models.filter((model) => model.totalTokens > 0).map((model, index) => ({ ...model, dataKey: `model${index}`, color: modelColors[index % modelColors.length] })) ?? []
-    const indexByKey = new Map(series.map((model) => [model.key, model.dataKey]))
-    const rows = data?.dailyModels.map((day) => {
-      const row: Record<string, string | number | boolean> = { date: day.date, totalTokens: day.totalTokens, isPartial: day.isPartial }
-      for (const model of day.models) { const key = indexByKey.get(model.key); if (key) row[key] = model.totalTokens }
-      return row
-    }) ?? []
-    const config = Object.fromEntries(series.map((model) => [model.dataKey, { label: <span className="font-mono">{model.label}</span>, color: model.color }])) satisfies ChartConfig
-    return { series, rows, config }
-  }, [data])
-  const selectedProject = project === "all" ? null : data?.filters.projects.find((item) => item.key === project)
+  const selectedProject =
+    project === "all"
+      ? null
+      : data?.filters.projects.find((item) => item.key === project)
   const selectedProjectLabel = selectedProject?.label ?? t("全部项目")
-  if (!data && !error) return <div className="flex flex-col gap-4"><PageIntro /><LoadingDashboard /></div>
 
-  return <div className="flex flex-col gap-4">
-    <PageIntro />
-    <div className="flex flex-wrap items-center gap-2" aria-label={t("用量筛选") as string}>
-      <Select value={range} onValueChange={(value) => value && setRange(value as CodexUsageRange)}><SelectTrigger className="w-36" aria-label={t("时间范围")}><SelectValue>{t(ranges.find((item) => item.value === range)?.label ?? "最近 14 天")}</SelectValue></SelectTrigger><SelectContent><SelectGroup>{ranges.map((item) => <SelectItem key={item.value} value={item.value}>{t(item.label)}</SelectItem>)}</SelectGroup></SelectContent></Select>
-      <Select value={model} onValueChange={(value) => value && setModel(value)}><SelectTrigger className="w-44" aria-label={t("模型筛选")}><SelectValue className={cn(model !== "all" && "font-mono")}>{model === "all" ? t("全部模型") : model}</SelectValue></SelectTrigger><SelectContent><SelectGroup><SelectItem value="all">{t("全部模型")}</SelectItem>{data?.filters.models.map((item) => <SelectItem className="font-mono" key={item} value={item}>{item}</SelectItem>)}</SelectGroup></SelectContent></Select>
-      <Select value={project} onValueChange={(value) => value && setProject(value)}>
-        <Tooltip>
-          <TooltipTrigger render={<span className="block w-full min-w-0 sm:w-64 lg:w-72" />}>
-            <SelectTrigger className="w-full min-w-0 overflow-hidden" aria-label={t("项目筛选")}>
-              <SelectValue className={cn("min-w-0 overflow-hidden", selectedProject && isProjectIdentifier(selectedProject.key) && "font-mono")}>
-                <span className="min-w-0 flex-1 truncate">{selectedProjectLabel}</span>
-              </SelectValue>
-            </SelectTrigger>
-          </TooltipTrigger>
-          <TooltipContent className={cn("max-w-sm break-all", selectedProject && isProjectIdentifier(selectedProject.key) && "font-mono")}>{selectedProjectLabel}</TooltipContent>
-        </Tooltip>
-        <SelectContent alignItemWithTrigger={false} className="w-[min(24rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)]">
+  const summary = data?.summary
+  const composition = summary
+    ? [
+        {
+          label: t("缓存输入"),
+          value: summary.cachedInputTokens,
+          className: "bg-chart-1",
+        },
+        {
+          label: t("非缓存输入"),
+          value: summary.uncachedInputTokens,
+          className: "bg-chart-3",
+        },
+        {
+          label: t("输出"),
+          value: summary.outputTokens - summary.reasoningOutputTokens,
+          className: "bg-chart-5",
+        },
+        {
+          label: t("推理输出"),
+          value: summary.reasoningOutputTokens,
+          className: "bg-chart-4",
+        },
+      ]
+    : []
+
+  const filters = (
+    <div
+      className="flex flex-wrap items-center gap-2"
+      aria-label={t("用量筛选") as string}
+    >
+      <div className="flex rounded-xl bg-card p-1 ring-1 ring-foreground/10">
+        {ranges.map((item) => (
+          <button
+            key={item.value}
+            type="button"
+            aria-pressed={item.value === range}
+            className={cn(
+              "h-7 rounded-lg px-2.5 text-xs font-medium outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+              item.value === range
+                ? "bg-muted text-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+            onClick={() => setRange(item.value)}
+          >
+            {t(item.label)}
+          </button>
+        ))}
+      </div>
+      <Select value={model} onValueChange={(value) => value && setModel(value)}>
+        <SelectTrigger
+          className="h-9 w-44 rounded-xl"
+          aria-label={t("模型筛选")}
+        >
+          <SelectValue className={cn(model !== "all" && "font-mono")}>
+            {model === "all" ? t("全部模型") : model}
+          </SelectValue>
+        </SelectTrigger>
+        <SelectContent>
           <SelectGroup>
-            <SelectItem value="all">{t("全部项目")}</SelectItem>
-            {data?.filters.projects.map((item) => <SelectItem aria-label={item.label} title={item.label} className={cn("min-w-0 max-w-full overflow-hidden [&>span:first-child]:min-w-0 [&>span:first-child]:shrink [&>span:first-child]:overflow-hidden", isProjectIdentifier(item.key) && "font-mono")} key={item.key} value={item.key}><span className="min-w-0 flex-1 truncate text-left">{item.label}</span></SelectItem>)}
+            <SelectItem value="all">{t("全部模型")}</SelectItem>
+            {data?.filters.models.map((item) => (
+              <SelectItem className="font-mono" key={item} value={item}>
+                {item}
+              </SelectItem>
+            ))}
           </SelectGroup>
         </SelectContent>
       </Select>
-      {data?.status === "scanning" ? <Badge variant="secondary">{t("正在更新")}</Badge> : null}
-      {data?.status === "partial" ? <Badge variant="outline">{t("部分数据")}</Badge> : null}
-      {data?.coverage.firstEventAt ? <span className="text-xs text-muted-foreground">{t("本机数据始于 {{date}}；更早的本地记录不可恢复。", { date: formatDay(data.coverage.firstEventAt) })}</span> : null}
+      <Select
+        value={project}
+        onValueChange={(value) => value && setProject(value)}
+      >
+        <Tooltip>
+          <TooltipTrigger
+            render={<span className="block w-full min-w-0 sm:w-64" />}
+          >
+            <SelectTrigger
+              className="h-9 w-full min-w-0 overflow-hidden rounded-xl"
+              aria-label={t("项目筛选")}
+            >
+              <SelectValue
+                className={cn(
+                  "min-w-0 overflow-hidden",
+                  selectedProject &&
+                    isProjectIdentifier(selectedProject.key) &&
+                    "font-mono"
+                )}
+              >
+                <span className="min-w-0 flex-1 truncate">
+                  {selectedProjectLabel}
+                </span>
+              </SelectValue>
+            </SelectTrigger>
+          </TooltipTrigger>
+          <TooltipContent className="max-w-sm break-all">
+            {selectedProjectLabel}
+          </TooltipContent>
+        </Tooltip>
+        <SelectContent
+          alignItemWithTrigger={false}
+          className="w-[min(24rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)]"
+        >
+          <SelectGroup>
+            <SelectItem value="all">{t("全部项目")}</SelectItem>
+            {data?.filters.projects.map((item) => (
+              <SelectItem
+                aria-label={item.label}
+                title={item.label}
+                className={cn(
+                  "max-w-full min-w-0 overflow-hidden [&>span:first-child]:min-w-0 [&>span:first-child]:shrink [&>span:first-child]:overflow-hidden",
+                  isProjectIdentifier(item.key) && "font-mono"
+                )}
+                key={item.key}
+                value={item.key}
+              >
+                <span className="min-w-0 flex-1 truncate text-left">
+                  {item.label}
+                </span>
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
     </div>
-    {error ? <Alert variant="destructive"><AlertTriangleIcon /><AlertTitle>{t("用量数据载入失败")}</AlertTitle><AlertDescription className="flex items-center gap-3"><span>{error}</span><Button variant="outline" size="sm" onClick={() => setRequest((value) => value + 1)}>{t("重试")}</Button></AlertDescription></Alert> : null}
-    {data && data.coverage.rollouts === 0 && data.status !== "scanning" ? <Empty className="min-h-80 border"><EmptyMedia variant="icon"><DatabaseIcon /></EmptyMedia><EmptyHeader><EmptyTitle>{t("没有本地用量数据")}</EmptyTitle><EmptyDescription>{t("Codex 创建会话记录后，用量趋势会自动出现在这里。")}</EmptyDescription></EmptyHeader></Empty> : null}
-    {data && data.coverage.rollouts > 0 ? <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
-      <MetricCard label={t("区间总 Token")} value={formatTokens(data.summary.totalTokens)} description={t("输入与输出之和，不重复计算缓存和推理子集。") as string} />
-      <MetricCard label={t("今日 Token")} value={formatTokens(data.summary.todayTokens)} description={t("今天仍在进行中，数值会持续更新。") as string} />
-      <MetricCard label={t("日均 Token")} value={formatTokens(data.summary.dailyAverage)} description={t("按所选自然日计算，包含零用量日期。") as string} />
-      <MetricCard label={t("缓存命中率")} value={`${data.summary.cacheHitPercent.toFixed(1)}%`} description={t("缓存输入占全部输入 Token 的比例。") as string} />
+  )
 
-      <div className="grid grid-cols-1 gap-4 lg:col-span-12 lg:h-[28rem] lg:grid-cols-12">
-      <Card className="min-h-0 lg:col-span-8 lg:h-full"><CardHeader><CardTitle>{t("每日 Token 趋势")}</CardTitle><CardDescription>{t("堆叠序列可以相加；7 日均线用于观察变化方向。")}</CardDescription></CardHeader><CardContent className="min-h-0 lg:flex-1">
-        <ChartContainer config={trendConfig} className="h-80 w-full lg:h-full" aria-label={t("每日 Token 趋势") as string}>
-          <ComposedChart accessibilityLayer data={data.daily} margin={{ left: 4, right: 8 }}><CartesianGrid vertical={false} /><XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={8} tick={{ className: "font-mono tabular-nums" }} tickFormatter={(value) => String(value).slice(5)} /><YAxis tickLine={false} axisLine={false} width={48} tick={{ className: "font-mono tabular-nums" }} tickFormatter={formatTokens} />
-            <ChartTooltip content={<ChartTooltipContent formatter={(value, name) => <div className="flex min-w-36 justify-between gap-3"><span className="text-muted-foreground">{trendConfig[name as keyof typeof trendConfig]?.label}</span><span className="font-mono tabular-nums">{fullTokens(Number(value))}</span></div>} />} />
-            <ChartLegend content={<ChartLegendContent />} /><Bar dataKey="cachedInputTokens" stackId="tokens" fill="var(--color-cachedInputTokens)" /><Bar dataKey="uncachedInputTokens" stackId="tokens" fill="var(--color-uncachedInputTokens)" /><Bar dataKey="outputTokens" stackId="tokens" fill="var(--color-outputTokens)" radius={[3, 3, 0, 0]} /><Line dataKey="rollingAverage7d" type="monotone" stroke="var(--color-rollingAverage7d)" strokeWidth={2} dot={false} />
-          </ComposedChart>
-        </ChartContainer>
-      </CardContent></Card>
+  return (
+    <div className="flex flex-col gap-4">
+      <header className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            {t("用量分析")}
+          </h1>
+          <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+            {t(
+              "数据来自主 CODEX_HOME 中所有账号共同产生的会话记录，不能按账号拆分，也不代表账单或账号额度。"
+            )}
+            {data?.status === "scanning" ? (
+              <Badge variant="secondary">{t("正在更新")}</Badge>
+            ) : null}
+            {data?.status === "partial" ? (
+              <Badge variant="outline">{t("部分数据")}</Badge>
+            ) : null}
+          </p>
+        </div>
+        {filters}
+      </header>
 
-      <Card className="min-h-0 lg:col-span-4 lg:h-full"><CardHeader><CardTitle>{t("用量结构")}</CardTitle><CardDescription>{t("缓存属于输入，推理属于输出，均不额外计入总量。")}</CardDescription></CardHeader><CardContent className="flex flex-col gap-5 lg:min-h-0 lg:flex-1 lg:justify-evenly">
-        {[{ label: t("输入 Token"), value: data.summary.inputTokens, percent: data.summary.totalTokens ? data.summary.inputTokens / data.summary.totalTokens * 100 : 0 }, { label: t("输出 Token"), value: data.summary.outputTokens, percent: data.summary.totalTokens ? data.summary.outputTokens / data.summary.totalTokens * 100 : 0 }, { label: t("缓存输入"), value: data.summary.cachedInputTokens, percent: data.summary.cacheHitPercent }, { label: t("推理输出"), value: data.summary.reasoningOutputTokens, percent: data.summary.outputTokens ? data.summary.reasoningOutputTokens / data.summary.outputTokens * 100 : 0 }].map((item) => <Progress key={item.label} value={item.percent}><ProgressLabel>{item.label}</ProgressLabel><ProgressValue className="font-mono">{() => `${formatTokens(item.value)} · ${item.percent.toFixed(1)}%`}</ProgressValue></Progress>)}
-      </CardContent></Card>
-      </div>
+      {error ? (
+        <Alert variant="destructive">
+          <AlertTriangleIcon />
+          <AlertTitle>{t("用量数据载入失败")}</AlertTitle>
+          <AlertDescription className="flex items-center gap-3">
+            <span>{error}</span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setRequest((value) => value + 1)}
+            >
+              {t("重试")}
+            </Button>
+          </AlertDescription>
+        </Alert>
+      ) : null}
 
-      <Card className="min-h-0 lg:col-span-12 lg:h-[28rem]"><CardHeader><CardTitle>{t("每日模型分布趋势")}</CardTitle><CardDescription>{t("按天比较各模型 Token；应用日期和项目筛选，保留全部模型。")}</CardDescription></CardHeader><CardContent className="min-h-0 lg:flex-1">
-        {modelTrend.series.length && modelTrend.rows.length ? <ChartContainer config={modelTrend.config} className="h-80 w-full lg:h-full" aria-label={t("每日模型分布趋势") as string}>
-          <BarChart accessibilityLayer data={modelTrend.rows} margin={{ left: 4, right: 8 }}><CartesianGrid vertical={false} /><XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={8} tick={{ className: "font-mono tabular-nums" }} tickFormatter={(value) => String(value).slice(5)} /><YAxis tickLine={false} axisLine={false} width={48} tick={{ className: "font-mono tabular-nums" }} tickFormatter={formatTokens} />
-            <ChartTooltip content={<ChartTooltipContent labelFormatter={(value) => String(value)} formatter={(value, name, item) => { const model = modelTrend.series.find((entry) => entry.dataKey === name); const total = Number(item.payload?.totalTokens ?? 0); const percent = total ? Number(value) / total * 100 : 0; return <div className="flex min-w-48 justify-between gap-3"><span className="font-mono text-muted-foreground">{model?.label ?? String(name)}</span><span className="font-mono tabular-nums">{fullTokens(Number(value))} · {percent.toFixed(1)}%</span></div> }} />} />
-            <ChartLegend content={<ChartLegendContent className="flex-wrap gap-y-2" />} />
-            {modelTrend.series.map((model, index) => <Bar key={model.key} dataKey={model.dataKey} stackId="models" fill={`var(--color-${model.dataKey})`} radius={index === modelTrend.series.length - 1 ? [3, 3, 0, 0] : 0} />)}
-          </BarChart>
-        </ChartContainer> : <Empty className="h-64 lg:h-full"><EmptyHeader><EmptyTitle>{t("暂无模型趋势数据")}</EmptyTitle><EmptyDescription>{t("当前筛选范围内没有可归属到模型的 Token 数据。")}</EmptyDescription></EmptyHeader></Empty>}
-      </CardContent></Card>
+      {!data && !error ? <LoadingDashboard /> : null}
 
-      <div className="grid grid-cols-1 gap-4 lg:col-span-12 lg:h-[29rem] lg:grid-cols-12">
-      <ModelRankingCard title={t("模型分布")} description={t("保留全部模型用于比较，仅应用日期和项目筛选。") as string} data={data.models} />
-      <ProjectRankingCard data={data.projects} />
-      </div>
+      {data && data.coverage.rollouts === 0 && data.status !== "scanning" ? (
+        <Empty className="min-h-80 rounded-2xl bg-card ring-1 ring-foreground/10">
+          <EmptyMedia variant="icon">
+            <DatabaseIcon />
+          </EmptyMedia>
+          <EmptyHeader>
+            <EmptyTitle>{t("没有本地用量数据")}</EmptyTitle>
+            <EmptyDescription>
+              {t("Codex 创建会话记录后，用量趋势会自动出现在这里。")}
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      ) : null}
 
-      <div className="grid grid-cols-1 gap-4 lg:col-span-12 lg:h-[23rem] lg:grid-cols-12">
-      <Card className="min-h-0 lg:col-span-5 lg:h-full"><CardHeader><CardTitle>{t("工作负载")}</CardTitle><CardDescription>{t("任务与会话活动使用同一筛选范围。")}</CardDescription></CardHeader><CardContent className="grid grid-cols-2 gap-4 text-sm lg:min-h-0 lg:flex-1 lg:auto-rows-fr">
-        {[ [t("会话"), data.summary.sessions], [t("任务启动"), data.summary.tasksStarted], [t("任务完成"), data.summary.tasksCompleted], [t("任务完成率"), `${data.summary.completionPercent.toFixed(1)}%`], [t("中止"), data.summary.abortedTurns], [t("上下文压缩"), data.summary.compactions], [t("每完成任务 Token"), formatTokens(data.summary.tokensPerCompletedTask)] ].map(([label, value]) => <div key={String(label)} className="flex flex-col gap-1"><span className="text-xs text-muted-foreground">{label}</span><span className="font-mono text-lg font-medium tabular-nums">{value}</span></div>)}
-      </CardContent></Card>
+      {data && data.coverage.rollouts > 0 && summary ? (
+        <div className="grid grid-cols-12 gap-4">
+          {/* The one dark block on the page: the headline number and its shape.
+              Everything else stays on light surfaces so this reads as the hero. */}
+          <section className="col-span-12 rounded-2xl bg-ink p-2 text-ink-foreground xl:col-span-8">
+            <div className="flex flex-wrap items-start justify-between gap-4 px-3 py-2.5">
+              <div>
+                <p className="text-xs text-ink-muted">{t("区间总 Token")}</p>
+                <p
+                  className="mt-1 font-brand text-3xl leading-none font-semibold tabular-nums"
+                  title={fullTokens(summary.totalTokens)}
+                >
+                  {formatTokens(summary.totalTokens)}
+                </p>
+              </div>
+              <ul className="flex gap-6 text-right">
+                {[
+                  {
+                    label: t("今日"),
+                    value: formatTokens(summary.todayTokens),
+                  },
+                  {
+                    label: t("日均"),
+                    value: formatTokens(summary.dailyAverage),
+                  },
+                  {
+                    label: t("缓存命中"),
+                    value: `${summary.cacheHitPercent.toFixed(1)}%`,
+                  },
+                ].map((item) => (
+                  <li key={item.label}>
+                    <p className="text-xs text-ink-muted">{item.label}</p>
+                    <p className="mt-0.5 text-sm font-semibold tabular-nums">
+                      {item.value}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </div>
 
-      <Card className="min-h-0 lg:col-span-7 lg:h-full"><CardHeader><CardTitle>{t("活跃热力图")}</CardTitle><CardDescription>{t("按本机时区汇总星期与小时的 Token 强度。")}</CardDescription></CardHeader><CardContent className="min-h-0 lg:flex-1"><ScrollArea className="h-full pb-3" aria-label={t("活跃热力图滚动区域") as string}><div className="grid min-w-[42rem] grid-cols-[2rem_repeat(24,minmax(1rem,1fr))] gap-1 lg:h-full lg:content-center" role="img" aria-label={t("星期和小时 Token 热力图") as string}>
-        <span />{Array.from({ length: 24 }, (_, hour) => <span key={hour} className="text-center font-mono text-[10px] text-muted-foreground tabular-nums">{hour % 3 === 0 ? hour : ""}</span>)}
-        {weekdays.flatMap((weekday) => [<span key={`${weekday}-label`} className="text-xs text-muted-foreground">{weekdayLabels[weekday]}</span>, ...Array.from({ length: 24 }, (_, hour) => { const value = heat.get(`${weekday}|${hour}`) ?? 0; const level = heatMax ? value / heatMax : 0; const label = `周${weekdayLabels[weekday]} ${hour}:00，${fullTokens(value)} Token`; return <Tooltip key={`${weekday}-${hour}`}><TooltipTrigger render={<span tabIndex={0} aria-label={label} className={cn("aspect-square rounded-sm bg-muted outline-none focus-visible:ring-2 focus-visible:ring-ring", level > 0 && "bg-primary/20", level > .25 && "bg-primary/40", level > .5 && "bg-primary/65", level > .75 && "bg-primary")} />} /><TooltipContent>{label}</TooltipContent></Tooltip> })])}
-      </div><ScrollBar orientation="horizontal" /></ScrollArea></CardContent></Card>
-      </div>
+            <div className="rounded-xl bg-ink-panel p-3">
+              <ChartContainer
+                config={trendConfig}
+                className="h-44 w-full"
+                aria-label={t("每日 Token 趋势") as string}
+              >
+                <ComposedChart
+                  accessibilityLayer
+                  data={data.daily}
+                  margin={{ left: 0, right: 0, top: 4, bottom: 0 }}
+                >
+                  <ChartTooltip
+                    content={
+                      <ChartTooltipContent
+                        formatter={(value, name) => (
+                          <div className="flex min-w-36 justify-between gap-3">
+                            <span className="text-muted-foreground">
+                              {
+                                trendConfig[name as keyof typeof trendConfig]
+                                  ?.label
+                              }
+                            </span>
+                            <span className="font-mono tabular-nums">
+                              {fullTokens(Number(value))}
+                            </span>
+                          </div>
+                        )}
+                      />
+                    }
+                  />
+                  <Bar
+                    dataKey="cachedInputTokens"
+                    stackId="tokens"
+                    fill="var(--color-cachedInputTokens)"
+                  />
+                  <Bar
+                    dataKey="uncachedInputTokens"
+                    stackId="tokens"
+                    fill="var(--color-uncachedInputTokens)"
+                  />
+                  <Bar
+                    dataKey="outputTokens"
+                    stackId="tokens"
+                    fill="var(--color-outputTokens)"
+                    radius={[3, 3, 0, 0]}
+                  />
+                  <Line
+                    dataKey="rollingAverage7d"
+                    type="monotone"
+                    stroke="var(--color-rollingAverage7d)"
+                    strokeWidth={1.5}
+                    strokeDasharray="4 3"
+                    dot={false}
+                  />
+                </ComposedChart>
+              </ChartContainer>
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-[11px] text-ink-muted">
+                <span className="font-mono tabular-nums">
+                  {data.daily[0]?.date.slice(5)}
+                </span>
+                <ul className="flex flex-wrap items-center gap-3">
+                  {[
+                    { name: t("缓存输入"), className: "bg-chart-1" },
+                    { name: t("非缓存输入"), className: "bg-chart-3" },
+                    { name: t("输出"), className: "bg-chart-5" },
+                  ].map((item) => (
+                    <li className="flex items-center gap-1.5" key={item.name}>
+                      <span
+                        className={cn("size-2 rounded-full", item.className)}
+                      />
+                      {item.name}
+                    </li>
+                  ))}
+                  <li className="flex items-center gap-1.5">
+                    <span className="h-px w-4 bg-ink-muted" />
+                    {t("7 日均线")}
+                  </li>
+                </ul>
+                <span className="font-mono tabular-nums">
+                  {data.daily[data.daily.length - 1]?.date.slice(5)}
+                </span>
+              </div>
+            </div>
+          </section>
 
-      <Card className="lg:col-span-12"><CardHeader><CardTitle>{t("数据覆盖")}</CardTitle><CardDescription>{t("白名单派生历史永久保留，不会随 Codex 会话文件清理而删除。")}</CardDescription></CardHeader><CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        {[
-          [t("统计会话"), data.coverage.rollouts], [t("当前源文件"), data.coverage.sourceRollouts], [t("永久保留"), data.coverage.retainedRollouts],
-          [t("扫描完整性"), t(data.coverage.scan.complete ? "完整" : "不完整")], [t("待确认缺失"), data.coverage.scan.pendingMissingRollouts],
-          [t("最早事件"), formatDate(data.coverage.firstEventAt)], [t("最新事件"), formatDate(data.coverage.lastEventAt)], [t("最近成功扫描"), formatDate(data.coverage.scan.lastSuccessfulAt)],
-          [t("最近保留"), formatDate(data.coverage.lastRetentionAt)], [t("解析警告"), data.coverage.parseWarnings],
-          [t("待同步审计"), data.coverage.retention.pendingAuditEvents], [t("审计最近校验"), formatDate(data.coverage.retention.lastVerifiedAt)],
-          [t("快照状态"), t(data.coverage.backup.status)], [t("最近快照"), formatDate(data.coverage.backup.lastSuccessfulAt)], [t("快照代数"), data.coverage.backup.generations],
-          [t("最近数据库恢复"), formatDate(data.coverage.backup.lastRecoveryAt)],
-        ].map(([label, value]) => <div key={String(label)} className="flex min-w-0 flex-col gap-1"><span className="text-xs text-muted-foreground">{label}</span><span className="truncate font-mono text-sm tabular-nums" title={String(value)}>{value}</span></div>)}
-      </CardContent></Card>
-    </div> : data?.status === "scanning" ? <LoadingDashboard /> : null}
-  </div>
-}
+          <Panel
+            title={t("用量结构")}
+            hint={t("缓存属于输入，推理属于输出")}
+            className="col-span-12 self-start xl:col-span-4"
+          >
+            {/* Reads top down: the two totals, the proportion they make, then
+                the parts each one breaks into. */}
+            <dl className="grid grid-cols-2 gap-4">
+              {[
+                {
+                  label: t("输入 Token"),
+                  value: summary.inputTokens,
+                  percent: share(summary.inputTokens, summary.totalTokens),
+                },
+                {
+                  label: t("输出 Token"),
+                  value: summary.outputTokens,
+                  percent: share(summary.outputTokens, summary.totalTokens),
+                },
+              ].map((item) => (
+                <div key={item.label}>
+                  <dt className="text-[11px] text-muted-foreground/70">
+                    {item.label}
+                  </dt>
+                  <dd className="mt-0.5 flex items-baseline gap-1.5">
+                    <span className="text-lg leading-none font-semibold tabular-nums">
+                      {formatTokens(item.value)}
+                    </span>
+                    <span className="text-[11px] text-muted-foreground tabular-nums">
+                      {item.percent.toFixed(0)}%
+                    </span>
+                  </dd>
+                </div>
+              ))}
+            </dl>
 
-function PageIntro() {
-  const { t } = useTranslation()
-  return <Alert><InfoIcon /><AlertTitle className="flex flex-wrap items-center gap-2">{t("本机 Codex 用量汇总")}<Badge variant="secondary">{t("本机汇总")}</Badge></AlertTitle><AlertDescription>{t("数据来自主 CODEX_HOME 中所有账号共同产生的会话记录，不能按账号拆分，也不代表账单或账号额度。")}</AlertDescription></Alert>
+            <div className="my-3.5 flex h-2 overflow-hidden rounded-full bg-foreground/10">
+              {composition.map((item) => (
+                <span
+                  key={item.label}
+                  className={item.className}
+                  style={{
+                    width: `${share(item.value, summary.totalTokens)}%`,
+                  }}
+                />
+              ))}
+            </div>
+
+            <ul className="grid gap-3">
+              {composition.map((item) => (
+                <li
+                  className="flex items-center gap-2 text-xs"
+                  key={item.label}
+                >
+                  <span
+                    className={cn(
+                      "size-2 shrink-0 rounded-full",
+                      item.className
+                    )}
+                  />
+                  <span className="truncate font-medium">{item.label}</span>
+                  <span className="ml-auto shrink-0 font-mono text-muted-foreground tabular-nums">
+                    {formatTokens(item.value)}
+                  </span>
+                  <span className="w-9 shrink-0 text-right text-muted-foreground/70 tabular-nums">
+                    {share(item.value, summary.totalTokens).toFixed(0)}%
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </Panel>
+
+          <Panel
+            title={t("模型分布")}
+            hint={t("{{count}} 项", { count: data.models.length })}
+            className="col-span-12 md:col-span-6"
+            bodyClassName="h-60"
+          >
+            <Ranking
+              rows={data.models}
+              scrollLabel={t("模型分布滚动区域")}
+              listLabel={t("模型分布排名")}
+              mono={() => true}
+              emptyTitle={t("暂无分布数据")}
+              emptyDescription={t("当前筛选范围内没有可比较的数据。")}
+            />
+          </Panel>
+
+          <Panel
+            title={t("项目分布")}
+            hint={t("{{count}} 项", { count: data.projects.length })}
+            className="col-span-12 md:col-span-6"
+            bodyClassName="h-60"
+          >
+            <Ranking
+              rows={data.projects}
+              scrollLabel={t("项目分布滚动区域")}
+              listLabel={t("项目分布排名")}
+              mono={isProjectIdentifier}
+              emptyTitle={t("暂无分布数据")}
+              emptyDescription={t("当前筛选范围内没有可比较的数据。")}
+            />
+          </Panel>
+
+          <Panel
+            title={t("活跃热力图")}
+            hint={t("按本机时区，星期 × 小时")}
+            className="col-span-12 xl:col-span-8"
+            bodyClassName="flex-1"
+          >
+            <ScrollArea aria-label={t("活跃热力图滚动区域") as string}>
+              <div
+                className="grid min-w-[38rem] gap-1"
+                role="img"
+                aria-label={t("星期和小时 Token 热力图") as string}
+              >
+                {weekdays.map((day) => (
+                  <div className="flex items-center gap-1" key={day}>
+                    <span className="w-4 shrink-0 text-[11px] text-muted-foreground/70">
+                      {weekdayLabels[day]}
+                    </span>
+                    <div className="grid flex-1 grid-cols-24 gap-1">
+                      {Array.from({ length: 24 }, (_, hour) => {
+                        const value = heat.get(`${day}|${hour}`) ?? 0
+                        const level = heatMax ? value / heatMax : 0
+                        return (
+                          <span
+                            key={hour}
+                            title={`${weekdayLabels[day]} ${hour}:00 · ${fullTokens(value)}`}
+                            className={cn(
+                              "h-3.5 rounded-[3px]",
+                              level === 0 && "bg-foreground/[0.06]",
+                              level > 0 && level <= 0.25 && "bg-chart-1",
+                              level > 0.25 && level <= 0.5 && "bg-chart-2",
+                              level > 0.5 && level <= 0.75 && "bg-chart-3",
+                              level > 0.75 && "bg-chart-5"
+                            )}
+                          />
+                        )
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+            <div className="mt-2 flex items-center justify-between pl-5 text-[11px] text-muted-foreground/70">
+              <span>0:00</span>
+              <span>12:00</span>
+              <span>23:00</span>
+            </div>
+          </Panel>
+
+          <Panel
+            title={t("工作负载与覆盖")}
+            hint={t("同一筛选范围")}
+            className="col-span-12 xl:col-span-4"
+            bodyClassName="min-h-0 flex-1"
+          >
+            <dl className="grid shrink-0 grid-cols-2 content-start gap-x-4 gap-y-3.5">
+              {[
+                { label: t("会话"), value: summary.sessions },
+                { label: t("任务启动"), value: summary.tasksStarted },
+                { label: t("任务完成"), value: summary.tasksCompleted },
+                {
+                  label: t("任务完成率"),
+                  value: `${summary.completionPercent.toFixed(1)}%`,
+                },
+                { label: t("中止"), value: summary.abortedTurns },
+                { label: t("上下文压缩"), value: summary.compactions },
+              ].map((item) => (
+                <div key={item.label}>
+                  <dt className="text-[11px] text-muted-foreground/70">
+                    {item.label}
+                  </dt>
+                  <dd className="text-sm font-semibold tabular-nums">
+                    {item.value}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+            <div className="mt-4 flex min-h-0 flex-1 flex-col border-t border-border pt-3">
+              <p className="mb-2 flex items-center gap-1.5 text-[11px] text-muted-foreground/70">
+                <DatabaseIcon aria-hidden="true" className="size-3" />
+                {t("数据覆盖")}
+              </p>
+              {/* The full diagnostic set stays available; the panel scrolls
+                  rather than dropping the rarely-read half of it. */}
+              <ScrollArea
+                className="min-h-24 flex-1"
+                aria-label={t("数据覆盖滚动区域") as string}
+              >
+                <dl className="grid gap-2 pr-2">
+                  {(
+                    [
+                      [t("统计会话"), String(data.coverage.rollouts)],
+                      [t("当前源文件"), String(data.coverage.sourceRollouts)],
+                      [t("永久保留"), String(data.coverage.retainedRollouts)],
+                      [
+                        t("扫描完整性"),
+                        t(data.coverage.scan.complete ? "完整" : "不完整"),
+                      ],
+                      [
+                        t("待确认缺失"),
+                        String(data.coverage.scan.pendingMissingRollouts),
+                      ],
+                      [t("解析警告"), String(data.coverage.parseWarnings)],
+                      [t("最早事件"), formatDate(data.coverage.firstEventAt)],
+                      [t("最新事件"), formatDate(data.coverage.lastEventAt)],
+                      [
+                        t("最近成功扫描"),
+                        formatDate(data.coverage.scan.lastSuccessfulAt),
+                      ],
+                      [
+                        t("最近保留"),
+                        formatDate(data.coverage.lastRetentionAt),
+                      ],
+                      [
+                        t("待同步审计"),
+                        String(data.coverage.retention.pendingAuditEvents),
+                      ],
+                      [
+                        t("审计最近校验"),
+                        formatDate(data.coverage.retention.lastVerifiedAt),
+                      ],
+                      [t("快照状态"), t(data.coverage.backup.status)],
+                      [
+                        t("最近快照"),
+                        formatDate(data.coverage.backup.lastSuccessfulAt),
+                      ],
+                      [t("快照代数"), String(data.coverage.backup.generations)],
+                      [
+                        t("最近数据库恢复"),
+                        formatDate(data.coverage.backup.lastRecoveryAt),
+                      ],
+                    ] as Array<[string, string]>
+                  ).map(([label, value]) => (
+                    <div
+                      className="flex justify-between gap-3 text-xs"
+                      key={label}
+                    >
+                      <dt className="truncate text-muted-foreground">
+                        {label}
+                      </dt>
+                      <dd
+                        className="min-w-0 shrink-0 truncate font-mono font-medium tabular-nums"
+                        title={value}
+                      >
+                        {value}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              </ScrollArea>
+            </div>
+          </Panel>
+
+          <p className="col-span-12 flex items-center gap-1.5 px-1 text-xs text-muted-foreground/70">
+            <InfoIcon aria-hidden="true" className="size-3.5 shrink-0" />
+            {data.coverage.firstEventAt
+              ? t("本机数据始于 {{date}}；更早的本地记录不可恢复。", {
+                  date: formatDay(data.coverage.firstEventAt),
+                })
+              : t("白名单派生历史永久保留，不会随 Codex 会话文件清理而删除。")}
+          </p>
+        </div>
+      ) : data?.status === "scanning" ? (
+        <LoadingDashboard />
+      ) : null}
+    </div>
+  )
 }

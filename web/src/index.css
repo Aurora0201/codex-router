@@ -42,6 +42,10 @@
     --color-border: var(--border);
     --color-destructive: var(--destructive);
     --color-success: var(--success);
+    --color-ink: var(--ink);
+    --color-ink-panel: var(--ink-panel);
+    --color-ink-foreground: var(--ink-foreground);
+    --color-ink-muted: var(--ink-muted);
     --color-warning: var(--warning);
     --color-accent-foreground: var(--accent-foreground);
     --color-accent: var(--accent);
@@ -87,11 +91,21 @@
     --ring: oklch(0.623 0.214 259.815);
     --success: oklch(0.566 0.13 164);
     --warning: oklch(0.56 0.15 75);
-    --chart-1: oklch(0.60 0.20 255);
-    --chart-2: oklch(0.64 0.16 185);
-    --chart-3: oklch(0.62 0.19 300);
-    --chart-4: oklch(0.72 0.17 75);
-    --chart-5: oklch(0.63 0.21 25);
+    /* One hue, five steps. Every series on the usage page measures the same
+       thing, so they belong on a lightness ramp rather than separate hues.
+       Step 1 is the least prominent against this theme's ground, step 5 the
+       most, and every step stays legible on the ink panel too. */
+    --chart-1: oklch(0.80 0.10 252);
+    --chart-2: oklch(0.71 0.15 254);
+    --chart-3: oklch(0.62 0.21 259);
+    --chart-4: oklch(0.54 0.23 262);
+    --chart-5: oklch(0.46 0.22 264);
+    /* The one dark block on a light page, and still a distinct block on a dark
+       one: always deeper than --card. */
+    --ink: oklch(0.21 0.02 265);
+    --ink-panel: oklch(0.27 0.02 265);
+    --ink-foreground: oklch(0.985 0 0);
+    --ink-muted: oklch(0.70 0.02 265);
     --chart-6: oklch(0.62 0.17 145);
     --chart-7: oklch(0.66 0.16 220);
     --chart-8: oklch(0.61 0.19 335);
@@ -127,14 +141,21 @@
     --ring: oklch(0.707 0.165 254.624);
     --success: oklch(0.76 0.145 164);
     --warning: oklch(0.68 0.15 82);
-    --chart-1: oklch(0.72 0.17 255);
-    --chart-2: oklch(0.75 0.14 185);
-    --chart-3: oklch(0.74 0.16 300);
-    --chart-4: oklch(0.80 0.14 75);
-    --chart-5: oklch(0.75 0.17 25);
-    --chart-6: oklch(0.74 0.14 145);
-    --chart-7: oklch(0.77 0.14 220);
-    --chart-8: oklch(0.73 0.16 335);
+    /* Same rule as the light ramp: step 1 is the least prominent against this
+       theme's ground, step 5 the most. On a dark ground that means the ramp
+       runs the other way, or the smallest series would shout the loudest. */
+    --chart-1: oklch(0.42 0.10 259);
+    --chart-2: oklch(0.52 0.14 257);
+    --chart-3: oklch(0.62 0.18 256);
+    --chart-4: oklch(0.72 0.17 254);
+    --chart-5: oklch(0.82 0.12 252);
+    /* On a dark page the hero cannot stand out by going darker: at 0.16 it sat
+       between --background and --card and read as a hole. Emphasis goes up
+       instead, so it stays the most elevated block in either theme. */
+    --ink: oklch(0.26 0.035 264);
+    --ink-panel: oklch(0.31 0.03 264);
+    --ink-foreground: oklch(0.985 0 0);
+    --ink-muted: oklch(0.72 0.03 264);
     --sidebar: oklch(0.205 0 0);
     --sidebar-foreground: oklch(0.985 0 0);
     --sidebar-primary: oklch(0.707 0.165 254.624);
