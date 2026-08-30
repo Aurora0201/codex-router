@@ -6,24 +6,17 @@ import { formatCountdown, formatUsageWindow } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { UsageWindowView } from "@/services/contracts"
 
-/**
- * The meter spans both row baselines: the window name, its bar and its
- * percentage share the first line, so the bar fills the space between the label
- * and the number instead of leaving a void under them. The reset countdown sits
- * on the second line, under the name it belongs to.
- */
-const METER =
-  "row-span-2 grid grid-rows-subgrid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2 text-xs"
+const METER = "grid gap-1.5"
+const HEAD = "flex items-center justify-between gap-4 text-xs font-medium"
 const TRACK =
-  "[&>[data-slot=progress-track]]:col-start-2 [&>[data-slot=progress-track]]:row-start-1 [&>[data-slot=progress-track]]:h-[3px] [&>[data-slot=progress-track]]:bg-foreground/20"
-const LABEL = "col-start-1 row-start-1 truncate text-muted-foreground"
-const VALUE = "col-start-3 row-start-1 w-9 text-right font-mono tabular-nums"
-const CAPTION = "col-span-3 row-start-2 truncate text-muted-foreground"
+  "[&>[data-slot=progress-track]]:h-1.5 [&>[data-slot=progress-track]]:bg-foreground/15"
+const CAPTION = "text-[11px] text-muted-foreground/70"
 
 /**
- * One quota window. The bar fills with what is left, not what was spent, so a
- * fuller bar always means a better account to route through. The shape never
- * changes between states; only the emphasis moves.
+ * One quota window inside an account card: name and remaining percentage on the
+ * first line, the bar under them, and the reset countdown beneath. The bar
+ * fills with what is left, not what was spent, so a fuller bar always means a
+ * better account to route through.
  */
 export function QuotaMeter({
   window,
@@ -59,34 +52,37 @@ export function QuotaMeter({
   )
 
   // An empty slot still holds its place, so both windows stay on screen and the
-  // rows below keep their alignment.
+  // cards keep the same height.
   if (!window || remaining === null) {
+    const uncapped = !window && known
     return (
       <div
         data-slot="quota-meter"
         aria-label={label}
         className={cn(METER, className)}
       >
-        <span className={LABEL}>{label}</span>
+        <div className={HEAD}>
+          <span className="truncate">{label}</span>
+          <span
+            aria-hidden="true"
+            className="shrink-0 text-muted-foreground tabular-nums"
+          >
+            {uncapped ? "∞" : null}
+          </span>
+        </div>
         {/* No cap means nothing is spent, so the rule is drawn full rather than
             empty. It is not a progressbar: there is no measurement behind it. */}
         <div
           data-slot="quota-bar"
           className={cn(
-            "col-start-2 row-start-1 h-[3px] rounded-full",
-            !window && known ? "bg-primary" : "bg-foreground/20"
+            "h-1.5 rounded-full",
+            uncapped ? "bg-primary" : "bg-foreground/15"
           )}
         />
-        {/* Holds the number column open so both windows keep the same bar
-            length, and stands where a percentage would when there is no cap.
-            The caption carries the words, so the symbol stays decorative. */}
-        <span aria-hidden="true" className={VALUE}>
-          {!window && known ? "∞" : null}
-        </span>
         <span className={CAPTION}>
           {/* A window reported without a number is 未报告; an absent window on
               a bucket upstream did report means there is no such cap. */}
-          {window ? t("未报告") : known ? t("无限制") : fallback}
+          {window ? t("未报告") : uncapped ? t("无限制") : fallback}
         </span>
       </div>
     )
@@ -111,20 +107,31 @@ export function QuotaMeter({
         className
       )}
     >
-      {/* A plain span, not ProgressLabel: base-ui would wire it as
-          aria-labelledby and shadow the fuller aria-label above. */}
-      <span className={LABEL}>{label}</span>
-      <ProgressValue
+      <div className={HEAD}>
+        {/* A plain span, not ProgressLabel: base-ui would wire it as
+            aria-labelledby and shadow the fuller aria-label above. */}
+        <span className="truncate">{label}</span>
+        <ProgressValue
+          className={cn(
+            "ml-0 shrink-0 tabular-nums",
+            empty
+              ? "text-destructive"
+              : tight
+                ? "text-warning"
+                : "text-muted-foreground"
+          )}
+        >
+          {() => t("{{value}}%", { value: Math.round(remaining) })}
+        </ProgressValue>
+      </div>
+      {/* Progress appends its own track last, so the caption is ordered past it. */}
+      <span
         className={cn(
-          VALUE,
-          "ml-0",
-          empty && "text-destructive",
-          tight && "text-warning"
+          "order-3",
+          CAPTION,
+          empty && "font-medium text-foreground"
         )}
       >
-        {() => t("{{value}}%", { value: Math.round(remaining) })}
-      </ProgressValue>
-      <span className={cn(CAPTION, empty && "font-medium text-foreground")}>
         {t("{{time}}重置", { time: formatCountdown(window.resetsAt) })}
       </span>
     </Progress>

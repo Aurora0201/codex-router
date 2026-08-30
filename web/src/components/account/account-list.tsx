@@ -1,13 +1,12 @@
-import { useMemo, useState } from "react"
-import { RouteIcon, RouteOffIcon, SearchXIcon } from "lucide-react"
+import { useEffect, useMemo, useRef, useState } from "react"
+import { RouteIcon, RouteOffIcon, SearchIcon, SearchXIcon } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
+import { AccountCard } from "./account-card"
 import { AccountDetailSheet } from "./account-detail-sheet"
-import { ACTIONS_CELL, AccountRow, ROW_COLUMNS } from "./account-row"
 import { AccountStatus } from "./account-status-badge"
 import type { AccountAction } from "./account-actions"
 import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,11 +25,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty"
-import { Input } from "@/components/ui/input"
 import { RadioGroup } from "@/components/ui/radio-group"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
-import { useIsMobile } from "@/hooks/use-mobile"
 import {
   isDisabled,
   isRoutable,
@@ -46,12 +41,15 @@ import type {
 
 type AccountFilter = "all" | "routable" | "attention" | "disabled"
 
-/**
- * A plain rule rather than the Separator primitive: its `data-vertical:self-stretch`
- * outranks a plain `self-center`, which top-aligns it against its neighbours, and
- * `role="separator"` is noise inside a run of inline metadata.
- */
-const RULE = "h-3.5 w-px shrink-0 self-center bg-border"
+const PANEL = "rounded-2xl bg-card p-2 ring-1 ring-foreground/10"
+
+/** Fades hint that the grid runs past the edge of its own scroll area. */
+function readFades(el: HTMLElement) {
+  return {
+    top: el.scrollTop > 1,
+    bottom: el.scrollTop < el.scrollHeight - el.clientHeight - 1,
+  }
+}
 
 export function AccountList({
   accounts,
@@ -72,7 +70,6 @@ export function AccountList({
   ): Promise<void>
 }) {
   const { t } = useTranslation()
-  const mobile = useIsMobile()
   const [now] = useState(Date.now)
   const [query, setQuery] = useState("")
   const [filter, setFilter] = useState<AccountFilter>("all")
@@ -82,6 +79,20 @@ export function AccountList({
     credit: RateLimitResetCreditView
     key: string
   } | null>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const [fades, setFades] = useState({ top: false, bottom: false })
+  // The grid's own height decides this, so remeasure when it changes as well as
+  // on scroll.
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const update = () => setFades(readFades(el))
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(el)
+    if (el.firstElementChild) observer.observe(el.firstElementChild)
+    return () => observer.disconnect()
+  }, [])
 
   const counts = useMemo(
     () => ({
@@ -96,8 +107,7 @@ export function AccountList({
   const normalized = query.trim().toLowerCase()
   // Filtered but never re-sorted. The server returns accounts by creation date,
   // which is the one order that does not move: ranking by status or by
-  // remaining quota reshuffled the list every time an account was used, so the
-  // row you were aiming at was rarely where you last saw it.
+  // remaining quota reshuffled the grid every time an account was used.
   const filtered = useMemo(
     () =>
       accounts.filter((account) => {
@@ -134,46 +144,45 @@ export function AccountList({
 
   return (
     <>
-      <Card className="gap-0 py-0 lg:min-h-0 lg:flex-1">
-        <div className="flex min-h-13 items-center gap-x-3 gap-y-2 border-b bg-muted/30 px-4 py-2.5 max-sm:flex-wrap sm:px-6">
-          <RouteIcon
-            aria-hidden="true"
-            className={cn(
-              "size-4 shrink-0",
-              active ? "text-primary" : "text-muted-foreground"
-            )}
-          />
+      <section className={cn("shrink-0", PANEL)}>
+        <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl bg-primary/8 p-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-card text-primary">
+              <RouteIcon aria-hidden="true" className="size-[18px]" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-xs text-muted-foreground/70">
+                {t("当前请求路由")}
+              </p>
+              <p
+                className={cn(
+                  "truncate text-sm font-semibold",
+                  active ? "font-mono" : "font-normal text-muted-foreground"
+                )}
+              >
+                {active
+                  ? shortAccountId(active.chatgptAccountId)
+                  : t("尚未选择路由账号 · 请求使用 Codex 当前登录账号透传")}
+              </p>
+            </div>
+          </div>
           {active ? (
-            <>
-              {/* One non-wrapping group, so the rules never end up stranded at
-                  the start or end of a wrapped line. */}
-              <div className="flex min-w-0 items-center gap-x-3">
-                <span className="shrink-0 text-sm text-muted-foreground">
-                  {t("请求经由")}
-                </span>
-                <span className="truncate font-mono text-sm font-medium">
-                  {shortAccountId(active.chatgptAccountId)}
-                </span>
-                <span aria-hidden="true" className={RULE} />
-                <div className="shrink-0">
+            <div className="flex items-center gap-5 text-right text-xs">
+              <div>
+                <p className="text-muted-foreground/70">{t("认证状态")}</p>
+                <div className="mt-0.5 flex justify-end">
                   <AccountStatus account={active} />
                 </div>
-                {activeRemaining !== null ? (
-                  <>
-                    <span
-                      aria-hidden="true"
-                      className={cn(RULE, "max-sm:hidden")}
-                    />
-                    <span className="shrink-0 text-xs text-muted-foreground max-sm:hidden">
-                      {t("最紧额度剩余 {{value}}%", {
-                        value: Math.round(activeRemaining),
-                      })}
-                    </span>
-                  </>
-                ) : null}
+              </div>
+              <div>
+                <p className="text-muted-foreground/70">{t("紧要额度")}</p>
+                <p className="mt-0.5 font-medium tabular-nums">
+                  {activeRemaining === null
+                    ? t("未报告")
+                    : t("{{value}}%", { value: Math.round(activeRemaining) })}
+                </p>
               </div>
               <Button
-                className="ml-auto shrink-0"
                 variant="ghost"
                 size="sm"
                 disabled={busyId !== null}
@@ -182,76 +191,63 @@ export function AccountList({
                 <RouteOffIcon data-icon="inline-start" />
                 {t("清除路由")}
               </Button>
-            </>
-          ) : (
-            <span className="text-sm text-muted-foreground">
-              {t("尚未选择路由账号 · 请求使用 Codex 当前登录账号透传")}
-            </span>
-          )}
+            </div>
+          ) : null}
         </div>
+      </section>
 
-        <div className="flex flex-col gap-2 border-b px-4 py-2.5 sm:flex-row sm:items-center sm:px-6">
-          <Input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            aria-label={t("搜索授权账号")}
-            placeholder={t("搜索 Account ID 或邮箱")}
-            className="sm:max-w-xs"
-          />
-          <ToggleGroup
-            value={[filter]}
-            onValueChange={(value: string[]) =>
-              setFilter((value[0] as AccountFilter | undefined) ?? "all")
-            }
-            variant="outline"
-            size="sm"
-            spacing={0}
-            className="sm:ml-auto"
-          >
+      <section
+        className={cn("flex min-h-0 flex-1 flex-col overflow-hidden", PANEL)}
+      >
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-4 p-2">
+          <label className="flex h-9 w-full items-center gap-2 rounded-xl bg-muted px-3 text-muted-foreground sm:w-80">
+            <SearchIcon aria-hidden="true" className="size-4 shrink-0" />
+            <input
+              className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/70"
+              type="search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              aria-label={t("搜索授权账号")}
+              placeholder={t("搜索 Account ID 或邮箱")}
+            />
+          </label>
+
+          <div className="flex rounded-xl bg-muted p-1">
             {options.map((option) => (
-              <ToggleGroupItem
+              <button
                 key={option.value}
-                value={option.value}
+                type="button"
+                aria-pressed={filter === option.value}
                 aria-label={t("{{label}}（{{count}}）", {
                   label: option.label,
                   count: option.count,
                 })}
+                onClick={() => setFilter(option.value)}
+                className={cn(
+                  "h-7 cursor-pointer rounded-lg px-2.5 text-xs font-medium outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                  filter === option.value
+                    ? "bg-card text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
               >
-                <span aria-hidden="true">{option.label}</span>
-                <span
-                  aria-hidden="true"
-                  className="font-mono tabular-nums opacity-60"
-                >
+                <span aria-hidden="true">{option.label}</span>{" "}
+                <span aria-hidden="true" className="tabular-nums opacity-60">
                   {option.count}
                 </span>
-              </ToggleGroupItem>
+              </button>
             ))}
-          </ToggleGroup>
+          </div>
         </div>
 
-        {filtered.length ? (
-          <>
-            {mobile ? null : (
-              <div
-                aria-hidden="true"
-                className="flex h-10 items-center gap-4 border-b px-4 text-sm font-medium text-foreground sm:px-6"
-              >
-                <span className="size-4 shrink-0" />
-                <span className="size-12 shrink-0" />
-                <div className={cn("grid min-w-0 flex-1 gap-x-6", ROW_COLUMNS)}>
-                  <span>{t("账号")}</span>
-                  <span>{t("状态")}</span>
-                  <span>{t("剩余额度")}</span>
-                  <span />
-                  {/* Matches the actions button, so the tracks resolve the same
-                      width here as they do on a row. */}
-                  <span className={cn("size-7", ACTIONS_CELL)} />
-                </div>
-              </div>
-            )}
-            <ScrollArea className="lg:min-h-0 lg:flex-1">
+        <div className="relative min-h-0 flex-1">
+          <div
+            ref={scrollRef}
+            onScroll={(event) => setFades(readFades(event.currentTarget))}
+            className="subtle-scrollbar h-full overflow-y-auto"
+          >
+            {filtered.length ? (
               <RadioGroup
-                className="@container/rows block"
+                className="grid gap-3 p-2 pt-1 pb-4 md:grid-cols-2 xl:grid-cols-3"
                 aria-label={t("选择路由账号")}
                 value={active?.id ?? null}
                 onValueChange={(value: unknown) => {
@@ -260,43 +256,57 @@ export function AccountList({
                 }}
               >
                 {filtered.map((account) => (
-                  <AccountRow
+                  <AccountCard
                     key={account.id}
                     account={account}
                     busy={busyId === account.id}
                     now={now}
-                    mobile={mobile}
                     onAction={(action) => handleAction(account, action)}
                   />
                 ))}
               </RadioGroup>
-            </ScrollArea>
-          </>
-        ) : (
-          <Empty className="py-12">
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <SearchXIcon />
-              </EmptyMedia>
-              <EmptyTitle>{t("没有匹配的账号")}</EmptyTitle>
-              <EmptyDescription>
-                {t("调整搜索内容或状态筛选后再试。")}
-              </EmptyDescription>
-            </EmptyHeader>
-            <EmptyContent>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setQuery("")
-                  setFilter("all")
-                }}
-              >
-                {t("清除筛选")}
-              </Button>
-            </EmptyContent>
-          </Empty>
-        )}
-      </Card>
+            ) : (
+              <Empty className="py-12">
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <SearchXIcon />
+                  </EmptyMedia>
+                  <EmptyTitle>{t("没有匹配的账号")}</EmptyTitle>
+                  <EmptyDescription>
+                    {t("调整搜索内容或状态筛选后再试。")}
+                  </EmptyDescription>
+                </EmptyHeader>
+                <EmptyContent>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setQuery("")
+                      setFilter("all")
+                    }}
+                  >
+                    {t("清除筛选")}
+                  </Button>
+                </EmptyContent>
+              </Empty>
+            )}
+          </div>
+
+          <div
+            aria-hidden="true"
+            className={cn(
+              "pointer-events-none absolute inset-x-0 top-0 h-6 bg-linear-to-b from-card to-transparent transition-opacity duration-150",
+              fades.top ? "opacity-100" : "opacity-0"
+            )}
+          />
+          <div
+            aria-hidden="true"
+            className={cn(
+              "pointer-events-none absolute inset-x-0 bottom-0 h-6 bg-linear-to-t from-card to-transparent transition-opacity duration-150",
+              fades.bottom ? "opacity-100" : "opacity-0"
+            )}
+          />
+        </div>
+      </section>
 
       <AccountDetailSheet
         account={detail}

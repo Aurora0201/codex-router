@@ -66,7 +66,7 @@ describe("AccountsPage", () => {
     expect(screen.queryByText("运行概览")).not.toBeInTheDocument()
     expect(screen.queryByRole("alert")).not.toBeInTheDocument()
     expect(
-      screen.getByRole("textbox", { name: "搜索授权账号" })
+      screen.getByRole("searchbox", { name: "搜索授权账号" })
     ).toBeInTheDocument()
   })
 

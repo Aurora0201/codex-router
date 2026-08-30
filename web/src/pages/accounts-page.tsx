@@ -193,7 +193,7 @@ export function AccountsPage({
     ) ?? false
 
   return (
-    <section className="flex flex-col gap-5 lg:h-full lg:min-h-0">
+    <section className="flex flex-col gap-4 lg:h-full lg:min-h-0">
       <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">
@@ -207,7 +207,7 @@ export function AccountsPage({
         </div>
         <div className="flex w-full gap-2 sm:w-auto">
           <Button
-            className="flex-1 sm:flex-none"
+            className="h-9 flex-1 rounded-xl sm:flex-none"
             variant="outline"
             disabled={refreshingAll || accounts.length === 0}
             onClick={() => void refreshAll(true)}
@@ -219,7 +219,7 @@ export function AccountsPage({
             {t("刷新全部状态")}
           </Button>
           <Button
-            className="flex-1 sm:flex-none"
+            className="h-9 flex-1 rounded-xl sm:flex-none"
             onClick={() => setLoginOpen(true)}
           >
             <PlusIcon data-icon="inline-start" />

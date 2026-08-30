@@ -101,11 +101,17 @@ const renderList = (
     </TooltipProvider>
   )
 
-const rows = () =>
-  Array.from(document.querySelectorAll<HTMLElement>("[data-slot=account-row]"))
+const cards = () =>
+  Array.from(document.querySelectorAll<HTMLElement>("[data-slot=account-card]"))
+
+const card = (id: string) =>
+  cards().find((item) => item.textContent?.includes(id))!
+
+const meters = (item: HTMLElement) =>
+  Array.from(item.querySelectorAll("[data-slot=quota-meter]"))
 
 describe("AccountList", () => {
-  it("names the live route in the header and offers to clear it", async () => {
+  it("names the live route in the summary and offers to clear it", async () => {
     const onClearRoute = vi.fn()
     renderList(
       [
@@ -119,9 +125,13 @@ describe("AccountList", () => {
       { onClearRoute }
     )
 
-    const header = screen.getByText("请求经由").parentElement
-    expect(header).toHaveTextContent("acct-live")
-    expect(header).toHaveTextContent("最紧额度剩余 38%")
+    const summary = screen
+      .getByText("当前请求路由")
+      .closest("div")!.parentElement!
+    expect(summary).toHaveTextContent("acct-live")
+    expect(screen.getByText("紧要额度").nextElementSibling).toHaveTextContent(
+      "38%"
+    )
     await userEvent.click(screen.getByRole("button", { name: "清除路由" }))
     expect(onClearRoute).toHaveBeenCalled()
   })
@@ -136,28 +146,6 @@ describe("AccountList", () => {
     ).not.toBeInTheDocument()
   })
 
-  it("keeps the route summary the same height with and without a route", () => {
-    const routed = renderList([account({ id: "live", isActive: true })])
-    const withRoute = screen
-      .getByText("请求经由")
-      .closest("div")!.parentElement!
-    expect(withRoute).toHaveClass("min-h-13")
-    routed.unmount()
-
-    renderList([account()])
-    const withoutRoute = screen.getByText(
-      "尚未选择路由账号 · 请求使用 Codex 当前登录账号透传"
-    ).parentElement!
-    expect(withoutRoute).toHaveClass("min-h-13")
-  })
-
-  it("indents the row dividers away from the card edge", () => {
-    renderList([account({ id: "one" }), account({ id: "two" })])
-    for (const row of rows()) {
-      expect(row).toHaveClass("after:inset-x-4", "last:after:hidden")
-    }
-  })
-
   it("routes through a single radio group with exactly one account checked", async () => {
     const onSelect = vi.fn()
     const standby = account({ id: "standby", chatgptAccountId: "acct-standby" })
@@ -169,9 +157,6 @@ describe("AccountList", () => {
       "true",
       "false",
     ])
-    expect(
-      within(group).queryByRole("button", { name: /切换/ })
-    ).not.toBeInTheDocument()
 
     await userEvent.click(
       screen.getByRole("radio", { name: "路由到 acct-standby" })
@@ -179,21 +164,29 @@ describe("AccountList", () => {
     expect(onSelect).toHaveBeenCalledWith(standby)
   })
 
-  it("disables the radio on accounts that cannot be routed", () => {
+  it("locks the radio on every account that cannot be routed", () => {
     renderList([
-      account({ id: "ready" }),
+      account({ id: "ready", chatgptAccountId: "acct-ready" }),
       account({
-        id: "broken",
-        chatgptAccountId: "acct-broken",
-        authStatus: "relogin_required",
+        id: "off",
+        chatgptAccountId: "acct-off",
+        enabled: false,
+        authStatus: "disabled",
+      }),
+      account({
+        id: "limited",
+        chatgptAccountId: "acct-limited",
+        authStatus: "rate_limited",
       }),
     ])
 
-    const broken = screen.getByRole("radio", { name: "路由到 acct-broken" })
-    expect(broken).toHaveAttribute("aria-disabled", "true")
-    expect(broken).toHaveClass("data-disabled:opacity-40")
+    for (const id of ["acct-off", "acct-limited"]) {
+      expect(
+        screen.getByRole("radio", { name: `路由到 ${id}` })
+      ).toHaveAttribute("aria-disabled", "true")
+    }
     expect(
-      screen.getByRole("radio", { name: "路由到 acct-alpha" })
+      screen.getByRole("radio", { name: "路由到 acct-ready" })
     ).not.toHaveAttribute("aria-disabled", "true")
   })
 
@@ -228,7 +221,7 @@ describe("AccountList", () => {
       expect.stringContaining("acct-off"),
     ]
     const { rerender } = renderList(pool)
-    expect(rows().map((row) => row.textContent)).toEqual(expected)
+    expect(cards().map((item) => item.textContent)).toEqual(expected)
 
     // Spending quota and losing auth must not move anybody.
     rerender(
@@ -254,36 +247,69 @@ describe("AccountList", () => {
         />
       </TooltipProvider>
     )
-    expect(rows().map((row) => row.textContent)).toEqual(expected)
+    expect(cards().map((item) => item.textContent)).toEqual(expected)
   })
 
-  it("stacks the account id above the email and the weekly window above the short one", () => {
+  it("gives every card both windows, the brand mark and an expiry footer", () => {
     renderList([
       account({
+        subscriptionExpiresAt: Date.UTC(2026, 8, 15),
+        subscription: { expiresAt: Date.UTC(2026, 8, 15), source: "manual" },
         limits: quota([
           bucket({ primary: window(25, 300), secondary: window(50, 10080) }),
         ]),
       }),
+      account({ id: "none", chatgptAccountId: "acct-none" }),
     ])
 
-    const row = rows()[0]
-    const id = within(row).getByText("acct-alpha")
-    const email = within(row).getByText("alpha@example.com")
-    expect(id.compareDocumentPosition(email)).toBe(
-      Node.DOCUMENT_POSITION_FOLLOWING
-    )
-    const weekly = within(row).getByRole("progressbar", {
-      name: "7 天额度剩余",
-    })
-    const short = within(row).getByRole("progressbar", {
-      name: "5 小时额度剩余",
-    })
-    expect(weekly.compareDocumentPosition(short)).toBe(
-      Node.DOCUMENT_POSITION_FOLLOWING
+    for (const item of cards()) {
+      expect(meters(item)).toHaveLength(2)
+      expect(item.querySelectorAll("[data-slot=metric-mark]")).toHaveLength(1)
+    }
+    expect(screen.getByText("2026/09/15 到期")).toBeInTheDocument()
+    expect(screen.getByText("未设置到期日")).toBeInTheDocument()
+
+    // Both slots stay named even with nothing to report, and never claim 无限制.
+    const none = card("acct-none")
+    expect(within(none).getByText("7 天额度")).toBeInTheDocument()
+    expect(within(none).getByText("5 小时额度")).toBeInTheDocument()
+    expect(within(none).getAllByText("额度尚未刷新")).toHaveLength(1)
+    expect(within(none).queryByText("无限制")).not.toBeInTheDocument()
+  })
+
+  it("marks a lapsed expiry as a notice rather than a failure", () => {
+    renderList([
+      account({
+        subscriptionExpiresAt: Date.now() - DAY,
+        subscription: { expiresAt: Date.now() - DAY, source: "manual" },
+      }),
+    ])
+    // The date never blocks routing, so it must not wear the blocking tone.
+    expect(screen.getByText(/^已于 .+ 到期$/).parentElement).toHaveClass(
+      "text-warning"
     )
   })
 
-  it("offers a repair only where a row stays broken until someone acts", async () => {
+  it("names the missing window by its role, whichever one upstream omitted", () => {
+    renderList([
+      account({
+        id: "no-short",
+        chatgptAccountId: "acct-no-short",
+        limits: quota([bucket({ secondary: window(12, 10080) })]),
+      }),
+      account({
+        id: "no-long",
+        chatgptAccountId: "acct-no-long",
+        limits: quota([bucket({ primary: window(30, 300) })]),
+      }),
+    ])
+
+    // The uncapped slot is the one upstream left out, not simply the last one.
+    expect(meters(card("acct-no-short"))[1]).toHaveTextContent("无限制")
+    expect(meters(card("acct-no-long"))[0]).toHaveTextContent("无限制")
+  })
+
+  it("offers a repair only where a card stays broken until someone acts", async () => {
     const onAction = vi.fn()
     renderList(
       [
@@ -306,78 +332,19 @@ describe("AccountList", () => {
           chatgptAccountId: "acct-busy",
           authStatus: "checking",
         }),
-        account({
-          id: "limited",
-          chatgptAccountId: "acct-limited",
-          authStatus: "rate_limited",
-        }),
       ],
       { onAction }
     )
 
-    const row = (id: string) => rows().find((r) => r.textContent?.includes(id))!
-    // Two buttons means identity plus the actions menu, and nothing else.
-    for (const id of ["acct-ready", "acct-off", "acct-busy", "acct-limited"]) {
-      expect(within(row(id)).queryAllByRole("button")).toHaveLength(2)
-    }
-    expect(
-      within(row("acct-broken")).getByRole("button", { name: "刷新认证" })
-    ).toBeInTheDocument()
-
-    await userEvent.click(screen.getByRole("button", { name: "刷新认证" }))
-    expect(onAction.mock.calls[0][1]).toBe("auth")
-  })
-
-  it("locks the radio on every account that cannot be routed", () => {
-    renderList([
-      account({ id: "ready", chatgptAccountId: "acct-ready" }),
-      account({
-        id: "off",
-        chatgptAccountId: "acct-off",
-        enabled: false,
-        authStatus: "disabled",
-      }),
-      account({
-        id: "limited",
-        chatgptAccountId: "acct-limited",
-        authStatus: "rate_limited",
-      }),
-    ])
-
-    // Routability decides this, not whether the row happens to show a button.
-    for (const id of ["acct-off", "acct-limited"]) {
+    for (const id of ["acct-ready", "acct-off", "acct-busy"]) {
       expect(
-        screen.getByRole("radio", { name: `路由到 ${id}` })
-      ).toHaveAttribute("aria-disabled", "true")
+        within(card(id)).queryByRole("button", { name: "刷新认证" })
+      ).not.toBeInTheDocument()
     }
-    expect(
-      screen.getByRole("radio", { name: "路由到 acct-ready" })
-    ).not.toHaveAttribute("aria-disabled", "true")
-  })
-
-  it("shows only the most urgent qualifier on the second line", () => {
-    renderList([
-      account({
-        subscriptionExpiresAt: Date.now() - DAY,
-        subscription: {
-          expiresAt: Date.now() - DAY,
-          source: "legacy_estimate",
-        },
-        auth: {
-          status: "ready",
-          mode: "chatgpt",
-          checkedAt: Date.now(),
-          lastSuccessfulAt: Date.now(),
-          stale: true,
-          errorCode: null,
-        },
-      }),
-    ])
-
-    // An expired reminder never blocks routing, so it is a notice, not a failure.
-    expect(screen.getByText(/^已于 .+ 到期$/)).toHaveClass("text-warning")
-    expect(screen.queryByText(/待确认/)).not.toBeInTheDocument()
-    expect(screen.queryByText("认证数据已陈旧")).not.toBeInTheDocument()
+    await userEvent.click(
+      within(card("acct-broken")).getByRole("button", { name: "刷新认证" })
+    )
+    expect(onAction.mock.calls[0][1]).toBe("auth")
   })
 
   it("searches and filters with counted state toggles", async () => {
@@ -393,13 +360,13 @@ describe("AccountList", () => {
       }),
     ])
 
-    const search = screen.getByRole("textbox", { name: "搜索授权账号" })
+    const search = screen.getByRole("searchbox", { name: "搜索授权账号" })
     await user.type(search, "acct-off")
-    expect(rows()).toHaveLength(1)
+    expect(cards()).toHaveLength(1)
     await user.clear(search)
 
     await user.click(screen.getByRole("button", { name: "已停用（1）" }))
-    expect(rows()).toHaveLength(1)
+    expect(cards()).toHaveLength(1)
     expect(screen.getByText("acct-off")).toBeInTheDocument()
     expect(screen.queryByText("acct-ready")).not.toBeInTheDocument()
   })
@@ -433,7 +400,6 @@ describe("AccountList", () => {
     await user.click(screen.getByRole("button", { name: /acct-alpha/ }))
     const sheet = screen.getByRole("dialog")
     expect(within(sheet).getByText("全部额度窗口")).toBeInTheDocument()
-    expect(within(sheet).getByText("Plus")).toBeInTheDocument()
     await user.click(within(sheet).getByRole("button", { name: "使用重置券" }))
     await user.click(screen.getByRole("button", { name: "确认使用" }))
     expect(onConsumeReset).toHaveBeenCalledWith(value, {

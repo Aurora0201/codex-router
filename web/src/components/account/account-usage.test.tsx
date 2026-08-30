@@ -65,9 +65,7 @@ describe("QuotaMeter", () => {
       <QuotaMeter window={null} placeholderMins={300} />
     )
     expect(screen.getByText("5 小时额度")).toBeInTheDocument()
-    // The state reads on the caption line, where the countdown sits on a
-    // measured window, so the two windows stay parallel.
-    expect(screen.getByText("无限制")).toHaveClass("row-start-2")
+    expect(screen.getByText("无限制")).toBeInTheDocument()
     expect(container.querySelector("[data-slot=quota-bar]")).toHaveClass(
       "bg-primary"
     )
@@ -80,15 +78,14 @@ describe("QuotaMeter", () => {
 
     expect(screen.getByText("额度尚未刷新")).toBeInTheDocument()
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument()
-    expect(container.querySelector("[data-slot=quota-meter]")).toHaveClass(
-      "row-span-2"
-    )
+    // Never claims there is no cap when nothing was ever fetched.
+    expect(screen.queryByText("无限制")).not.toBeInTheDocument()
     expect(container.querySelector("[data-slot=quota-bar]")).toHaveClass(
-      "bg-foreground/20"
+      "bg-foreground/15"
     )
   })
 
-  it("runs the bar between the label and the number, not under them", () => {
+  it("puts the name and the number on one line, the bar beneath, then the reset", () => {
     const { container } = render(
       <QuotaMeter
         window={{
@@ -100,17 +97,14 @@ describe("QuotaMeter", () => {
     )
 
     const meter = container.querySelector("[data-slot=quota-meter]")!
-    // Label, bar and number share the first row; the countdown takes the second.
-    expect(screen.getByText("5 小时额度")).toHaveClass(
-      "col-start-1",
-      "row-start-1"
+    const head = screen.getByText("5 小时额度").parentElement!
+    expect(head).toContainElement(screen.getByText("80%"))
+    const track = meter.querySelector("[data-slot=progress-track]")!
+    expect(head.compareDocumentPosition(track)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
     )
-    expect(meter).toHaveClass(
-      "[&>[data-slot=progress-track]]:col-start-2",
-      "[&>[data-slot=progress-track]]:row-start-1"
-    )
-    expect(screen.getByText("80%")).toHaveClass("col-start-3", "row-start-1")
-    expect(screen.getByText("1 小时后重置")).toHaveClass("row-start-2")
+    // The countdown is ordered past the track Progress appends after it.
+    expect(screen.getByText("1 小时后重置")).toHaveClass("order-3")
   })
 
   it("renders an unreported window as 未报告 instead of a zeroed bar", () => {

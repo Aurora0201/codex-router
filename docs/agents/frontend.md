@@ -43,6 +43,13 @@
 
 ## Accounts page rules
 
+> **Superseded, pending rewrite.** The account routing page has been rebuilt
+> from a new UI design (`D:\codespace\my-front`) as a card grid, so the row,
+> baseline and column rules below no longer describe the code. They are kept
+> only for the parts that are still true — identity, quota semantics, tone, and
+> ordering — and this section will be rewritten once the redesign settles.
+
+
 - The page is a comparison surface: exactly one account is live and the rest are standby reserves, and the layout must encode that asymmetry rather than render peer cards.
 - The account identity shown first is the real ChatGPT Account ID (`chatgptAccountId`) in a monospace font, with email and plan as auxiliary information.
 - Never show a user-entered account label input; add-account dialog starts official Codex Browser OAuth with no label.
