@@ -7,6 +7,77 @@ import { createGatewayServiceFixture } from "@/test/gateway-service-fixture"
 import { RequestLogsPage } from "./request-logs-page"
 
 describe("RequestLogsPage", () => {
+  it("puts the coarse slice in the toolbar and every hidden filter on a chip", async () => {
+    const user = userEvent.setup()
+    const service = createGatewayServiceFixture()
+    const getRequestLogs = vi.fn().mockResolvedValue({
+      items: [],
+      summary: {
+        requests: 0,
+        errors: 0,
+        rejected: 0,
+        cancelled: 0,
+        availabilityRequests: 0,
+        availabilityErrors: 0,
+        averageDurationMs: null,
+      },
+      timeline: [],
+      histogram: [],
+      failureSources: [{ source: "upstream_http", count: 3 }],
+      diagnosticCodes: [],
+      nextCursor: null,
+      pagination: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0 },
+    })
+    service.getRequestLogs = getRequestLogs
+    render(
+      <Toaster>
+        <RequestLogsPage
+          service={service}
+          accounts={service.snapshot.accounts.accounts}
+          enabled
+          initialErrorsOnly={false}
+          revision={0}
+          onShowPreferences={() => {}}
+        />
+      </Toaster>
+    )
+
+    // "Show me the failures" is the common move, so it is one click in the
+    // toolbar rather than a select buried among the rare filters.
+    const tabs = await screen.findByRole("tablist", { name: "请求结果筛选" })
+    expect(tabs).toBeInTheDocument()
+    await user.click(screen.getByRole("tab", { name: "故障" }))
+    await waitFor(() =>
+      expect(getRequestLogs).toHaveBeenLastCalledWith(
+        expect.objectContaining({ status: "error" })
+      )
+    )
+    // A tab shows its own state, so it needs no chip.
+    expect(screen.queryByRole("button", { name: /移除筛选/ })).toBeNull()
+
+    // Anything set out of sight does get one, and the chip lives in the
+    // toolbar rather than inside the popover that set it.
+    await user.click(screen.getByRole("button", { name: /上游 HTTP/ }))
+    const chip = await screen.findByRole("button", {
+      name: "移除筛选 upstream_http",
+    })
+    expect(chip.closest("[data-slot=popover-content]")).toBeNull()
+    await waitFor(() =>
+      expect(getRequestLogs).toHaveBeenLastCalledWith(
+        expect.objectContaining({ failureSource: "upstream_http" })
+      )
+    )
+
+    // Removing the chip drops the field entirely rather than sending it as
+    // undefined, so the query stops carrying it at all.
+    await user.click(chip)
+    await waitFor(() =>
+      expect(getRequestLogs.mock.lastCall?.[0]).not.toHaveProperty(
+        "failureSource"
+      )
+    )
+  })
+
   it("shows summaries, safe row metadata, and the details sheet", async () => {
     const service = createGatewayServiceFixture()
     service.getRequestLogs = vi.fn().mockResolvedValue({

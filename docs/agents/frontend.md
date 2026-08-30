@@ -152,7 +152,10 @@ other, one of them is wrong; fix it rather than choosing freely.
 - A healthy bucket wears the measurement blue, not a green badge of health: ninety-six cells of "all clear" would shout down the few worth clicking.
 - Anything counted or shaped over the whole window is aggregated server-side. The timeline is capped at 500 rows, so counting it stops at 500 and its oldest buckets read as idle on a busy day — `histogram`, `failureSources` and `diagnosticCodes` all narrow with the same filter as the rows.
 - A failed row carries `bg-destructive/5`. A log is scanned for its failures, so they must be findable without reading the outcome column — this is the exception to "a default state never wears an accent".
-- Every filter in force has a removable chip, including a custom window. Clicking the histogram sets one and deselects every range tab, so without a chip there would be nothing on screen to clear.
+- The toolbar carries three controls and no more: a search field, the coarse outcome slice as tabs, and one door to everything rarer. "Show me the failures" is the common move and must cost one click, not the same as picking a protocol error code.
+- A filter visible in its own control needs no chip; a filter the popover hides always gets one, and the chips sit in the toolbar rather than inside the popover that set them. A filter you cannot see is a filter you will forget you set.
+- The advanced popover groups its fields by the question each answers (time window / request / failure detail). Eight fields in a row is a wall, not a form.
+- Removing a chip deletes the field rather than sending it as `undefined`, so the query stops carrying it; a chip entry must therefore be `undefined` when unset, not `false`.
 
 ## Interaction and accessibility
 

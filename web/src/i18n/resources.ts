@@ -3,6 +3,10 @@ export const zhCN = {
 } as const
 
 export const en = {
+  搜索请求: "Search requests",
+  请求结果筛选: "Filter by outcome",
+  时间窗口: "Time window",
+  故障细节: "Failure detail",
   "{{range}}的请求": "Requests, {{range}}",
   "{{percent}}% 成功": "{{percent}}% succeeded",
   请求量与结果的时间分布: "Request volume and outcomes over time",

@@ -95,7 +95,7 @@ import {
   RequestVolumeHero,
 } from "@/components/request/request-log-panels"
 import { WebSocketConnectionLogsPanel } from "@/components/request/websocket-connection-logs-panel"
-import { Field, FieldGroup } from "@/components/ui/field"
+import { FieldGroup } from "@/components/ui/field"
 import { cn } from "@/lib/utils"
 import type {
   AccountView,
@@ -113,6 +113,18 @@ type SelectedRequest = RequestLogView | TimelinePoint
 type AccountOption = { value: string; label: string }
 
 const PAGE_SIZE = 20
+/** The coarse slice most log sessions start from; the exact outcome, the
+ *  failure source and the stage all refine it from 更多筛选. */
+const STATUS_TABS: Array<{
+  value: NonNullable<RequestLogFilters["status"]> | "all"
+  label: string
+}> = [
+  { value: "all", label: "全部" },
+  { value: "success", label: "成功" },
+  { value: "error", label: "故障" },
+  { value: "rejected", label: "拒绝" },
+  { value: "cancelled", label: "取消" },
+]
 const RANGE_OPTIONS: Array<{ value: RequestLogRange; label: string }> = [
   { value: "1h", label: "最近 1 小时" },
   { value: "24h", label: "最近 24 小时" },
@@ -237,6 +249,24 @@ function FilterSelect({
         </SelectGroup>
       </SelectContent>
     </Select>
+  )
+}
+
+/** One question per group, so the popover reads as a form and not a wall. */
+function FilterGroup({
+  title,
+  children,
+}: {
+  title: string
+  children: React.ReactNode
+}) {
+  return (
+    <section className="grid gap-2">
+      <h4 className="text-[11px] text-muted-foreground/70">{title}</h4>
+      <FieldGroup className="grid gap-3 sm:grid-cols-2">
+        {children}
+      </FieldGroup>
+    </section>
   )
 }
 
@@ -756,6 +786,8 @@ export function RequestLogsPage({
             from: new Date(filters.from).toLocaleString(locale),
           }),
     ],
+    ["transport", filters.transport],
+    ["outcome", filters.outcome && t(OUTCOME_LABELS[filters.outcome])],
     ["state", filters.state && t(STATE_LABELS[filters.state])],
     ["failureSource", filters.failureSource],
     ["failureStage", filters.failureStage],
@@ -887,68 +919,53 @@ export function RequestLogsPage({
               className="min-h-0 flex-1"
               bodyClassName="min-h-0 flex-1 gap-3"
             >
+              {/* Three controls, each with one job: what you are looking
+                  for, which slice of results, and everything rarer behind one
+                  door. Two selects sitting in the toolbar made the common case
+                  (show me the failures) cost the same as the rare ones. */}
               <div className="flex flex-wrap items-center gap-2">
-                <FilterSelect
-                  label={t("请求结果")}
-                  value={
-                    filters.status === "error"
-                      ? "error"
-                      : (filters.outcome ?? "all")
-                  }
-                  onChange={(outcome) =>
-                    update(
-                      outcome === "error"
-                        ? { status: "error", outcome: undefined }
-                        : {
-                            status: undefined,
-                            outcome:
-                              outcome === "all"
-                                ? undefined
-                                : (outcome as RequestLogFilters["outcome"]),
-                          }
-                    )
-                  }
-                  items={[
-                    { value: "all", label: t("全部结果") },
-                    { value: "error", label: t("全部故障") },
-                    ...Object.entries(OUTCOME_LABELS).map(([value, label]) => ({
-                      value,
-                      label: t(label),
-                    })),
-                  ]}
-                />
-                <FilterSelect
-                  label={t("传输类型")}
-                  className="w-40"
-                  value={filters.transport ?? "all"}
-                  onChange={(transport) =>
-                    update({
-                      transport:
-                        transport === "all"
-                          ? undefined
-                          : (transport as RequestLogFilters["transport"]),
-                    })
-                  }
-                  items={[
-                    { value: "all", label: t("全部传输") },
-                    { value: "http", label: "HTTP" },
-                    { value: "ws", label: "WebSocket" },
-                    { value: "compact", label: t("压缩") },
-                    { value: "models", label: t("模型") },
-                    { value: "search", label: t("搜索") },
-                  ]}
-                />
-                <div className="relative min-w-64 flex-1">
-                  <SearchIcon className="pointer-events-none absolute top-2 left-2.5 size-4 text-muted-foreground" />
-                  <Input
-                    className="pl-8"
+                <label className="flex h-9 w-full min-w-0 items-center gap-2 rounded-xl bg-card px-3 text-muted-foreground sm:w-72">
+                  <SearchIcon aria-hidden="true" className="size-4 shrink-0" />
+                  <input
+                    className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/70"
+                    type="search"
                     value={queryDraft}
                     onChange={(event) => setQueryDraft(event.target.value)}
+                    aria-label={t("搜索请求")}
                     placeholder={t("搜索路由、请求 ID、账号或错误码")}
                   />
-                </div>
+                </label>
+
+                <Tabs
+                  className="gap-0"
+                  value={filters.status ?? "all"}
+                  onValueChange={(next) =>
+                    update({
+                      status:
+                        next === "all"
+                          ? undefined
+                          : (next as RequestLogFilters["status"]),
+                    })
+                  }
+                >
+                  <TabsList aria-label={t("请求结果筛选")}>
+                    {STATUS_TABS.map((tab) => (
+                      <TabsTab
+                        className="text-xs"
+                        key={tab.value}
+                        value={tab.value}
+                      >
+                        {t(tab.label)}
+                      </TabsTab>
+                    ))}
+                  </TabsList>
+                </Tabs>
+
                 <Popover>
-                  <PopoverTrigger render={<Button variant="outline" />}>
+                  <PopoverTrigger
+                    render={<Button variant="outline" size="sm" />}
+                    className="ml-auto"
+                  >
                     <SlidersHorizontalIcon data-icon="inline-start" />
                     {t("更多筛选")}
                     {advancedEntries.length > 0 && (
@@ -967,40 +984,66 @@ export function RequestLogsPage({
                         {t("摘要和请求列表使用相同筛选范围。")}
                       </PopoverDescription>
                     </PopoverHeader>
-                    {filters.from !== undefined && (
-                      <FieldGroup className="grid gap-3 sm:grid-cols-2">
-                        <Field>
-                          <Input
-                            aria-label={t("开始时间")}
-                            type="datetime-local"
-                            className="w-full"
-                            value={toLocalDateTime(filters.from)}
-                            onChange={(event) =>
-                              event.target.value &&
-                              update({
-                                from: new Date(event.target.value).getTime(),
-                              })
-                            }
-                          />
-                        </Field>
-                        <Field>
-                          <Input
-                            aria-label={t("结束时间")}
-                            type="datetime-local"
-                            className="w-full"
-                            value={toLocalDateTime(filters.to)}
-                            onChange={(event) =>
-                              event.target.value &&
-                              update({
-                                to: new Date(event.target.value).getTime(),
-                              })
-                            }
-                          />
-                        </Field>
-                      </FieldGroup>
-                    )}
-                    <FieldGroup className="grid gap-3 sm:grid-cols-2">
-                      <Field>
+
+                    {/* Grouped by the question each one answers, because eight
+                        fields in a row is a wall, not a form. */}
+                    <div className="grid gap-4">
+                      <FilterGroup title={t("时间窗口")}>
+                        <Input
+                          aria-label={t("开始时间")}
+                          type="datetime-local"
+                          className="w-full"
+                          value={toLocalDateTime(filters.from)}
+                          onChange={(event) =>
+                            update({
+                              from: event.target.value
+                                ? new Date(event.target.value).getTime()
+                                : undefined,
+                            })
+                          }
+                        />
+                        <Input
+                          aria-label={t("结束时间")}
+                          type="datetime-local"
+                          className="w-full"
+                          value={toLocalDateTime(filters.to)}
+                          onChange={(event) =>
+                            update({
+                              to: event.target.value
+                                ? new Date(event.target.value).getTime()
+                                : undefined,
+                            })
+                          }
+                        />
+                      </FilterGroup>
+
+                      <FilterGroup title={t("请求")}>
+                        <FilterSelect
+                          className="w-full"
+                          label={t("传输类型")}
+                          value={filters.transport ?? "all"}
+                          onChange={(value) =>
+                            update({
+                              transport:
+                                value === "all"
+                                  ? undefined
+                                  : (value as RequestLogFilters["transport"]),
+                            })
+                          }
+                          items={[
+                            { value: "all", label: t("全部传输") },
+                            { value: "http", label: "HTTP" },
+                            { value: "ws", label: "WebSocket" },
+                            { value: "compact", label: t("压缩") },
+                            { value: "models", label: t("模型") },
+                            { value: "search", label: t("搜索") },
+                          ]}
+                        />
+                        <AccountCombobox
+                          accounts={accounts}
+                          value={filters.accountId}
+                          onChange={(accountId) => update({ accountId })}
+                        />
                         <FilterSelect
                           className="w-full"
                           label={t("生命周期")}
@@ -1016,22 +1059,32 @@ export function RequestLogsPage({
                           items={[
                             { value: "all", label: t("全部生命周期") },
                             ...Object.entries(STATE_LABELS).map(
-                              ([value, label]) => ({
-                                value,
-                                label: t(label),
-                              })
+                              ([value, label]) => ({ value, label: t(label) })
                             ),
                           ]}
                         />
-                      </Field>
-                      <Field>
-                        <AccountCombobox
-                          accounts={accounts}
-                          value={filters.accountId}
-                          onChange={(accountId) => update({ accountId })}
+                        <FilterSelect
+                          className="w-full"
+                          label={t("请求结果")}
+                          value={filters.outcome ?? "all"}
+                          onChange={(value) =>
+                            update({
+                              outcome:
+                                value === "all"
+                                  ? undefined
+                                  : (value as RequestLogFilters["outcome"]),
+                            })
+                          }
+                          items={[
+                            { value: "all", label: t("全部结果") },
+                            ...Object.entries(OUTCOME_LABELS).map(
+                              ([value, label]) => ({ value, label: t(label) })
+                            ),
+                          ]}
                         />
-                      </Field>
-                      <Field>
+                      </FilterGroup>
+
+                      <FilterGroup title={t("故障细节")}>
                         <FilterSelect
                           className="w-full"
                           label={t("失败来源")}
@@ -1057,8 +1110,6 @@ export function RequestLogsPage({
                             ).map((value) => ({ value, label: value })),
                           ]}
                         />
-                      </Field>
-                      <Field>
                         <FilterSelect
                           className="w-full"
                           label={t("失败阶段")}
@@ -1085,8 +1136,6 @@ export function RequestLogsPage({
                             ).map((value) => ({ value, label: value })),
                           ]}
                         />
-                      </Field>
-                      <Field>
                         <Input
                           aria-label={t("HTTP 状态")}
                           className="w-full"
@@ -1101,8 +1150,6 @@ export function RequestLogsPage({
                             })
                           }
                         />
-                      </Field>
-                      <Field>
                         <Input
                           aria-label={t("协议错误码")}
                           className="w-full"
@@ -1115,11 +1162,9 @@ export function RequestLogsPage({
                             })
                           }
                         />
-                      </Field>
-                      <Field>
                         <Input
                           aria-label={t("诊断码")}
-                          className="w-full"
+                          className="w-full sm:col-span-2"
                           placeholder={t("诊断码")}
                           value={filters.diagnosticCode ?? ""}
                           onChange={(event) =>
@@ -1128,36 +1173,41 @@ export function RequestLogsPage({
                             })
                           }
                         />
-                      </Field>
-                    </FieldGroup>
-                    {advancedEntries.length > 0 && (
-                      <div className="flex flex-wrap items-center gap-2">
-                        {advancedEntries.map(([key, label]) => (
-                          <Badge key={key} variant="secondary">
-                            {String(label)}
-                            <button
-                              type="button"
-                              aria-label={t("移除筛选 {{filter}}", {
-                                filter: String(label),
-                              })}
-                              onClick={() => clearAdvanced(key)}
-                            >
-                              <XIcon />
-                            </button>
-                          </Badge>
-                        ))}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => clearAdvanced()}
-                        >
-                          {t("清除全部")}
-                        </Button>
-                      </div>
-                    )}
+                      </FilterGroup>
+                    </div>
                   </PopoverContent>
                 </Popover>
               </div>
+
+              {/* Chips live out here, not inside the popover: a filter you
+                  cannot see is a filter you will forget you set. What the
+                  toolbar shows in its own control needs no chip; what the
+                  popover hides always gets one. */}
+              {advancedEntries.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2">
+                  {advancedEntries.map(([key, label]) => (
+                    <Badge key={key} variant="secondary">
+                      {String(label)}
+                      <button
+                        type="button"
+                        aria-label={t("移除筛选 {{filter}}", {
+                          filter: String(label),
+                        })}
+                        onClick={() => clearAdvanced(key)}
+                      >
+                        <XIcon />
+                      </button>
+                    </Badge>
+                  ))}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => clearAdvanced()}
+                  >
+                    {t("清除全部")}
+                  </Button>
+                </div>
+              )}
               <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg bg-card">
                 {!enabled || (!loading && result.items.length === 0) ? (
                   <Empty className="h-full min-h-80 border-0 lg:min-h-0">
