@@ -162,7 +162,7 @@ describe("UsagePage", () => {
         },
         {
           key: "uncategorized-conversation",
-          label: "无分类对话",
+          label: "非项目类对话",
           totalTokens: 100,
           tasks: 1,
           share: 0.1,
@@ -172,7 +172,7 @@ describe("UsagePage", () => {
         ...base.filters,
         projects: [
           { key: "long", label: longName },
-          { key: "uncategorized-conversation", label: "无分类对话" },
+          { key: "uncategorized-conversation", label: "非项目类对话" },
         ],
       },
     })
@@ -195,7 +195,7 @@ describe("UsagePage", () => {
     // Project names are readable labels, so both real projects and synthetic
     // buckets inherit the body face instead of the technical-data face.
     expect(label).not.toHaveClass("font-mono")
-    expect(within(ranking).getByText("无分类对话")).not.toHaveClass("font-mono")
+    expect(within(ranking).getByText("非项目类对话")).not.toHaveClass("font-mono")
 
     const projectFilter = screen.getByRole("combobox", { name: "项目筛选" })
     const modelFilter = screen.getByRole("combobox", { name: "模型筛选" })

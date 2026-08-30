@@ -20,7 +20,7 @@ async function fixture() {
 }
 
 describe.sequential("CodexUsageStore", () => {
-  it("imports legacy derived rows once and replaces raw identifiers with HMAC keys", async () => {
+  it("backs up migrations and clears active derivations that need rescanning", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "codex-usage-migrate-test-")); temporary.push(root);
     const legacy = new GatewayDatabase(path.join(root, "gateway.db"));
     const source = "legacy-source"; const thread = "019fe159-caca-7b40-8641-bad1fd122cb7";
@@ -35,8 +35,8 @@ describe.sequential("CodexUsageStore", () => {
     store.setMeta("schema_version", "1");
     await store.close();
     const reopened = await CodexUsageStore.open(dataDir, legacy.raw, { warn: () => undefined });
-    expect((reopened.raw.prepare("SELECT COUNT(*) AS count FROM codex_usage_event").get() as { count: number }).count).toBe(1);
-    expect((reopened.raw.prepare("SELECT value FROM usage_meta WHERE key='schema_version'").get() as { value: string }).value).toBe("2");
+    expect((reopened.raw.prepare("SELECT COUNT(*) AS count FROM codex_usage_event").get() as { count: number }).count).toBe(0);
+    expect((reopened.raw.prepare("SELECT value FROM usage_meta WHERE key='schema_version'").get() as { value: string }).value).toBe("3");
     expect((await readdir(reopened.backupDir)).some((name) => name.startsWith("codex-usage-pre-migration-") && name.endsWith(".manifest.json"))).toBe(true);
     await reopened.close(); legacy.close();
   });

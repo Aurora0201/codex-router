@@ -48,16 +48,16 @@ const tokens = (timestamp: string, input: number, cached: number, output: number
 });
 
 describe.sequential("CodexUsageService", () => {
-  it("groups only Codex date workspaces as uncategorized conversations", () => {
-    expect(codexUsageInternals.projectIdentity("C:\\Users\\test\\AppData\\Local\\Temp\\Codex\\2026-08-18\\x")).toEqual({ key: UNCATEGORIZED_PROJECT_KEY, label: "无分类对话" });
-    expect(codexUsageInternals.projectIdentity("C:\\Users\\test\\AppData\\Local\\Temp\\Codex\\2026-08-12\\a-different-name")).toEqual({ key: UNCATEGORIZED_PROJECT_KEY, label: "无分类对话" });
+  it("groups only known Codex projectless date workspaces as non-project conversations", () => {
+    expect(codexUsageInternals.projectIdentity("C:\\Users\\test\\Documents\\Codex\\2026-08-18\\x")).toEqual({ key: UNCATEGORIZED_PROJECT_KEY, label: "非项目类对话" });
+    expect(codexUsageInternals.projectIdentity("D:\\codespace\\codex-document\\2026-08-30\\fa")).toEqual({ key: UNCATEGORIZED_PROJECT_KEY, label: "非项目类对话" });
     expect(codexUsageInternals.projectIdentity("D:\\projects\\2026-08-18\\x")?.label).toBe("2026-08-18/x");
     expect(codexUsageInternals.projectIdentity("D:\\codespace\\codex-router")?.label).toBe("codespace/codex-router");
   });
 
   it("keeps uncategorized conversations visible outside the top eight", () => {
     const rows = Array.from({ length: 10 }, (_, index) => ({ key: `project-${index}`, label: `Project ${index}`, totalTokens: 100 - index, tasks: 1, share: .09 }));
-    rows.push({ key: UNCATEGORIZED_PROJECT_KEY, label: "无分类对话", totalTokens: 1, tasks: 1, share: .01 });
+    rows.push({ key: UNCATEGORIZED_PROJECT_KEY, label: "非项目类对话", totalTokens: 1, tasks: 1, share: .01 });
     const limited = codexUsageInternals.limitProjectRows(rows);
     expect(limited.map((row) => row.key)).toContain(UNCATEGORIZED_PROJECT_KEY);
     expect(limited.at(-1)).toMatchObject({ key: "other", totalTokens: 276, tasks: 3, share: .27 });
@@ -87,14 +87,16 @@ describe.sequential("CodexUsageService", () => {
   it("merges temporary rollouts into one filterable project bucket", async () => {
     const { root, database, service } = await fixture();
     const secondThread = "019fe159-caca-7b40-8641-bad1fd122cb8";
+    const thirdThread = "019fe159-caca-7b40-8641-bad1fd122cb9";
     const directory = path.join(root, "sessions", "2026", "08", "20");
     await writeFile(path.join(directory, `rollout-${thread}.jsonl`), `${row("2026-08-20T16:00:00.000Z", "session_meta", { id: thread, cwd: "C:\\Temp\\Codex\\2026-08-18\\x" })}\n${tokens("2026-08-20T16:00:01.000Z", 10, 2, 3, 1)}\n`);
     await writeFile(path.join(directory, `rollout-${secondThread}.jsonl`), `${row("2026-08-20T17:00:00.000Z", "session_meta", { id: secondThread, cwd: "C:\\Temp\\Codex\\2026-08-19\\another" })}\n${tokens("2026-08-20T17:00:01.000Z", 8, 1, 4, 1)}\n`);
+    await writeFile(path.join(directory, `rollout-${thirdThread}.jsonl`), `${row("2026-08-20T18:00:00.000Z", "session_meta", { id: thirdThread, cwd: "D:\\codespace\\codex-document\\2026-08-30\\fa" })}\n${tokens("2026-08-20T18:00:01.000Z", 5, 1, 2, 1)}\n`);
     await service.scan();
-    const dashboard = service.getDashboard({ range: "all" }) as any;
-    expect(dashboard.filters.projects).toEqual([{ key: UNCATEGORIZED_PROJECT_KEY, label: "无分类对话" }]);
-    expect(dashboard.projects).toEqual([expect.objectContaining({ key: UNCATEGORIZED_PROJECT_KEY, label: "无分类对话", totalTokens: 25 })]);
-    expect((service.getDashboard({ range: "all", project: UNCATEGORIZED_PROJECT_KEY }) as any).summary.totalTokens).toBe(25);
+    const dashboard = service.getDashboard({ range: "14d" }) as any;
+    expect(dashboard.filters.projects).toEqual([{ key: UNCATEGORIZED_PROJECT_KEY, label: "非项目类对话" }]);
+    expect(dashboard.projects).toEqual([expect.objectContaining({ key: UNCATEGORIZED_PROJECT_KEY, label: "非项目类对话", totalTokens: 32 })]);
+    expect((service.getDashboard({ range: "14d", project: UNCATEGORIZED_PROJECT_KEY }) as any).summary.totalTokens).toBe(32);
     await service.close(); database.close();
   });
 

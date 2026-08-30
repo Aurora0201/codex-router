@@ -30,7 +30,7 @@ type ChangeHandler = () => void;
 type LogLike = { warn(values: Record<string, unknown>, message: string): void };
 
 export const UNCATEGORIZED_PROJECT_KEY = "uncategorized-conversation";
-export const UNCATEGORIZED_PROJECT_LABEL = "无分类对话";
+export const UNCATEGORIZED_PROJECT_LABEL = "非项目类对话";
 
 const ROLLOUT_SELECT = `SELECT thread_id AS threadId, source_hash AS sourceHash, source_category AS sourceCategory,
   encoding, file_size AS fileSize, mtime_ms AS mtimeMs, byte_offset AS byteOffset, next_ordinal AS nextOrdinal,
@@ -48,8 +48,13 @@ function projectIdentity(cwd: unknown): { key: string; label: string } | null {
   if (typeof cwd !== "string" || cwd.length === 0) return null;
   const normalized = path.normalize(cwd).replace(/[\\/]+$/, "");
   const parts = normalized.split(/[\\/]+/).filter(Boolean);
-  const [codexDirectory, dateDirectory, conversationDirectory] = parts.slice(-3);
-  if (/^codex$/i.test(codexDirectory ?? "") && /^\d{4}-\d{2}-\d{2}$/.test(dateDirectory ?? "") && conversationDirectory) {
+  const [workspaceContainer, dateDirectory, conversationDirectory] = parts.slice(-3);
+  // Codex projectless tasks use a dated child beneath either the default
+  // `Codex` documents directory or the desktop app's `codex-document`
+  // workspace. Requiring the known container keeps a real project such as
+  // D:/projects/2026-08-30/fa from being folded into this bucket.
+  const projectlessContainer = /^(?:codex|codex-document)$/i.test(workspaceContainer ?? "");
+  if (projectlessContainer && /^\d{4}-\d{2}-\d{2}$/.test(dateDirectory ?? "") && conversationDirectory) {
     return { key: UNCATEGORIZED_PROJECT_KEY, label: UNCATEGORIZED_PROJECT_LABEL };
   }
   return { key: hash(normalized.toLocaleLowerCase()), label: parts.slice(-2).join("/") || "未知项目" };

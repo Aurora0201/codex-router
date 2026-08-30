@@ -150,12 +150,12 @@ export const en = {
   推理输出: "Reasoning output",
   模型分布: "Model distribution",
   项目分布: "Project distribution",
-  无分类对话: "Uncategorized conversations",
+  非项目类对话: "Non-project conversations",
   项目分布排名: "Project usage ranking",
   项目分布滚动区域: "Scrollable project usage ranking",
   活跃热力图滚动区域: "Scrollable activity heatmap",
-  "无分类对话单独汇总；长项目名可悬停或聚焦查看完整内容。":
-    "Uncategorized conversations are grouped separately; hover or focus a long project name to see it in full.",
+  "非项目类对话单独汇总；长项目名可悬停或聚焦查看完整内容。":
+    "Non-project conversations are grouped separately; hover or focus a long project name to see it in full.",
   "{{project}} Token 占比 {{percent}}": "{{project}} token share {{percent}}",
   "保留全部模型用于比较，仅应用日期和项目筛选。":
     "Keeps all models for comparison and applies only date and project filters.",
