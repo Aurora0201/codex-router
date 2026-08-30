@@ -70,7 +70,7 @@ export function AccountList({
   ): Promise<void>
 }) {
   const { t } = useTranslation()
-  const [now] = useState(Date.now)
+  const [now, setNow] = useState(Date.now)
   const [query, setQuery] = useState("")
   const [filter, setFilter] = useState<AccountFilter>("all")
   const [detail, setDetail] = useState<AccountView | null>(null)
@@ -81,6 +81,15 @@ export function AccountList({
   } | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const [fades, setFades] = useState({ top: false, bottom: false })
+  useEffect(() => {
+    const update = () => setNow(Date.now())
+    const timer = window.setInterval(update, 60_000)
+    window.addEventListener("focus", update)
+    return () => {
+      window.clearInterval(timer)
+      window.removeEventListener("focus", update)
+    }
+  }, [])
   // The grid's own height decides this, so remeasure when it changes as well as
   // on scroll.
   useEffect(() => {
@@ -98,10 +107,10 @@ export function AccountList({
     () => ({
       all: accounts.length,
       routable: accounts.filter(isRoutable).length,
-      attention: accounts.filter((a) => needsAttention(a, now)).length,
+      attention: accounts.filter(needsAttention).length,
       disabled: accounts.filter(isDisabled).length,
     }),
-    [accounts, now]
+    [accounts]
   )
 
   const normalized = query.trim().toLowerCase()
@@ -118,11 +127,11 @@ export function AccountList({
         const state =
           filter === "all" ||
           (filter === "routable" && isRoutable(account)) ||
-          (filter === "attention" && needsAttention(account, now)) ||
+          (filter === "attention" && needsAttention(account)) ||
           (filter === "disabled" && isDisabled(account))
         return Boolean(text && state)
       }),
-    [accounts, filter, normalized, now]
+    [accounts, filter, normalized]
   )
 
   const active = accounts.find((account) => account.isActive) ?? null
@@ -310,6 +319,7 @@ export function AccountList({
 
       <AccountDetailSheet
         account={detail}
+        now={now}
         onOpenChange={(open) => !open && setDetail(null)}
         onUseCredit={(account, credit) =>
           setResetting({ account, credit, key: crypto.randomUUID() })

@@ -8,7 +8,7 @@ export interface NewAccount {
   codexHome: string;
 }
 
-export type AccountPatch = Partial<Pick<AccountRecord, "chatgptAccountId" | "email" | "planType" | "subscriptionStartedAt" | "subscriptionExpiresAt" | "subscriptionExpirySource" | "enabled" | "authStatus" | "fedRamp" | "authMode" | "authCheckedAt" | "authLastSuccessfulAt" | "authErrorCode">>;
+export type AccountPatch = Partial<Pick<AccountRecord, "chatgptAccountId" | "email" | "planType" | "subscriptionStartedAt" | "subscriptionExpiresAt" | "subscriptionExpirySource" | "billingAnchorAt" | "billingCadence" | "enabled" | "authStatus" | "fedRamp" | "authMode" | "authCheckedAt" | "authLastSuccessfulAt" | "authErrorCode">>;
 
 function asAccount(row: Record<string, unknown>): AccountRecord {
   return {
@@ -19,6 +19,8 @@ function asAccount(row: Record<string, unknown>): AccountRecord {
     subscriptionStartedAt: row.subscription_started_at == null ? null : Number(row.subscription_started_at),
     subscriptionExpiresAt: row.subscription_expires_at == null ? null : Number(row.subscription_expires_at),
     subscriptionExpirySource: row.subscription_expiry_source == null ? null : String(row.subscription_expiry_source) as AccountRecord["subscriptionExpirySource"],
+    billingAnchorAt: row.billing_anchor_at == null ? null : Number(row.billing_anchor_at),
+    billingCadence: row.billing_cadence == null ? null : String(row.billing_cadence) as AccountRecord["billingCadence"],
     codexHome: String(row.codex_home),
     enabled: Boolean(row.enabled),
     authStatus: String(row.auth_status) as AuthStatus,
@@ -75,10 +77,10 @@ export class AccountRepository {
     const next = { ...current, ...patch };
     this.db.prepare(`
       UPDATE accounts SET
-        chatgpt_account_id=?, email=?, plan_type=?, subscription_started_at=?, subscription_expires_at=?, subscription_expiry_source=?,
+        chatgpt_account_id=?, email=?, plan_type=?, subscription_started_at=?, subscription_expires_at=?, subscription_expiry_source=?, billing_anchor_at=?, billing_cadence=?,
         enabled=?, auth_status=?, fedramp=?, auth_mode=?, auth_checked_at=?, auth_last_successful_at=?, auth_error_code=?, updated_at=?
       WHERE id=?
-    `).run(next.chatgptAccountId, next.email, next.planType, next.subscriptionStartedAt, next.subscriptionExpiresAt, next.subscriptionExpirySource, next.enabled ? 1 : 0, next.authStatus, next.fedRamp ? 1 : 0, next.authMode, next.authCheckedAt, next.authLastSuccessfulAt, next.authErrorCode, Date.now(), id);
+    `).run(next.chatgptAccountId, next.email, next.planType, next.subscriptionStartedAt, next.subscriptionExpiresAt, next.subscriptionExpirySource, next.billingAnchorAt, next.billingCadence, next.enabled ? 1 : 0, next.authStatus, next.fedRamp ? 1 : 0, next.authMode, next.authCheckedAt, next.authLastSuccessfulAt, next.authErrorCode, Date.now(), id);
     return this.get(id)!;
   }
 

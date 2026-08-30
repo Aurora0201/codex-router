@@ -1,4 +1,12 @@
-import { TicketCheckIcon } from "lucide-react"
+import {
+  BadgeCheckIcon,
+  BadgeIcon,
+  CalendarClockIcon,
+  CircleDollarSignIcon,
+  KeyRoundIcon,
+  Layers3Icon,
+  type LucideIcon,
+} from "lucide-react"
 import { useTranslation } from "react-i18next"
 
 import { QuotaMeter } from "./account-usage"
@@ -14,21 +22,34 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import {
+  formatBillingCountdown,
   formatDateOnly,
   formatRelativeTime,
   shortAccountId,
 } from "@/lib/format"
+import { nextBillingAt } from "@/lib/billing-cycle"
 import type {
   AccountView,
   RateLimitResetCreditView,
   UsageWindowView,
 } from "@/services/contracts"
 
-function Fact({ label, value }: { label: string; value: string }) {
+function Fact({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: LucideIcon
+  label: string
+  value: string
+}) {
   return (
-    <div>
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="mt-1 font-mono text-sm">{value}</dd>
+    <div className="flex min-h-10 items-center gap-2.5 rounded-lg px-2 py-1.5">
+      <span className="grid size-7 shrink-0 place-items-center rounded-md bg-background text-primary">
+        <Icon aria-hidden="true" className="size-4" />
+      </span>
+      <dt className="shrink-0 text-sm text-muted-foreground">{label}：</dt>
+      <dd className="ml-auto text-right font-mono text-sm">{value}</dd>
     </div>
   )
 }
@@ -39,14 +60,19 @@ function Fact({ label, value }: { label: string; value: string }) {
  */
 export function AccountDetailSheet({
   account,
+  now,
   onOpenChange,
   onUseCredit,
 }: {
   account: AccountView | null
+  now: number
   onOpenChange(open: boolean): void
   onUseCredit(account: AccountView, credit: RateLimitResetCreditView): void
 }) {
   const { t } = useTranslation()
+  const nextBilling = account
+    ? nextBillingAt(account.billing.anchorAt, account.billing.cadence, now)
+    : null
   return (
     <Sheet open={account !== null} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-lg">
@@ -60,32 +86,42 @@ export function AccountDetailSheet({
         </SheetHeader>
         {account ? (
           <ScrollArea className="min-h-0 flex-1">
-            <div className="space-y-6 px-4 pb-6">
-              <section className="grid grid-cols-2 gap-4 rounded-lg border p-3">
+            <div className="flex flex-col gap-6 px-4 pb-6">
+              <section className="flex flex-col gap-1 rounded-xl bg-muted/60 p-2">
                 <Fact
+                  icon={Layers3Icon}
                   label={t("订阅等级")}
                   value={account.planType ?? t("未知")}
                 />
                 <Fact
+                  icon={KeyRoundIcon}
                   label={t("认证模式")}
                   value={account.auth.mode ?? t("未知")}
                 />
                 <Fact
-                  label={t("订阅到期")}
-                  value={
-                    formatDateOnly(account.subscription.expiresAt) +
-                    (account.subscription.source === "legacy_estimate"
-                      ? ` · ${t("待确认")}`
-                      : "")
-                  }
+                  icon={CircleDollarSignIcon}
+                  label={t("下次自动续订")}
+                  value={nextBilling === null
+                    ? t("未设置")
+                    : `${formatDateOnly(nextBilling)} · ${formatBillingCountdown(nextBilling, now)}`}
                 />
                 <Fact
+                  icon={CalendarClockIcon}
+                  label={t("付款周期")}
+                  value={account.billing.cadence === "monthly"
+                    ? t("每月")
+                    : account.billing.cadence === "annual"
+                      ? t("每年")
+                      : t("未设置")}
+                />
+                <Fact
+                  icon={BadgeCheckIcon}
                   label={t("最近成功认证")}
                   value={formatRelativeTime(account.auth.lastSuccessfulAt)}
                 />
               </section>
 
-              <section className="space-y-3">
+              <section className="flex flex-col gap-3">
                 <div className="flex items-baseline justify-between gap-3">
                   <h3 className="font-heading font-medium">
                     {t("全部额度窗口")}
@@ -100,7 +136,7 @@ export function AccountDetailSheet({
                   account.limits.buckets.map((bucket) => (
                     <div
                       key={bucket.key}
-                      className="space-y-2 rounded-lg border p-3"
+                      className="flex flex-col gap-2 rounded-xl bg-muted/60 p-3"
                     >
                       <div className="flex items-center justify-between gap-3">
                         <p className="truncate text-sm font-medium">
@@ -159,7 +195,7 @@ export function AccountDetailSheet({
                 )}
               </section>
 
-              <section className="space-y-3">
+              <section className="flex flex-col gap-3">
                 <h3 className="font-heading font-medium">{t("额度重置券")}</h3>
                 {account.limits.resetCredits?.credits?.length ? (
                   [...account.limits.resetCredits.credits]
@@ -169,7 +205,7 @@ export function AccountDetailSheet({
                         (b.expiresAt ?? Number.MAX_SAFE_INTEGER)
                     )
                     .map((credit) => (
-                      <div key={credit.id} className="rounded-lg border p-3">
+                      <div key={credit.id} className="rounded-xl bg-muted/60 p-3">
                         <div className="flex justify-between gap-3">
                           <div className="min-w-0">
                             <p className="truncate text-sm font-medium">
@@ -192,7 +228,7 @@ export function AccountDetailSheet({
                             size="sm"
                             onClick={() => onUseCredit(account, credit)}
                           >
-                            <TicketCheckIcon data-icon="inline-start" />
+                            <BadgeIcon data-icon="inline-start" />
                             {t("使用重置券")}
                           </Button>
                         ) : null}

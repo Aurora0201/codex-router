@@ -10,8 +10,6 @@ function accountWithStatus(authStatus: AuthStatus): AccountView {
     chatgptAccountId: "account-" + authStatus,
     email: null,
     planType: null,
-    subscriptionStartedAt: null,
-    subscriptionExpiresAt: null,
     enabled: authStatus !== "disabled",
     isActive: false,
     authStatus,
@@ -27,7 +25,7 @@ function accountWithStatus(authStatus: AuthStatus): AccountView {
       stale: false,
       errorCode: null,
     },
-    subscription: { expiresAt: null, source: null },
+    billing: { anchorAt: null, cadence: null },
     limits: {
       buckets: [],
       defaultBucketKey: null,
@@ -70,8 +68,7 @@ describe("AccountStatus", () => {
   )
 
   it.each([
-    // Nothing to do: the default state must not spend an accent on every row.
-    ["ready", "认证就绪", "text-muted-foreground"],
+    ["ready", "认证就绪", "text-primary"],
     ["disabled", "已停用", "text-muted-foreground"],
     ["login_pending", "等待登录", "text-muted-foreground"],
     // Clears on its own; worth noticing, not worth acting on.

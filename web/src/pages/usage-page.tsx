@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import {
   ActivityIcon,
   AlertTriangleIcon,
@@ -81,21 +81,15 @@ const ranges: Array<{ value: CodexUsageRange; label: string }> = [
   { value: "90d", label: "最近 90 天" },
   { value: "all", label: "全部历史" },
 ]
-const weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-const weekdayLabels: Record<string, string> = {
-  Mon: "一",
-  Tue: "二",
-  Wed: "三",
-  Thu: "四",
-  Fri: "五",
-  Sat: "六",
-  Sun: "日",
+function weekdayIndex(date: string): number {
+  const day = new Date(`${date}T00:00:00Z`).getUTCDay()
+  return (day + 6) % 7
 }
-// The axis has one glyph of room; a day quoted on its own needs the 周 to read
-// as a weekday rather than as a numeral.
-const weekdayFullLabels: Record<string, string> = Object.fromEntries(
-  Object.entries(weekdayLabels).map(([key, label]) => [key, `周${label}`])
-)
+
+function dateParts(date: string) {
+  const [year, month, day] = date.split("-")
+  return { year, month, day }
+}
 
 function formatTokens(value: number): string {
   return new Intl.NumberFormat(undefined, {
@@ -138,13 +132,13 @@ function Panel({
   return (
     <section
       className={cn(
-        "flex flex-col rounded-2xl bg-card p-2 ring-1 ring-foreground/10",
+        "flex flex-col rounded-2xl bg-card px-2 pb-2 ring-1 ring-foreground/10",
         className
       )}
     >
-      {/* A fixed band rather than padding around the text: the title and the
-          hint are different sizes, so only a shared box centres them both. */}
-      <header className="flex h-9 shrink-0 items-center justify-between gap-4 px-2">
+      {/* The complete top band is the header itself, so the icon, title and
+          hint are centred between the card edge and the inset body. */}
+      <header className="flex h-11 shrink-0 items-center justify-between gap-4 px-2">
         <h2 className="flex min-w-0 items-center gap-2 text-sm font-semibold">
           <Icon aria-hidden="true" className="size-4 text-muted-foreground" />
           <span className="truncate">{title}</span>
@@ -283,6 +277,8 @@ export function UsagePage({
   const [data, setData] = useState<CodexUsageDashboard | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [request, setRequest] = useState(0)
+  const heatmapScrollRef = useRef<HTMLDivElement>(null)
+  const [heatmapFade, setHeatmapFade] = useState({ top: false, bottom: false })
 
   useEffect(() => {
     let cancelled = false
@@ -306,44 +302,80 @@ export function UsagePage({
     }
   }, [service, range, model, project, revision, request])
 
-  const heat = useMemo(
+  // During local HMR the page can briefly talk to an older running gateway.
+  // Ignore its former weekday/hour cells instead of taking down the page.
+  const heatmap = useMemo(
     () =>
-      new Map(
-        data?.heatmap.map((item) => [
-          `${item.weekday}|${item.hour}`,
-          item.totalTokens,
-        ]) ?? []
+      (data?.heatmap ?? []).filter(
+        (cell) =>
+          typeof (cell as { date?: unknown }).date === "string" &&
+          typeof (cell as { hour?: unknown }).hour === "number"
       ),
     [data]
   )
-  const heatMax = Math.max(0, ...heat.values())
+  const heatRows = useMemo(() => {
+    const rows = new Map<
+      string,
+      { date: string; hours: number[]; totalTokens: number }
+    >()
+    for (const cell of heatmap) {
+      const row = rows.get(cell.date) ?? {
+        date: cell.date,
+        hours: Array.from({ length: 24 }, () => 0),
+        totalTokens: 0,
+      }
+      row.hours[cell.hour] = cell.totalTokens
+      row.totalTokens += cell.totalTokens
+      rows.set(cell.date, row)
+    }
+    return [...rows.values()]
+  }, [heatmap])
+
+  useLayoutEffect(() => {
+    const viewport = heatmapScrollRef.current?.querySelector<HTMLElement>(
+      '[data-slot="scroll-area-viewport"]'
+    )
+    if (!viewport) return
+
+    const updateFade = () => {
+      const maxScrollTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight)
+      setHeatmapFade({
+        top: viewport.scrollTop > 1,
+        bottom: viewport.scrollTop < maxScrollTop - 1,
+      })
+    }
+
+    viewport.scrollTop = viewport.scrollHeight
+    updateFade()
+    viewport.addEventListener("scroll", updateFade)
+
+    return () => viewport.removeEventListener("scroll", updateFade)
+  }, [heatRows.length])
+  const heatMax = Math.max(0, ...heatmap.map((cell) => cell.totalTokens))
   const rhythm = useMemo(() => {
-    const cells = data?.heatmap ?? []
-    const total = cells.reduce((sum, cell) => sum + cell.totalTokens, 0)
-    const peak = cells.reduce<(typeof cells)[number] | null>(
-      (best, cell) =>
-        best && best.totalTokens >= cell.totalTokens ? best : cell,
+    const total = heatRows.reduce((sum, row) => sum + row.totalTokens, 0)
+    const peak = heatRows.reduce<(typeof heatRows)[number] | null>(
+      (best, row) =>
+        best && best.totalTokens >= row.totalTokens ? best : row,
       null
     )
-    const within = (predicate: (cell: (typeof cells)[number]) => boolean) =>
+    const within = (predicate: (row: (typeof heatRows)[number]) => boolean) =>
       total
-        ? (cells
+        ? (heatRows
             .filter(predicate)
-            .reduce((sum, cell) => sum + cell.totalTokens, 0) /
+            .reduce((sum, row) => sum + row.totalTokens, 0) /
             total) *
           100
         : 0
     return {
-      busiest: peak
-        ? `${weekdayFullLabels[peak.weekday] ?? peak.weekday} ${String(peak.hour).padStart(2, "0")}:00`
-        : "—",
-      // Working hours are 09:00 through 20:59 local.
-      workHoursPercent: within((cell) => cell.hour >= 9 && cell.hour <= 20),
-      weekendPercent: within(
-        (cell) => cell.weekday === "Sat" || cell.weekday === "Sun"
-      ),
+      busiestDate: peak?.date ?? null,
+      activeDays: heatRows.filter((row) => row.totalTokens > 0).length,
+      weekendPercent: within((row) => weekdayIndex(row.date) >= 5),
     }
-  }, [data])
+  }, [heatRows])
+
+  const formatHeatmapDate = (date: string) =>
+    t("{{year}}年{{month}}月{{day}}日", dateParts(date))
   const selectedProject =
     project === "all"
       ? null
@@ -397,7 +429,7 @@ export function UsagePage({
       </Tabs>
       <Select value={model} onValueChange={(value) => value && setModel(value)}>
         <SelectTrigger
-          className="h-9 w-44 rounded-xl"
+          className="h-9 w-44 rounded-md"
           aria-label={t("模型筛选")}
         >
           <SelectValue className={cn(model !== "all" && "font-mono")}>
@@ -424,7 +456,7 @@ export function UsagePage({
             render={<span className="block w-full min-w-0 sm:w-64" />}
           >
             <SelectTrigger
-              className="h-9 w-full min-w-0 overflow-hidden rounded-xl"
+              className="h-9 w-full min-w-0 overflow-hidden rounded-md"
               aria-label={t("项目筛选")}
             >
               <SelectValue
@@ -774,59 +806,75 @@ export function UsagePage({
             className="col-span-12 xl:col-span-8"
             bodyClassName="flex-1"
           >
-            <ScrollArea
-              className="[&_[data-slot=scroll-area-scrollbar]]:h-1.5"
-              aria-label={t("活跃热力图滚动区域") as string}
-            >
-              <div
-                className="grid min-w-[38rem] gap-1"
-                role="img"
-                aria-label={t("星期和小时 Token 热力图") as string}
+            <div className="relative">
+              <ScrollArea
+                ref={heatmapScrollRef}
+                className="h-36 [&_[data-slot=scroll-area-scrollbar]]:hidden"
+                aria-label={t("活跃热力图滚动区域") as string}
               >
-                {weekdays.map((day) => (
-                  <div className="flex items-center gap-1" key={day}>
-                    <span className="w-4 shrink-0 text-[11px] text-muted-foreground/70">
-                      {weekdayLabels[day]}
+                <div
+                  className="grid min-w-[38rem] gap-1 pr-2"
+                  role="img"
+                  aria-label={t("日期和小时 Token 热力图") as string}
+                >
+                  {heatRows.map((row) => (
+                  <div className="flex items-center gap-1" key={row.date}>
+                    <span className="w-10 shrink-0 font-mono text-[10px] text-muted-foreground/70">
+                      {row.date.slice(5)}
                     </span>
                     <div className="grid flex-1 grid-cols-24 gap-1">
-                      {Array.from({ length: 24 }, (_, hour) => {
-                        const value = heat.get(`${day}|${hour}`) ?? 0
-                        const level = heatMax ? value / heatMax : 0
-                        const cell = (
-                          <span
-                            className={cn(
-                              "h-3.5 rounded-[3px]",
-                              level === 0 && "bg-foreground/[0.06]",
-                              level > 0 && level <= 0.25 && "bg-chart-1",
-                              level > 0.25 && level <= 0.5 && "bg-chart-2",
-                              level > 0.5 && level <= 0.75 && "bg-chart-3",
-                              level > 0.75 && "bg-chart-5"
-                            )}
-                          />
+                      {row.hours.map((totalTokens, hour) => {
+                        const level = heatMax ? totalTokens / heatMax : 0
+                        const label = t(
+                          "{{date}} {{hour}}:00 · {{tokens}} Token",
+                          {
+                            date: formatHeatmapDate(row.date),
+                            hour: String(hour).padStart(2, "0"),
+                            tokens: fullTokens(totalTokens),
+                          }
                         )
-                        // An empty hour has nothing to report, so only cells
-                        // with usage carry a tooltip.
-                        return value === 0 ? (
-                          <span key={hour}>{cell}</span>
-                        ) : (
+                        return (
                           <Tooltip key={hour}>
-                            <TooltipTrigger render={cell} />
-                            <TooltipContent>
-                              {t("{{weekday}} {{hour}}:00 · {{tokens}}", {
-                                weekday: weekdayFullLabels[day],
-                                hour: String(hour).padStart(2, "0"),
-                                tokens: fullTokens(value),
-                              })}
-                            </TooltipContent>
+                            <TooltipTrigger
+                              aria-label={label}
+                              render={
+                                <span
+                                  className={cn(
+                                    "h-3.5 rounded-[3px]",
+                                    level === 0 && "bg-foreground/[0.06]",
+                                    level > 0 && level <= 0.25 && "bg-chart-1",
+                                    level > 0.25 && level <= 0.5 && "bg-chart-2",
+                                    level > 0.5 && level <= 0.75 && "bg-chart-3",
+                                    level > 0.75 && "bg-chart-5"
+                                  )}
+                                />
+                              }
+                            />
+                            <TooltipContent>{label}</TooltipContent>
                           </Tooltip>
                         )
                       })}
                     </div>
                   </div>
                 ))}
-              </div>
-            </ScrollArea>
-            <div className="mt-2 flex items-center justify-between pl-5 text-[11px] text-muted-foreground/70">
+                </div>
+              </ScrollArea>
+              <div
+                aria-hidden="true"
+                className={cn(
+                  "pointer-events-none absolute inset-x-0 top-0 h-8 bg-linear-to-b from-muted to-transparent transition-opacity duration-200 ease-out",
+                  heatmapFade.top ? "opacity-100" : "opacity-0"
+                )}
+              />
+              <div
+                aria-hidden="true"
+                className={cn(
+                  "pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-linear-to-t from-muted to-transparent transition-opacity duration-200 ease-out",
+                  heatmapFade.bottom ? "opacity-100" : "opacity-0"
+                )}
+              />
+            </div>
+            <div className="mt-2 flex items-center justify-between pl-11 text-[11px] text-muted-foreground/70">
               <span>0:00</span>
               <span>12:00</span>
               <span>23:00</span>
@@ -835,10 +883,15 @@ export function UsagePage({
                 and gives the panel a footer so it stops floating in dead space. */}
             <dl className="mt-auto grid grid-cols-3 gap-4 border-t border-border pt-3">
               {[
-                { label: t("最活跃"), value: rhythm.busiest },
                 {
-                  label: t("工作时段占比"),
-                  value: `${rhythm.workHoursPercent.toFixed(0)}%`,
+                  label: t("最活跃日期"),
+                  value: rhythm.busiestDate
+                    ? formatHeatmapDate(rhythm.busiestDate)
+                    : "—",
+                },
+                {
+                  label: t("活跃天数"),
+                  value: String(rhythm.activeDays),
                 },
                 {
                   label: t("周末占比"),

@@ -15,6 +15,7 @@ export type RequestState = "running" | "completed" | "failed" | "rejected" | "ca
 export type FailureSource = "gateway" | "upstream_http" | "upstream_protocol" | "transport" | "client";
 export type FailureStage = "routing" | "authentication" | "handshake" | "sending" | "streaming" | "terminal";
 export type IdentityMode = "managed_account" | "client_passthrough";
+export type BillingCadence = "monthly" | "annual";
 
 export interface AccountRecord {
   id: string;
@@ -24,6 +25,8 @@ export interface AccountRecord {
   subscriptionStartedAt: number | null;
   subscriptionExpiresAt: number | null;
   subscriptionExpirySource: "manual" | "legacy_estimate" | null;
+  billingAnchorAt: number | null;
+  billingCadence: BillingCadence | null;
   codexHome: string;
   enabled: boolean;
   authStatus: AuthStatus;

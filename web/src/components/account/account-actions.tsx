@@ -1,5 +1,5 @@
 import {
-  CalendarDaysIcon,
+  CircleDollarSignIcon,
   CopyIcon,
   EllipsisIcon,
   PanelRightOpenIcon,
@@ -106,8 +106,8 @@ export function AccountActions({
               disabled={disabled}
               onClick={() => onAction("subscription")}
             >
-              <CalendarDaysIcon />
-              {t("设置订阅到期日")}
+              <CircleDollarSignIcon />
+              {t("设置自动续订周期")}
             </DropdownMenuItem>
             <DropdownMenuItem
               disabled={disabled}

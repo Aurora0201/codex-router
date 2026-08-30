@@ -99,9 +99,9 @@ describe.sequential("CodexUsageService", () => {
 ${row("2026-08-20T16:00:00.500Z", "turn_context", { model: "gpt-one", cwd: "D:\a" })}
 ${tokens("2026-08-20T16:00:01.000Z", 10, 2, 3, 1)}
 `);
-    await writeFile(path.join(directory, `rollout-${secondThread}.jsonl`), `${row("2026-08-20T17:00:00.000Z", "session_meta", { id: secondThread, cwd: "D:\b" })}
-${row("2026-08-20T17:00:00.500Z", "turn_context", { model: "gpt-two", cwd: "D:\b" })}
-${tokens("2026-08-20T17:00:01.000Z", 8, 1, 4, 1)}
+    await writeFile(path.join(directory, `rollout-${secondThread}.jsonl`), `${row("2026-08-22T17:00:00.000Z", "session_meta", { id: secondThread, cwd: "D:\b" })}
+${row("2026-08-22T17:00:00.500Z", "turn_context", { model: "gpt-two", cwd: "D:\b" })}
+${tokens("2026-08-22T17:00:01.000Z", 8, 1, 4, 1)}
 `);
     await service.scan();
 
@@ -113,6 +113,14 @@ ${tokens("2026-08-20T17:00:01.000Z", 8, 1, 4, 1)}
     expect(narrowed.summary.totalTokens).toBeLessThan(unfiltered.summary.totalTokens);
     expect(total(narrowed)).toBe(total(unfiltered));
     expect(narrowed.heatmap).toEqual(unfiltered.heatmap);
+    const firstDay = unfiltered.heatmap.filter((cell: any) => cell.date === "2026-08-21");
+    const emptyDay = unfiltered.heatmap.filter((cell: any) => cell.date === "2026-08-22");
+    const lastDay = unfiltered.heatmap.filter((cell: any) => cell.date === "2026-08-23");
+    expect(firstDay).toHaveLength(24);
+    expect(firstDay.reduce((sum: number, cell: any) => sum + cell.totalTokens, 0)).toBe(13);
+    expect(emptyDay).toHaveLength(24);
+    expect(emptyDay.every((cell: any) => cell.totalTokens === 0)).toBe(true);
+    expect(lastDay.reduce((sum: number, cell: any) => sum + cell.totalTokens, 0)).toBe(12);
     await service.close(); database.close();
   });
 
@@ -203,7 +211,7 @@ ${tokens("2026-08-20T17:00:01.000Z", 8, 1, 4, 1)}
     ].join("\n") + "\n");
     await service.scan();
     const dashboard = service.getDashboard({ range: "90d", model: "gpt-a" }) as any;
-    expect(dashboard.daily).toHaveLength(2);
+    expect(dashboard.daily[0].date).toBe("2026-08-21");
     expect(dashboard.summary.totalTokens).toBe(12);
     expect(dashboard.dailyModels).toEqual(expect.arrayContaining([expect.objectContaining({ totalTokens: 25, models: [
       expect.objectContaining({ key: "gpt-b", totalTokens: 13 }),
@@ -261,7 +269,7 @@ ${tokens("2026-08-20T17:00:01.000Z", 8, 1, 4, 1)}
     legacy.close();
     const migrated = new GatewayDatabase(databasePath);
     expect((migrated.raw.prepare("SELECT COUNT(*) AS count FROM codex_usage_rollout").get() as { count: number }).count).toBe(0);
-    expect((migrated.raw.prepare("SELECT MAX(version) AS version FROM schema_migrations").get() as { version: number }).version).toBe(16);
+    expect((migrated.raw.prepare("SELECT MAX(version) AS version FROM schema_migrations").get() as { version: number }).version).toBe(17);
     expect((migrated.raw.prepare("SELECT COUNT(*) AS count FROM sqlite_master WHERE type='table' AND name LIKE 'codex_usage_retained_%'").get() as { count: number }).count).toBe(2);
     migrated.close();
   });

@@ -42,8 +42,6 @@ export interface AccountView {
   chatgptAccountId: string | null;
   email: string | null;
   planType: string | null;
-  subscriptionStartedAt: number | null;
-  subscriptionExpiresAt: number | null;
   enabled: boolean;
   isActive: boolean;
   authStatus: AccountRecord["authStatus"];
@@ -59,9 +57,9 @@ export interface AccountView {
     stale: boolean;
     errorCode: string | null;
   };
-  subscription: {
-    expiresAt: number | null;
-    source: AccountRecord["subscriptionExpirySource"];
+  billing: {
+    anchorAt: number | null;
+    cadence: AccountRecord["billingCadence"];
   };
   limits: {
     buckets: RateLimitSnapshot["buckets"];
@@ -98,8 +96,6 @@ export function toAccountView(account: AccountRecord, activeAccountId: string | 
     chatgptAccountId: account.chatgptAccountId,
     email: account.email,
     planType: account.planType,
-    subscriptionStartedAt: account.subscriptionStartedAt,
-    subscriptionExpiresAt: account.subscriptionExpiresAt,
     enabled: account.enabled,
     isActive: account.id === activeAccountId,
     authStatus: account.authStatus,
@@ -115,9 +111,9 @@ export function toAccountView(account: AccountRecord, activeAccountId: string | 
       stale: account.authLastSuccessfulAt === null || Date.now() - account.authLastSuccessfulAt > STATUS_STALE_AFTER_MS,
       errorCode: account.authErrorCode,
     },
-    subscription: {
-      expiresAt: account.subscriptionExpiresAt,
-      source: account.subscriptionExpirySource,
+    billing: {
+      anchorAt: account.billingAnchorAt,
+      cadence: account.billingCadence,
     },
     limits: {
       buckets: snapshot?.buckets ?? [],

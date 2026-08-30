@@ -157,7 +157,7 @@ describe("security and routing core", () => {
     expect(snake.planType).toBeNull();
   });
 
-  it("persists subscription dates and updates plans from complete usage snapshots", async () => {
+  it("persists billing settings and updates plans from complete usage snapshots", async () => {
     const root = await tempDir();
     const database = new GatewayDatabase(path.join(root, "account-metadata.db"));
     database.accounts.insert({ id: "account", codexHome: path.join(root, "account") });
@@ -166,6 +166,8 @@ describe("security and routing core", () => {
       subscriptionStartedAt: 1_786_089_600_000,
       subscriptionExpiresAt: 1_786_089_600_000 + 30 * 24 * 60 * 60_000,
       subscriptionExpirySource: "legacy_estimate",
+      billingAnchorAt: Date.UTC(2026, 7, 24),
+      billingCadence: "monthly",
     });
     database.accounts.updateRateLimits("account", {
       primary: null,
@@ -177,10 +179,12 @@ describe("security and routing core", () => {
     expect(database.accounts.get("account")).toMatchObject({
       planType: "free",
       subscriptionStartedAt: 1_786_089_600_000,
+      billingAnchorAt: Date.UTC(2026, 7, 24),
+      billingCadence: "monthly",
     });
-    expect(toAccountView(database.accounts.get("account")!, null).subscription).toEqual({
-      expiresAt: 1_786_089_600_000 + 30 * 24 * 60 * 60_000,
-      source: "legacy_estimate",
+    expect(toAccountView(database.accounts.get("account")!, null).billing).toEqual({
+      anchorAt: Date.UTC(2026, 7, 24),
+      cadence: "monthly",
     });
     database.accounts.updateRateLimits("account", {
       primary: null,
@@ -251,7 +255,7 @@ describe("database migration v16", () => {
       subscriptionExpiresAt: null,
       subscriptionExpirySource: null,
     });
-    database.raw.prepare("UPDATE schema_migrations SET version = 15 WHERE version = 16").run();
+    database.raw.prepare("UPDATE schema_migrations SET version = 15 WHERE version = 17").run();
     database.close();
 
     const migrated = new GatewayDatabase(dbPath);
@@ -260,6 +264,33 @@ describe("database migration v16", () => {
       subscriptionExpirySource: "legacy_estimate",
     });
     migrated.close();
+  });
+});
+
+describe("database migration v17", () => {
+  it("adds empty billing fields without converting legacy expiration data", async () => {
+    const root = await tempDir();
+    const dbPath = path.join(root, "billing-v17.db");
+    const database = new GatewayDatabase(dbPath);
+    database.accounts.insert({ id: "legacy-billing", codexHome: path.join(root, "legacy-billing") });
+    database.accounts.update("legacy-billing", {
+      subscriptionStartedAt: Date.UTC(2026, 7, 1),
+      subscriptionExpiresAt: Date.UTC(2026, 7, 31),
+      subscriptionExpirySource: "manual",
+    });
+    expect(database.accounts.get("legacy-billing")).toMatchObject({
+      billingAnchorAt: null,
+      billingCadence: null,
+    });
+    database.accounts.update("legacy-billing", {
+      billingAnchorAt: Date.UTC(2026, 7, 24),
+      billingCadence: "annual",
+    });
+    expect(database.accounts.get("legacy-billing")).toMatchObject({
+      billingAnchorAt: Date.UTC(2026, 7, 24),
+      billingCadence: "annual",
+    });
+    database.close();
   });
 });
 

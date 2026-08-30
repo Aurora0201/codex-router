@@ -9,6 +9,8 @@ export type AuthStatus =
   | "disabled"
   | "error"
 
+export type BillingCadence = "monthly" | "annual"
+
 export interface UsageWindowView {
   usedPercent: number | null
   resetsAt: number | null
@@ -56,8 +58,6 @@ export interface AccountView {
   chatgptAccountId: string | null
   email: string | null
   planType: string | null
-  subscriptionStartedAt: number | null
-  subscriptionExpiresAt: number | null
   enabled: boolean
   isActive: boolean
   authStatus: AuthStatus
@@ -76,9 +76,9 @@ export interface AccountView {
     stale: boolean
     errorCode: string | null
   }
-  subscription: {
-    expiresAt: number | null
-    source: "manual" | "legacy_estimate" | null
+  billing: {
+    anchorAt: number | null
+    cadence: BillingCadence | null
   }
   limits: {
     buckets: RateLimitBucketView[]
@@ -183,7 +183,7 @@ export interface CodexUsageDashboard {
   dailyModels: Array<{ date: string; totalTokens: number; isPartial: boolean; models: Array<{ key: string; label: string; totalTokens: number }> }>
   models: Array<{ key: string; label: string; totalTokens: number; tasks: number; share: number }>
   projects: Array<{ key: string; label: string; totalTokens: number; tasks: number; share: number }>
-  heatmap: Array<{ weekday: string; hour: number; totalTokens: number }>
+  heatmap: Array<{ date: string; hour: number; totalTokens: number }>
   filters: { models: string[]; projects: Array<{ key: string; label: string }> }
 }
 
@@ -346,7 +346,8 @@ export interface GatewayService {
     id: string,
     values: {
       enabled?: boolean
-      subscriptionExpiresAt?: number | null
+      billingAnchorAt?: number | null
+      billingCadence?: BillingCadence | null
     }
   ): Promise<AccountView>
   removeAccount(id: string): Promise<void>

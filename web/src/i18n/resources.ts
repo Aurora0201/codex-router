@@ -122,10 +122,11 @@ export const en = {
   "本机数据始于 {{date}}；更早的本地记录不可恢复。":
     "Local data starts on {{date}}; earlier local records cannot be recovered.",
   "7 日均线": "7-day average",
-  "{{weekday}} {{hour}}:00 · {{tokens}}": "{{weekday}} {{hour}}:00 · {{tokens}}",
+  "{{date}} {{hour}}:00 · {{tokens}} Token": "{{date}} {{hour}}:00 · {{tokens}} tokens",
+  "{{year}}年{{month}}月{{day}}日": "{{year}}-{{month}}-{{day}}",
   "全部历史 · 不随筛选变化": "All history · unaffected by filters",
-  最活跃: "Busiest",
-  工作时段占比: "Working hours",
+  最活跃日期: "Busiest day",
+  活跃天数: "Active days",
   周末占比: "Weekend",
   白名单派生历史永久保留: "Allowlisted derived history is retained permanently",
   模型分布滚动区域: "Scrollable model usage ranking",
@@ -171,8 +172,9 @@ export const en = {
   中止: "Aborted",
   "每完成任务 Token": "Tokens per completed task",
   活跃热力图: "Activity heatmap",
-  "按本机时区汇总星期与小时的 Token 强度。": "Token intensity by weekday and hour in the local time zone.",
-  "星期和小时 Token 热力图": "Token heatmap by weekday and hour",
+  "按本机时区汇总星期与小时的 Token 强度。":
+    "Daily token intensity in the local time zone.",
+  "日期和小时 Token 热力图": "Token heatmap by date and hour",
   数据覆盖: "Data coverage",
   "用于判断统计的新鲜度和完整性。": "Use this to assess data freshness and completeness.",
   "白名单派生历史永久保留，不会随 Codex 会话文件清理而删除。":
@@ -534,6 +536,7 @@ export const en = {
   "当前账号仍保持为手动路由目标，系统不会自动切换账号。":
     "The current account remains the manual routing target. The router will not switch accounts automatically.",
   订阅到期日已更新: "Subscription expiration updated",
+  自动续订设置已更新: "Automatic renewal settings updated",
   "{{label}}剩余": "{{label}} remaining",
   "{{time}}重置": "Resets {{time}}",
   "{{days}} 天 {{hours}} 小时后": "in {{days}}d {{hours}}h",
@@ -599,6 +602,26 @@ export const en = {
     "This immediately asks Codex to reset the server-side limit. The client will use the returned result and will not infer a change.",
   确认使用: "Use credit",
   设置订阅到期日: "Set subscription expiration",
+  设置自动续订周期: "Set automatic renewal cycle",
+  "填写最近一次实际付款日期，系统会自动推算下一次续订时间。":
+    "Enter the most recent actual payment date to calculate the next renewal automatically.",
+  最近付款日: "Most recent payment date",
+  付款周期: "Billing cycle",
+  每月: "Monthly",
+  每年: "Annual",
+  "只能选择今天或过去的实际付款日期。":
+    "Select an actual payment date from today or earlier.",
+  "选择付款日期后将显示下一次自动续订时间。":
+    "Select a payment date to see the next automatic renewal.",
+  "下次自动续订：{{date}} · {{countdown}}":
+    "Next automatic renewal: {{date}} · {{countdown}}",
+  清除付款设置: "Clear payment settings",
+  下次自动续订: "Next automatic renewal",
+  未设置: "Not set",
+  未设置自动续订时间: "No automatic renewal set",
+  "{{date}} 自动续订 · {{countdown}}":
+    "Renews automatically {{date}} · {{countdown}}",
+  今天: "today",
   "订阅到期日由你手工维护，仅用于提醒，不会自动阻断路由。":
     "The subscription expiration is maintained manually for reminders only and never blocks routing automatically.",
   订阅到期日: "Subscription expiration",

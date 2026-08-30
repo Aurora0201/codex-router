@@ -10,8 +10,6 @@ const account = (id: string, isActive = false): AccountView => ({
   chatgptAccountId: `chatgpt-${id}`,
   email: `${id}@example.com`,
   planType: "Plus",
-  subscriptionStartedAt: null,
-  subscriptionExpiresAt: null,
   enabled: true,
   isActive,
   authStatus: "ready",
@@ -27,7 +25,7 @@ const account = (id: string, isActive = false): AccountView => ({
     stale: false,
     errorCode: null,
   },
-  subscription: { expiresAt: null, source: null },
+  billing: { anchorAt: null, cadence: null },
   limits: {
     buckets: [],
     defaultBucketKey: null,
@@ -164,11 +162,10 @@ export function createGatewayServiceFixture({
         selected.enabled = values.enabled
         selected.authStatus = values.enabled ? "ready" : "disabled"
       }
-      if (values.subscriptionExpiresAt !== undefined) {
-        selected.subscriptionExpiresAt = values.subscriptionExpiresAt
-        selected.subscription = {
-          expiresAt: values.subscriptionExpiresAt,
-          source: values.subscriptionExpiresAt === null ? null : "manual",
+      if (values.billingAnchorAt !== undefined && values.billingCadence !== undefined) {
+        selected.billing = {
+          anchorAt: values.billingAnchorAt,
+          cadence: values.billingCadence,
         }
       }
       return structuredClone(selected)

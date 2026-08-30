@@ -87,7 +87,10 @@ describe("UsagePage", () => {
           share: 1,
         },
       ],
-      heatmap: [{ weekday: "Fri", hour: 10, totalTokens: 180 }],
+      heatmap: [
+        { date: "2026-08-21", hour: 10, totalTokens: 180 },
+        { date: "2026-08-22", hour: 0, totalTokens: 0 },
+      ],
       filters: {
         models: ["gpt-test"],
         projects: [{ key: "hash", label: "codespace/codex-router" }],
@@ -110,6 +113,12 @@ describe("UsagePage", () => {
     // The heatmap describes the whole history, so it says so rather than
     // implying it follows the filters.
     expect(screen.getByText("全部历史 · 不随筛选变化")).toBeInTheDocument()
+    expect(
+      screen.getByLabelText("2026年08月21日 10:00 · 180 Token")
+    ).toBeInTheDocument()
+    expect(
+      screen.getByLabelText("2026年08月22日 00:00 · 0 Token")
+    ).toBeInTheDocument()
     expect(screen.queryByLabelText("账号筛选")).not.toBeInTheDocument()
     await waitFor(() =>
       expect(getCodexUsage).toHaveBeenCalledWith({
@@ -180,6 +189,11 @@ describe("UsagePage", () => {
     expect(within(ranking).getByText("无分类对话")).not.toHaveClass("font-mono")
 
     const projectFilter = screen.getByRole("combobox", { name: "项目筛选" })
+    const modelFilter = screen.getByRole("combobox", { name: "模型筛选" })
+    for (const filter of [modelFilter, projectFilter]) {
+      expect(filter).toHaveClass("rounded-md")
+      expect(filter).not.toHaveClass("rounded-xl")
+    }
     expect(projectFilter).toHaveClass("w-full", "min-w-0", "overflow-hidden")
     expect(projectFilter.parentElement).toHaveAttribute(
       "data-slot",
@@ -248,7 +262,18 @@ describe("UsagePage", () => {
     // The eleventh row is rendered rather than dropped: the card scrolls.
     expect(within(modelScrollArea).getByText("gpt-test-10")).toBeInTheDocument()
     expect(screen.getByLabelText("项目分布滚动区域")).toBeInTheDocument()
-    expect(screen.getByLabelText("活跃热力图滚动区域")).toBeInTheDocument()
+    const heatmapScrollArea = screen.getByLabelText("活跃热力图滚动区域")
+    expect(heatmapScrollArea).toHaveClass(
+      "[&_[data-slot=scroll-area-scrollbar]]:hidden"
+    )
+    expect(heatmapScrollArea).not.toHaveClass(
+      "[&_[data-slot=scroll-area-scrollbar]]:h-1.5"
+    )
+    for (const selector of [".bg-linear-to-b", ".bg-linear-to-t"]) {
+      expect(
+        heatmapScrollArea.parentElement?.querySelector(selector)
+      ).toHaveClass("transition-opacity", "duration-200")
+    }
 
     // Both cards pin the same body height, so an uneven list cannot skew them.
     for (const label of ["模型分布滚动区域", "项目分布滚动区域"]) {
@@ -292,7 +317,9 @@ describe("UsagePage", () => {
       expect(heading.querySelector("svg")).not.toBeNull()
       // A fixed band, not padding: the hint is smaller than the title, so only
       // a shared box centres both instead of sitting them on one baseline.
-      expect(heading.parentElement).toHaveClass("h-9", "items-center")
+      expect(heading.parentElement).toHaveClass("h-11", "items-center")
+      expect(heading.parentElement?.parentElement).toHaveClass("pb-2")
+      expect(heading.parentElement?.parentElement).not.toHaveClass("pt-2")
     }
   })
 

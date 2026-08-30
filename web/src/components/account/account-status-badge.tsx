@@ -1,6 +1,6 @@
 import {
   BanIcon,
-  CircleCheckIcon,
+  BadgeCheckIcon,
   Clock3Icon,
   GaugeIcon,
   ShieldOffIcon,
@@ -27,14 +27,9 @@ export function AccountStatus({ account }: { account: AccountView }) {
     )
   }
 
-  // Tone follows what the state asks of you, not what kind of state it is:
-  // muted when there is nothing to do, warning when it clears on its own or is
-  // only a reminder, destructive when routing is blocked until you act. Ready
-  // is the default for nearly every account, so colouring it would put an
-  // accent on every row and leave the exceptions nothing to stand out against.
   const status = {
     login_pending: { tone: "muted" as const, icon: Clock3Icon },
-    ready: { tone: "muted" as const, icon: CircleCheckIcon },
+    ready: { tone: "primary" as const, icon: BadgeCheckIcon },
     rate_limited: { tone: "warning" as const, icon: GaugeIcon },
     relogin_required: {
       tone: "destructive" as const,
@@ -54,6 +49,7 @@ export function AccountStatus({ account }: { account: AccountView }) {
       className={cn(
         "inline-flex items-center gap-1.5 text-xs font-medium [&_svg]:size-3.5",
         status.tone === "muted" && "text-muted-foreground",
+        status.tone === "primary" && "text-primary",
         status.tone === "warning" && "text-warning",
         status.tone === "destructive" && "text-destructive"
       )}

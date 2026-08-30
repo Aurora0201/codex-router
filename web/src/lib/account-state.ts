@@ -4,7 +4,6 @@ import type {
   UsageWindowView,
 } from "@/services/contracts"
 
-export const EXPIRING_SOON_MS = 7 * 24 * 60 * 60_000
 export const QUOTA_STALE_MS = 10 * 60_000
 /** Remaining quota at or below this share turns the meter into a warning. */
 export const QUOTA_TIGHT_PERCENT = 25
@@ -23,28 +22,9 @@ export function isRoutable(account: AccountView) {
   return account.enabled && account.auth.status === "ready"
 }
 
-export function subscriptionExpired(account: AccountView, now: number) {
-  const expiresAt = account.subscription.expiresAt
-  return expiresAt !== null && expiresAt < now
-}
-
-export function subscriptionExpiringSoon(account: AccountView, now: number) {
-  const expiresAt = account.subscription.expiresAt
-  return (
-    expiresAt !== null &&
-    expiresAt >= now &&
-    expiresAt - now <= EXPIRING_SOON_MS
-  )
-}
-
-export function needsAttention(account: AccountView, now: number) {
+export function needsAttention(account: AccountView) {
   if (isDisabled(account)) return false
-  return (
-    !isRoutable(account) ||
-    account.subscription.source === "legacy_estimate" ||
-    subscriptionExpired(account, now) ||
-    subscriptionExpiringSoon(account, now)
-  )
+  return !isRoutable(account)
 }
 
 export function defaultBucket(

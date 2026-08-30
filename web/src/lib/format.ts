@@ -1,5 +1,6 @@
 import type { AuthStatus, UsageWindowView } from "@/services/contracts"
 import i18n from "@/i18n"
+import { billingDaysRemaining } from "@/lib/billing-cycle"
 
 export function shortAccountId(value: string | null): string {
   if (!value) return "Account ID unavailable"
@@ -15,6 +16,11 @@ export function formatDateOnly(value: number | null): string {
     day: "2-digit",
     timeZone: "UTC",
   }).format(value)
+}
+
+export function formatBillingCountdown(timestamp: number, now = Date.now()): string {
+  const days = billingDaysRemaining(timestamp, now)
+  return days === 0 ? i18n.t("今天") : i18n.t("{{count}} 天后", { count: days })
 }
 
 export function formatUsageWindow(window: UsageWindowView | null): string {

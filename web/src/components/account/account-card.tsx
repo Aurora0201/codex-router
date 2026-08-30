@@ -1,5 +1,5 @@
 import { Radio as RadioPrimitive } from "@base-ui/react/radio"
-import { Clock3Icon, RefreshCwIcon } from "lucide-react"
+import { CircleDollarSignIcon, RefreshCwIcon } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
 import { AccountActions, type AccountAction } from "./account-actions"
@@ -18,9 +18,10 @@ import {
   accountWindowSlots,
   isDisabled,
   isRoutable,
-  subscriptionExpired,
 } from "@/lib/account-state"
+import { nextBillingAt } from "@/lib/billing-cycle"
 import {
+  formatBillingCountdown,
   formatDateOnly,
   formatRelativeTime,
   shortAccountId,
@@ -68,7 +69,11 @@ export function AccountCard({
     account.auth.stale ||
     (account.limits.checkedAt !== null &&
       now - account.limits.checkedAt > QUOTA_STALE_MS)
-  const expired = subscriptionExpired(account, now)
+  const nextBilling = nextBillingAt(
+    account.billing.anchorAt,
+    account.billing.cadence,
+    now
+  )
 
   return (
     <article
@@ -192,20 +197,17 @@ export function AccountCard({
           <span
             className={cn(
               "flex min-w-0 items-center gap-1.5 text-xs",
-              expired ? "text-warning" : "text-muted-foreground"
+              nextBilling !== null ? "text-primary" : "text-muted-foreground"
             )}
           >
-            <Clock3Icon aria-hidden="true" className="size-3.5 shrink-0" />
+            <CircleDollarSignIcon aria-hidden="true" className="size-3.5 shrink-0" />
             <span className="truncate">
-              {account.subscription.expiresAt === null
-                ? t("未设置到期日")
-                : expired
-                  ? t("已于 {{date}} 到期", {
-                      date: formatDateOnly(account.subscription.expiresAt),
-                    })
-                  : t("{{date}} 到期", {
-                      date: formatDateOnly(account.subscription.expiresAt),
-                    })}
+              {nextBilling === null
+                ? t("未设置自动续订时间")
+                : t("{{date}} 自动续订 · {{countdown}}", {
+                    date: formatDateOnly(nextBilling),
+                    countdown: formatBillingCountdown(nextBilling, now),
+                  })}
             </span>
           </span>
           {repair ? (

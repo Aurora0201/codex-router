@@ -18,41 +18,30 @@ function renderPage(snapshot: GatewaySnapshot, service: GatewayService) {
 }
 
 describe("AccountsPage", () => {
-  it("edits a subscription date with the shadcn date picker dialog", async () => {
+  it("edits automatic renewal settings with the shadcn dialog", async () => {
     const service = createGatewayServiceFixture()
-    service.snapshot.accounts.accounts[0].subscriptionStartedAt = Date.UTC(
-      2026,
-      7,
-      1
-    )
-    service.snapshot.accounts.accounts[0].subscriptionExpiresAt = Date.UTC(
-      2026,
-      7,
-      31
-    )
-    service.snapshot.accounts.accounts[0].subscription.expiresAt = Date.UTC(
-      2026,
-      7,
-      31
-    )
-    service.snapshot.accounts.accounts[0].subscription.source = "manual"
+    service.snapshot.accounts.accounts[0].billing = {
+      anchorAt: Date.UTC(2026, 7, 24),
+      cadence: "monthly",
+    }
     const updateAccount = vi.spyOn(service, "updateAccount")
 
     renderPage(await service.getSnapshot(), service)
     await userEvent.click(
       screen.getAllByRole("button", { name: "账号操作" })[0]
     )
-    await userEvent.click(await screen.findByText("设置订阅到期日"))
+    await userEvent.click(await screen.findByText("设置自动续订周期"))
 
     expect(screen.getByRole("dialog")).toHaveTextContent(
-      "到期提醒日期：2026-08-31"
+      "下次自动续订："
     )
     expect(
-      screen.getByRole("button", { name: /2026-08-31/ })
+      screen.getByRole("button", { name: /2026-08-24/ })
     ).toBeInTheDocument()
     await userEvent.click(screen.getByRole("button", { name: "保存" }))
     expect(updateAccount).toHaveBeenCalledWith("account-1", {
-      subscriptionExpiresAt: Date.UTC(2026, 7, 31),
+      billingAnchorAt: Date.UTC(2026, 7, 24),
+      billingCadence: "monthly",
     })
   })
 

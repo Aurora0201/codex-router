@@ -477,11 +477,12 @@ export class CodexUsageService {
     const projects = limitProjectRows(allProjects);
     const inputTokens = sum(selected, "inputTokens"), cachedInputTokens = sum(selected, "cachedInputTokens"), outputTokens = sum(selected, "outputTokens");
     const tasksStarted = selected.filter((event) => event.kind === "task_started").length, tasksCompleted = selected.filter((event) => event.kind === "task_completed").length;
-    const hourFormatter = new Intl.DateTimeFormat("en-US", { timeZone: timezone, weekday: "short", hour: "2-digit", hourCycle: "h23" });
-    // The heatmap answers "when do I work", which is a property of the whole
-    // history rather than of whatever slice is on screen, so it reads the
-    // unfiltered events instead of the selected ones.
-    const heat = new Map<string, number>(); for (const event of events.filter((item) => item.kind === "token_usage")) { const parts = hourFormatter.formatToParts(new Date(event.occurredAt)); const key = `${parts.find((part) => part.type === "weekday")?.value}|${Number(parts.find((part) => part.type === "hour")?.value)}`; heat.set(key, (heat.get(key) ?? 0) + event.totalTokens); }
+    // The heatmap covers the whole retained history rather than the selected
+    // slice. Populate every calendar day so a quiet day remains visible.
+    const hourFormatter = new Intl.DateTimeFormat("en-US", { timeZone: timezone, hour: "2-digit", hourCycle: "h23" });
+    const heat = new Map<string, number>(); for (const event of datedEvents.filter((item) => item.kind === "token_usage")) { const hour = Number(hourFormatter.format(new Date(event.occurredAt))); const key = `${event.localDay}|${hour}`; heat.set(key, (heat.get(key) ?? 0) + event.totalTokens); }
+    const heatDays: string[] = [];
+    if (coverageFirstAt !== null) for (let cursor = coverageFirstAt; day(cursor) <= today; cursor += 86_400_000) { const value = day(cursor); if (!heatDays.includes(value)) heatDays.push(value); }
     return { status: this.scanning ? "scanning" : (storeStatus.pendingAuditEvents > 0 ? "partial" : this.status), scope: "local_codex_home", generatedAt: Date.now(), timezone,
       coverage: { firstEventAt: coverageFirstAt, lastEventAt: lastTimes.length ? Math.max(...lastTimes) : null,
         rollouts: activeCoverage.count + retainedCoverage.count, sourceRollouts: sourceCoverage?.discoveredRollouts ?? 0, retainedRollouts: retainedCoverage.count,
@@ -497,7 +498,7 @@ export class CodexUsageService {
         compactions: selected.filter((event) => event.kind === "context_compacted").length, completionPercent: tasksStarted ? tasksCompleted / tasksStarted * 100 : 0,
         tokensPerCompletedTask: tasksCompleted ? Math.round((inputTokens + outputTokens) / tasksCompleted) : 0 },
       daily, dailyModels, models: modelRows, projects,
-      heatmap: [...heat].map(([key, totalTokens]) => { const [weekday, hour] = key.split("|"); return { weekday, hour: Number(hour), totalTokens }; }),
+      heatmap: heatDays.flatMap((date) => Array.from({ length: 24 }, (_, hour) => ({ date, hour, totalTokens: heat.get(`${date}|${hour}`) ?? 0 }))),
       filters: { models: [...new Set(events.map((event) => event.model).filter(Boolean))], projects: rank(events, "project").map(({ key, label }) => ({ key, label })) } };
   }
 }

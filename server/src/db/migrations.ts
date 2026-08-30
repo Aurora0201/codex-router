@@ -2,7 +2,7 @@ import type Database from "better-sqlite3";
 
 type SqliteDatabase = Database.Database;
 
-export const SCHEMA_VERSION = 16;
+export const SCHEMA_VERSION = 17;
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -18,6 +18,8 @@ CREATE TABLE IF NOT EXISTS accounts (
   subscription_started_at INTEGER,
   subscription_expires_at INTEGER,
   subscription_expiry_source TEXT,
+  billing_anchor_at INTEGER,
+  billing_cadence TEXT,
   codex_home TEXT NOT NULL UNIQUE,
   enabled INTEGER NOT NULL DEFAULT 1,
   is_default INTEGER NOT NULL DEFAULT 0,
@@ -404,6 +406,15 @@ export function migrate(db: SqliteDatabase): void {
       WHERE auth_last_successful_at IS NULL
         AND last_auth_refresh_at IS NOT NULL;
     `);
+  }
+  if (version < 17) {
+    const accountColumns = tableColumns(db, "accounts");
+    if (!accountColumns.has("billing_anchor_at")) {
+      db.exec("ALTER TABLE accounts ADD COLUMN billing_anchor_at INTEGER");
+    }
+    if (!accountColumns.has("billing_cadence")) {
+      db.exec("ALTER TABLE accounts ADD COLUMN billing_cadence TEXT");
+    }
   }
 
   db.prepare(

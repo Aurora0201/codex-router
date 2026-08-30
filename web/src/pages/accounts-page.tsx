@@ -8,7 +8,7 @@ import {
 import { useTranslation } from "react-i18next"
 
 import { AccountList } from "@/components/account/account-list"
-import { SubscriptionDateDialog } from "@/components/account/subscription-date-dialog"
+import { BillingDialog } from "@/components/account/billing-dialog"
 import { OAuthDialog } from "@/components/account/oauth-dialog"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
@@ -302,18 +302,18 @@ export function AccountsPage({
         onComplete={reload}
       />
       {editingSubscription ? (
-        <SubscriptionDateDialog
+        <BillingDialog
           key={editingSubscription.id}
           account={editingSubscription}
           busy={busyId === editingSubscription.id}
           onOpenChange={(open) => !open && setEditingSubscription(null)}
-          onSave={(subscriptionExpiresAt) => {
+          onSave={({ billingAnchorAt, billingCadence }) => {
             const account = editingSubscription
             void run(
               account.id,
               () =>
-                service.updateAccount(account.id, { subscriptionExpiresAt }),
-              t("订阅到期日已更新")
+                service.updateAccount(account.id, { billingAnchorAt, billingCadence }),
+              t("自动续订设置已更新")
             ).then(() => setEditingSubscription(null))
           }}
         />

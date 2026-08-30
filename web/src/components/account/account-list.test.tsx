@@ -11,7 +11,6 @@ import type {
 import { AccountList } from "./account-list"
 
 const HOUR = 60 * 60 * 1000
-const DAY = 24 * HOUR
 
 function window(usedPercent: number | null, mins: number): UsageWindowView {
   return {
@@ -55,8 +54,6 @@ function account(values: Partial<AccountView> = {}): AccountView {
     chatgptAccountId: "acct-alpha",
     email: "alpha@example.com",
     planType: "Plus",
-    subscriptionStartedAt: null,
-    subscriptionExpiresAt: null,
     enabled: true,
     isActive: false,
     authStatus,
@@ -72,7 +69,7 @@ function account(values: Partial<AccountView> = {}): AccountView {
       stale: false,
       errorCode: null,
     },
-    subscription: { expiresAt: null, source: null },
+    billing: { anchorAt: null, cadence: null },
     limits: {
       buckets: [],
       defaultBucketKey: null,
@@ -250,11 +247,10 @@ describe("AccountList", () => {
     expect(cards().map((item) => item.textContent)).toEqual(expected)
   })
 
-  it("gives every card both windows, the brand mark and an expiry footer", () => {
+  it("gives every card both windows, the brand mark and a renewal footer", () => {
     renderList([
       account({
-        subscriptionExpiresAt: Date.UTC(2026, 8, 15),
-        subscription: { expiresAt: Date.UTC(2026, 8, 15), source: "manual" },
+        billing: { anchorAt: Date.UTC(2026, 7, 15), cadence: "monthly" },
         limits: quota([
           bucket({ primary: window(25, 300), secondary: window(50, 10080) }),
         ]),
@@ -266,8 +262,8 @@ describe("AccountList", () => {
       expect(meters(item)).toHaveLength(2)
       expect(item.querySelectorAll("[data-slot=metric-mark]")).toHaveLength(1)
     }
-    expect(screen.getByText("2026/09/15 到期")).toBeInTheDocument()
-    expect(screen.getByText("未设置到期日")).toBeInTheDocument()
+    expect(screen.getByText(/^\d{4}\/\d{2}\/\d{2} 自动续订 ·/)).toBeInTheDocument()
+    expect(screen.getByText("未设置自动续订时间")).toBeInTheDocument()
 
     // Both slots stay named even with nothing to report, and never claim 无限制.
     const none = card("acct-none")
@@ -277,17 +273,11 @@ describe("AccountList", () => {
     expect(within(none).queryByText("无限制")).not.toBeInTheDocument()
   })
 
-  it("marks a lapsed expiry as a notice rather than a failure", () => {
+  it("keeps missing billing metadata out of the attention state", () => {
     renderList([
-      account({
-        subscriptionExpiresAt: Date.now() - DAY,
-        subscription: { expiresAt: Date.now() - DAY, source: "manual" },
-      }),
+      account(),
     ])
-    // The date never blocks routing, so it must not wear the blocking tone.
-    expect(screen.getByText(/^已于 .+ 到期$/).parentElement).toHaveClass(
-      "text-warning"
-    )
+    expect(screen.getByRole("button", { name: "需处理（0）" })).toBeInTheDocument()
   })
 
   it("names the missing window by its role, whichever one upstream omitted", () => {
