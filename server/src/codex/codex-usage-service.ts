@@ -197,14 +197,15 @@ export class CodexUsageService {
     private readonly log: LogLike,
     private readonly minimumMissingAgeMs = 30_000,
     private readonly automaticBackups = true,
+    private readonly timezone = Intl.DateTimeFormat().resolvedOptions().timeZone,
   ) {}
 
   static async create(options: {
     dataDir: string; legacyDb: Database.Database; onChange: ChangeHandler; log: LogLike;
-    minimumMissingAgeMs?: number; automaticBackups?: boolean;
+    minimumMissingAgeMs?: number; automaticBackups?: boolean; timezone?: string;
   }): Promise<CodexUsageService> {
     const store = await CodexUsageStore.open(options.dataDir, options.legacyDb, options.log);
-    return new CodexUsageService(store, options.onChange, options.log, options.minimumMissingAgeMs ?? 30_000, options.automaticBackups ?? true);
+    return new CodexUsageService(store, options.onChange, options.log, options.minimumMissingAgeMs ?? 30_000, options.automaticBackups ?? true, options.timezone);
   }
 
   get database(): Database.Database { return this.store.raw; }
@@ -430,7 +431,7 @@ export class CodexUsageService {
     const lastTimes = presentTimes([activeCoverage.lastAt, retainedCoverage.lastAt, events.at(-1)?.occurredAt ?? null]);
     const scannedTimes = presentTimes([activeCoverage.scannedAt, retainedCoverage.scannedAt]);
     const coverageFirstAt = firstTimes.length ? Math.min(...firstTimes) : null;
-    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const timezone = this.timezone;
     const dayFormatter = new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" });
     const day = (time: number) => dayFormatter.format(new Date(time));
     const datedEvents = events.map((event) => ({ ...event, localDay: day(event.occurredAt) }));

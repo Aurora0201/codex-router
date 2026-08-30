@@ -8,10 +8,15 @@ import { CodexUsageService, UNCATEGORIZED_PROJECT_KEY, codexUsageInternals } fro
 import { buildGateway } from "../src/app.js";
 
 const temporary: string[] = [];
+const fixtures: Array<{ database: GatewayDatabase; service: CodexUsageService }> = [];
 const originalCodexHome = process.env.CODEX_HOME;
 afterEach(async () => {
   if (originalCodexHome === undefined) delete process.env.CODEX_HOME; else process.env.CODEX_HOME = originalCodexHome;
-  await Promise.all(temporary.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
+  for (const { database, service } of fixtures.splice(0).reverse()) {
+    try { await service.close(); } catch { /* already closed by the test */ }
+    try { database.close(); } catch { /* already closed by the test */ }
+  }
+  await Promise.all(temporary.splice(0).map((directory) => rm(directory, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })));
 });
 
 async function fixture(): Promise<{ root: string; database: GatewayDatabase; service: CodexUsageService; auditPath: string }> {
@@ -29,7 +34,9 @@ async function fixture(): Promise<{ root: string; database: GatewayDatabase; ser
     log: { warn: () => undefined },
     minimumMissingAgeMs: 0,
     automaticBackups: false,
+    timezone: "Asia/Shanghai",
   });
+  fixtures.push({ database, service });
   return { root, database, service, auditPath };
 }
 

@@ -149,8 +149,6 @@ export async function buildGateway(overrides: Partial<GatewayConfig> = {}): Prom
   }
 
   let closed = false;
-  // Fastify lifecycle cleanup is not reachable from an HTTP request.
-  // lgtm[js/missing-rate-limiting]
   app.addHook("onClose", async () => {
     if (closed) return;
     closed = true;
