@@ -141,15 +141,15 @@ function ToastIcon({ type }: { type: string | undefined }) {
   let icon: React.ReactNode = null
 
   if (type === "success") {
-    icon = <CircleCheckIcon aria-hidden="true" />
+    icon = <CircleCheckIcon className="text-success" aria-hidden="true" />
   }
 
   if (type === "info") {
-    icon = <InfoIcon aria-hidden="true" />
+    icon = <InfoIcon className="text-info" aria-hidden="true" />
   }
 
   if (type === "warning") {
-    icon = <TriangleAlertIcon aria-hidden="true" />
+    icon = <TriangleAlertIcon className="text-warning" aria-hidden="true" />
   }
 
   if (type === "error") {

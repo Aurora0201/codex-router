@@ -337,8 +337,8 @@ describe("UsagePage", () => {
     )
 
     await screen.findByText("区间总 Token")
-    // Exactly one ink block: the hero. Anything more and it stops being one.
-    expect(document.querySelectorAll(".bg-ink")).toHaveLength(1)
-    expect(screen.getByText("区间总 Token").closest(".bg-ink")).not.toBeNull()
+    // Exactly one emphasis block: the hero. Anything more and it stops being one.
+    expect(document.querySelectorAll(".bg-emphasis")).toHaveLength(1)
+    expect(screen.getByText("区间总 Token").closest(".bg-emphasis")).not.toBeNull()
   })
 })

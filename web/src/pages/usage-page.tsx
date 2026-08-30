@@ -70,7 +70,7 @@ const trendConfig = {
   cachedInputTokens: { label: "缓存输入", color: "var(--chart-1)" },
   uncachedInputTokens: { label: "非缓存输入", color: "var(--chart-3)" },
   outputTokens: { label: "输出", color: "var(--chart-5)" },
-  rollingAverage7d: { label: "7 日均线", color: "var(--ink-muted)" },
+  rollingAverage7d: { label: "7 日均线", color: "var(--emphasis-muted)" },
 } satisfies ChartConfig
 
 const ranges: Array<{ value: CodexUsageRange; label: string }> = [
@@ -564,10 +564,10 @@ export function UsagePage({
         <div className="grid grid-cols-12 gap-4">
           {/* The one dark block on the page: the headline number and its shape.
               Everything else stays on light surfaces so this reads as the hero. */}
-          <section className="col-span-12 rounded-2xl bg-ink p-2 text-ink-foreground xl:col-span-8">
+          <section className="col-span-12 rounded-2xl bg-emphasis p-2 text-emphasis-foreground xl:col-span-8">
             <div className="flex flex-wrap items-start justify-between gap-4 px-3 py-2.5">
               <div>
-                <p className="text-xs text-ink-muted">{t("区间总 Token")}</p>
+                <p className="text-xs text-emphasis-muted">{t("区间总 Token")}</p>
                 <p
                   className="mt-1 font-brand text-3xl leading-none font-semibold tabular-nums"
                   title={fullTokens(summary.totalTokens)}
@@ -591,7 +591,7 @@ export function UsagePage({
                   },
                 ].map((item) => (
                   <li key={item.label}>
-                    <p className="text-xs text-ink-muted">{item.label}</p>
+                    <p className="text-xs text-emphasis-muted">{item.label}</p>
                     <p className="mt-0.5 text-sm font-semibold tabular-nums">
                       {item.value}
                     </p>
@@ -600,7 +600,7 @@ export function UsagePage({
               </ul>
             </div>
 
-            <div className="rounded-xl bg-ink-panel p-3">
+            <div className="rounded-xl bg-emphasis-surface p-3">
               <ChartContainer
                 config={trendConfig}
                 className="h-44 w-full"
@@ -614,8 +614,8 @@ export function UsagePage({
                   <ChartTooltip
                     content={
                       <ChartTooltipContent
-                        // Inside the ink panel this would inherit
-                        // --ink-foreground onto its own light background.
+                        // Inside the emphasis panel this would inherit
+                        // --emphasis-foreground onto its own light background.
                         className="text-foreground"
                         formatter={(value, name) => (
                           <div className="flex min-w-36 justify-between gap-3">
@@ -663,7 +663,7 @@ export function UsagePage({
                   />
                 </ComposedChart>
               </ChartContainer>
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-[11px] text-ink-muted">
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-[11px] text-emphasis-muted">
                 <span className="font-mono tabular-nums">
                   {data.daily[0]?.date.slice(5)}
                 </span>
@@ -681,7 +681,7 @@ export function UsagePage({
                     </li>
                   ))}
                   <li className="flex items-center gap-1.5">
-                    <span className="h-px w-4 bg-ink-muted" />
+                    <span className="h-px w-4 bg-emphasis-muted" />
                     {t("7 日均线")}
                   </li>
                 </ul>
