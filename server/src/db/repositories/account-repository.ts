@@ -8,7 +8,7 @@ export interface NewAccount {
   codexHome: string;
 }
 
-export type AccountPatch = Partial<Pick<AccountRecord, "chatgptAccountId" | "email" | "planType" | "enabled" | "authStatus" | "fedRamp">>;
+export type AccountPatch = Partial<Pick<AccountRecord, "chatgptAccountId" | "email" | "planType" | "subscriptionStartedAt" | "subscriptionExpiresAt" | "subscriptionExpirySource" | "billingAnchorAt" | "billingCadence" | "enabled" | "authStatus" | "fedRamp" | "authMode" | "authCheckedAt" | "authLastSuccessfulAt" | "authErrorCode">>;
 
 function asAccount(row: Record<string, unknown>): AccountRecord {
   return {
@@ -16,6 +16,11 @@ function asAccount(row: Record<string, unknown>): AccountRecord {
     chatgptAccountId: row.chatgpt_account_id == null ? null : String(row.chatgpt_account_id),
     email: row.email == null ? null : String(row.email),
     planType: row.plan_type == null ? null : String(row.plan_type),
+    subscriptionStartedAt: row.subscription_started_at == null ? null : Number(row.subscription_started_at),
+    subscriptionExpiresAt: row.subscription_expires_at == null ? null : Number(row.subscription_expires_at),
+    subscriptionExpirySource: row.subscription_expiry_source == null ? null : String(row.subscription_expiry_source) as AccountRecord["subscriptionExpirySource"],
+    billingAnchorAt: row.billing_anchor_at == null ? null : Number(row.billing_anchor_at),
+    billingCadence: row.billing_cadence == null ? null : String(row.billing_cadence) as AccountRecord["billingCadence"],
     codexHome: String(row.codex_home),
     enabled: Boolean(row.enabled),
     authStatus: String(row.auth_status) as AuthStatus,
@@ -27,6 +32,11 @@ function asAccount(row: Record<string, unknown>): AccountRecord {
     secondaryResetsAt: row.secondary_resets_at == null ? null : Number(row.secondary_resets_at),
     secondaryWindowMinutes: row.secondary_window_minutes == null ? null : Number(row.secondary_window_minutes),
     rateLimitReachedType: row.rate_limit_reached_type == null ? null : String(row.rate_limit_reached_type),
+    authMode: row.auth_mode == null ? null : String(row.auth_mode),
+    authCheckedAt: row.auth_checked_at == null ? null : Number(row.auth_checked_at),
+    authLastSuccessfulAt: row.auth_last_successful_at == null ? null : Number(row.auth_last_successful_at),
+    authErrorCode: row.auth_error_code == null ? null : String(row.auth_error_code),
+    limitsSnapshotJson: row.limits_snapshot_json == null ? null : String(row.limits_snapshot_json),
     lastAuthRefreshAt: row.last_auth_refresh_at == null ? null : Number(row.last_auth_refresh_at),
     lastLimitsRefreshAt: row.last_limits_refresh_at == null ? null : Number(row.last_limits_refresh_at),
     lastUsedAt: row.last_used_at == null ? null : Number(row.last_used_at),
@@ -67,9 +77,10 @@ export class AccountRepository {
     const next = { ...current, ...patch };
     this.db.prepare(`
       UPDATE accounts SET
-        chatgpt_account_id=?, email=?, plan_type=?, enabled=?, auth_status=?, fedramp=?, updated_at=?
+        chatgpt_account_id=?, email=?, plan_type=?, subscription_started_at=?, subscription_expires_at=?, subscription_expiry_source=?, billing_anchor_at=?, billing_cadence=?,
+        enabled=?, auth_status=?, fedramp=?, auth_mode=?, auth_checked_at=?, auth_last_successful_at=?, auth_error_code=?, updated_at=?
       WHERE id=?
-    `).run(next.chatgptAccountId, next.email, next.planType, next.enabled ? 1 : 0, next.authStatus, next.fedRamp ? 1 : 0, Date.now(), id);
+    `).run(next.chatgptAccountId, next.email, next.planType, next.subscriptionStartedAt, next.subscriptionExpiresAt, next.subscriptionExpirySource, next.billingAnchorAt, next.billingCadence, next.enabled ? 1 : 0, next.authStatus, next.fedRamp ? 1 : 0, next.authMode, next.authCheckedAt, next.authLastSuccessfulAt, next.authErrorCode, Date.now(), id);
     return this.get(id)!;
   }
 
@@ -82,7 +93,8 @@ export class AccountRepository {
       UPDATE accounts SET
         primary_used_percent=?, primary_resets_at=?, primary_window_minutes=?,
         secondary_used_percent=?, secondary_resets_at=?, secondary_window_minutes=?,
-        rate_limit_reached_type=?,
+        rate_limit_reached_type=?, limits_snapshot_json=?,
+        plan_type=COALESCE(?, plan_type),
         auth_status=CASE WHEN auth_status='rate_limited' AND ? IS NULL THEN 'ready' ELSE auth_status END,
         last_limits_refresh_at=?, updated_at=?
       WHERE id=?
@@ -94,6 +106,8 @@ export class AccountRepository {
       limits.secondary?.resetsAt ?? null,
       limits.secondary?.windowDurationMins ?? null,
       limits.rateLimitReachedType ?? null,
+      JSON.stringify(limits),
+      limits.planType,
       limits.rateLimitReachedType ?? null,
       limits.loadedAt,
       Date.now(),
@@ -102,6 +116,7 @@ export class AccountRepository {
   }
 
   markAuthRefreshed(id: string): void {
-    this.db.prepare("UPDATE accounts SET auth_status='ready', last_auth_refresh_at=?, updated_at=? WHERE id=?").run(Date.now(), Date.now(), id);
+    const now = Date.now();
+    this.db.prepare("UPDATE accounts SET auth_status='ready', last_auth_refresh_at=?, auth_checked_at=?, auth_last_successful_at=?, auth_error_code=NULL, updated_at=? WHERE id=?").run(now, now, now, now, id);
   }
 }

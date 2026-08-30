@@ -18,6 +18,33 @@ function renderPage(snapshot: GatewaySnapshot, service: GatewayService) {
 }
 
 describe("AccountsPage", () => {
+  it("edits automatic renewal settings with the shadcn dialog", async () => {
+    const service = createGatewayServiceFixture()
+    service.snapshot.accounts.accounts[0].billing = {
+      anchorAt: Date.UTC(2026, 7, 24),
+      cadence: "monthly",
+    }
+    const updateAccount = vi.spyOn(service, "updateAccount")
+
+    renderPage(await service.getSnapshot(), service)
+    await userEvent.click(
+      screen.getAllByRole("button", { name: "账号操作" })[0]
+    )
+    await userEvent.click(await screen.findByText("设置自动续订周期"))
+
+    expect(screen.getByRole("dialog")).toHaveTextContent(
+      "下次自动续订："
+    )
+    expect(
+      screen.getByRole("button", { name: /2026-08-24/ })
+    ).toBeInTheDocument()
+    await userEvent.click(screen.getByRole("button", { name: "保存" }))
+    expect(updateAccount).toHaveBeenCalledWith("account-1", {
+      billingAnchorAt: Date.UTC(2026, 7, 24),
+      billingCadence: "monthly",
+    })
+  })
+
   it("focuses the healthy page on the searchable account pool", async () => {
     const service = createGatewayServiceFixture()
     const snapshot = await service.getSnapshot()
@@ -28,24 +55,36 @@ describe("AccountsPage", () => {
     expect(screen.queryByText("运行概览")).not.toBeInTheDocument()
     expect(screen.queryByRole("alert")).not.toBeInTheDocument()
     expect(
-      screen.getByRole("textbox", { name: "搜索授权账号" })
+      screen.getByRole("searchbox", { name: "搜索授权账号" })
     ).toBeInTheDocument()
   })
 
-  it("warns when no route account is selected", async () => {
+  it("shows the unselected route summary without an alert", async () => {
     const service = createGatewayServiceFixture({ activeAccountId: null })
     const snapshot = await service.getSnapshot()
 
     renderPage(snapshot, service)
 
     expect(screen.queryByRole("alert")).not.toBeInTheDocument()
-    expect(screen.getByText("未选择路由").closest('[data-slot="badge"]')).toHaveClass("text-warning")
+    expect(
+      screen.getByText("尚未选择路由账号 · 请求使用 Codex 当前登录账号透传")
+    ).toBeInTheDocument()
+  })
+
+  it("clears the manual route from the route summary", async () => {
+    const service = createGatewayServiceFixture()
+    const clearActiveAccount = vi.spyOn(service, "clearActiveAccount")
+    renderPage(await service.getSnapshot(), service)
+
+    await userEvent.click(screen.getByRole("button", { name: "清除路由" }))
+    expect(clearActiveAccount).toHaveBeenCalled()
   })
 
   it("warns when the active route account is unavailable", async () => {
     const service = createGatewayServiceFixture()
     const snapshot = await service.getSnapshot()
     snapshot.accounts.accounts[0].authStatus = "relogin_required"
+    snapshot.accounts.accounts[0].auth.status = "relogin_required"
 
     renderPage(snapshot, service)
 
@@ -61,7 +100,7 @@ describe("AccountsPage", () => {
     renderPage(snapshot, service)
 
     const add = screen.getByRole("button", { name: "添加账号" })
-    expect(add.parentElement).toHaveClass("sm:items-center")
+    expect(add.parentElement?.parentElement).toHaveClass("sm:items-center")
     await userEvent.click(add)
     expect(screen.getByRole("dialog")).toBeInTheDocument()
   })
@@ -70,7 +109,9 @@ describe("AccountsPage", () => {
     const service = createGatewayServiceFixture({ activeAccountId: null })
     service.snapshot.accounts.accounts = []
     renderPage(await service.getSnapshot(), service)
-    expect(screen.getByText(/账号池为空时，请求会使用 Codex 当前登录账号透传/)).toBeInTheDocument()
+    expect(
+      screen.getByText(/账号池为空时，请求会使用 Codex 当前登录账号透传/)
+    ).toBeInTheDocument()
   })
 
   it("uses one shared dialog from both empty-state triggers and keeps it mounted after completion", async () => {
@@ -80,24 +121,44 @@ describe("AccountsPage", () => {
     service.snapshot.accounts.accounts = []
     service.getLoginStatus = vi.fn(async () => {
       service.snapshot.accounts.accounts = [addedAccount]
-      return { loginId: "login-1", status: "complete" as const, authUrl: "https://auth.openai.test/codex" }
+      return {
+        loginId: "login-1",
+        status: "complete" as const,
+        authUrl: "https://auth.openai.test/codex",
+      }
     })
     const initial = await service.getSnapshot()
 
     function Harness() {
       const [snapshot, setSnapshot] = useState(initial)
-      return <AccountsPage snapshot={snapshot} service={service} reload={async () => setSnapshot(await service.getSnapshot())} />
+      return (
+        <AccountsPage
+          snapshot={snapshot}
+          service={service}
+          reload={async () => setSnapshot(await service.getSnapshot())}
+        />
+      )
     }
 
-    render(<TooltipProvider><Harness /></TooltipProvider>)
+    render(
+      <TooltipProvider>
+        <Harness />
+      </TooltipProvider>
+    )
     const triggers = screen.getAllByRole("button", { name: "添加账号" })
     expect(triggers).toHaveLength(2)
     await userEvent.click(triggers[1])
     expect(screen.getAllByRole("dialog")).toHaveLength(1)
     await userEvent.click(screen.getByRole("button", { name: "启动登录" }))
 
-    expect(await screen.findByText("授权完成", {}, { timeout: 2_000 })).toBeInTheDocument()
-    await waitFor(() => expect(document.querySelector('[aria-label="搜索授权账号"]')).toBeInTheDocument())
+    expect(
+      await screen.findByText("授权完成", {}, { timeout: 2_000 })
+    ).toBeInTheDocument()
+    await waitFor(() =>
+      expect(
+        document.querySelector('[aria-label="搜索授权账号"]')
+      ).toBeInTheDocument()
+    )
     expect(screen.getByRole("dialog")).toBeInTheDocument()
     open.mockRestore()
   })

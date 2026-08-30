@@ -7,7 +7,7 @@ import { AccountStatus } from "./account-status-badge"
 function accountWithStatus(authStatus: AuthStatus): AccountView {
   return {
     id: authStatus,
-    chatgptAccountId: `account-${authStatus}`,
+    chatgptAccountId: "account-" + authStatus,
     email: null,
     planType: null,
     enabled: authStatus !== "disabled",
@@ -17,12 +17,28 @@ function accountWithStatus(authStatus: AuthStatus): AccountView {
     usage: { primary: null, secondary: null },
     lastAuthRefreshAt: null,
     lastLimitsRefreshAt: null,
+    auth: {
+      status: authStatus,
+      mode: null,
+      checkedAt: null,
+      lastSuccessfulAt: null,
+      stale: false,
+      errorCode: null,
+    },
+    billing: { anchorAt: null, cadence: null },
+    limits: {
+      buckets: [],
+      defaultBucketKey: null,
+      resetCredits: null,
+      checkedAt: null,
+    },
   }
 }
 
 describe("AccountStatus", () => {
   it.each([
     ["login_pending", "等待登录"],
+    ["checking", "正在检查"],
     ["ready", "认证就绪"],
     ["refreshing", "正在刷新"],
     ["rate_limited", "额度受限"],
@@ -31,29 +47,41 @@ describe("AccountStatus", () => {
     ["disabled", "已停用"],
     ["error", "认证异常"],
   ] satisfies [AuthStatus, string][])(
-    "renders the %s status with Nova icon treatment",
+    "renders the %s status",
     (status, label) => {
       const { container } = render(
         <AccountStatus account={accountWithStatus(status)} />
       )
-
       expect(screen.getByText(label)).toBeInTheDocument()
       expect(container.querySelector("svg")).not.toBeNull()
-      expect(container.querySelector('[data-slot="badge"]')).toBeNull()
     }
   )
 
-  it("uses a spinner while authentication refreshes", () => {
-    render(<AccountStatus account={accountWithStatus("refreshing")} />)
+  it.each(["checking", "refreshing"] satisfies AuthStatus[])(
+    "uses a spinner while %s",
+    (status) => {
+      render(<AccountStatus account={accountWithStatus(status)} />)
+      expect(
+        screen.getByRole("status", { name: "Loading" })
+      ).toBeInTheDocument()
+    }
+  )
 
-    expect(screen.getByRole("status", { name: "Loading" })).toBeInTheDocument()
-  })
-
-  it("uses the success semantic color only for a ready account", () => {
-    render(<AccountStatus account={accountWithStatus("ready")} />)
-
-    const status = screen.getByText("认证就绪").closest("span")
-    expect(status).toHaveClass("text-success")
-    expect(status).not.toHaveClass("text-primary")
-  })
+  it.each([
+    ["ready", "认证就绪", "text-primary"],
+    ["disabled", "已停用", "text-muted-foreground"],
+    ["login_pending", "等待登录", "text-muted-foreground"],
+    // Clears on its own; worth noticing, not worth acting on.
+    ["rate_limited", "额度受限", "text-warning"],
+    // Routing stays blocked until someone acts.
+    ["relogin_required", "需要重新登录", "text-destructive"],
+    ["error", "认证异常", "text-destructive"],
+    ["unsupported_fedramp", "不支持 FedRAMP", "text-destructive"],
+  ] satisfies [AuthStatus, string, string][])(
+    "tones %s by what it asks of you",
+    (status, label, tone) => {
+      render(<AccountStatus account={accountWithStatus(status)} />)
+      expect(screen.getByText(label).closest("span")).toHaveClass(tone)
+    }
+  )
 })

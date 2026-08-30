@@ -1,6 +1,6 @@
 import {
   BanIcon,
-  CircleCheckIcon,
+  BadgeCheckIcon,
   Clock3Icon,
   GaugeIcon,
   ShieldOffIcon,
@@ -15,7 +15,10 @@ import type { AccountView } from "@/services/contracts"
 export function AccountStatus({ account }: { account: AccountView }) {
   const label = authStatusLabel(account.authStatus)
 
-  if (account.authStatus === "refreshing") {
+  if (
+    account.authStatus === "refreshing" ||
+    account.authStatus === "checking"
+  ) {
     return (
       <span className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
         <Spinner />
@@ -26,8 +29,8 @@ export function AccountStatus({ account }: { account: AccountView }) {
 
   const status = {
     login_pending: { tone: "muted" as const, icon: Clock3Icon },
-    ready: { tone: "success" as const, icon: CircleCheckIcon },
-    rate_limited: { tone: "muted" as const, icon: GaugeIcon },
+    ready: { tone: "primary" as const, icon: BadgeCheckIcon },
+    rate_limited: { tone: "warning" as const, icon: GaugeIcon },
     relogin_required: {
       tone: "destructive" as const,
       icon: TriangleAlertIcon,
@@ -45,8 +48,9 @@ export function AccountStatus({ account }: { account: AccountView }) {
     <span
       className={cn(
         "inline-flex items-center gap-1.5 text-xs font-medium [&_svg]:size-3.5",
-        status.tone === "success" && "text-success",
         status.tone === "muted" && "text-muted-foreground",
+        status.tone === "primary" && "text-primary",
+        status.tone === "warning" && "text-warning",
         status.tone === "destructive" && "text-destructive"
       )}
     >

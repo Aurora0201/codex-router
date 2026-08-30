@@ -1,5 +1,6 @@
 export type AuthStatus =
   | "login_pending"
+  | "checking"
   | "ready"
   | "refreshing"
   | "rate_limited"
@@ -8,10 +9,48 @@ export type AuthStatus =
   | "disabled"
   | "error"
 
+export type BillingCadence = "monthly" | "annual"
+
 export interface UsageWindowView {
   usedPercent: number | null
   resetsAt: number | null
   windowDurationMins: number | null
+}
+
+export interface CreditsView {
+  hasCredits: boolean
+  unlimited: boolean
+  balance: string | null
+}
+
+export interface SpendControlLimitView {
+  limit: string
+  used: string
+  remainingPercent: number
+  resetsAt: number
+}
+
+export interface RateLimitBucketView {
+  key: string
+  limitId: string | null
+  limitName: string | null
+  primary: UsageWindowView | null
+  secondary: UsageWindowView | null
+  credits: CreditsView | null
+  individualLimit: SpendControlLimitView | null
+  spendControlReached: boolean | null
+  planType: string | null
+  rateLimitReachedType: string | null
+}
+
+export interface RateLimitResetCreditView {
+  id: string
+  resetType: string
+  status: string
+  grantedAt: number
+  expiresAt: number | null
+  title: string | null
+  description: string | null
 }
 
 export interface AccountView {
@@ -29,6 +68,27 @@ export interface AccountView {
   }
   lastAuthRefreshAt: number | null
   lastLimitsRefreshAt: number | null
+  auth: {
+    status: AuthStatus
+    mode: string | null
+    checkedAt: number | null
+    lastSuccessfulAt: number | null
+    stale: boolean
+    errorCode: string | null
+  }
+  billing: {
+    anchorAt: number | null
+    cadence: BillingCadence | null
+  }
+  limits: {
+    buckets: RateLimitBucketView[]
+    defaultBucketKey: string | null
+    resetCredits: {
+      availableCount: number
+      credits: RateLimitResetCreditView[] | null
+    } | null
+    checkedAt: number | null
+  }
 }
 
 export interface AccountsResponse {
@@ -108,7 +168,24 @@ export interface GatewaySnapshot {
 }
 
 export type GatewayResource =
-  "accounts" | "stats" | "settings" | "codex" | "logs" | "websocketConnections"
+  "accounts" | "stats" | "settings" | "codex" | "logs" | "websocketConnections" | "usage"
+
+export type CodexUsageRange = "1d" | "7d" | "14d" | "30d" | "90d" | "all"
+export interface CodexUsageFilters { range: CodexUsageRange; model?: string; project?: string }
+export interface CodexUsageDashboard {
+  status: "scanning" | "ready" | "partial"
+  scope: "local_codex_home"
+  generatedAt: number
+  timezone: string
+  coverage: { firstEventAt: number | null; lastEventAt: number | null; rollouts: number; sourceRollouts: number; retainedRollouts: number; lastScannedAt: number | null; lastRetentionAt: number | null; parseWarnings: number; scan: { complete: boolean; lastSuccessfulAt: number | null; pendingMissingRollouts: number }; retention: { pendingAuditEvents: number; lastVerifiedAt: number | null }; backup: { status: "ready" | "pending" | "failed" | "unavailable"; lastSuccessfulAt: number | null; generations: number; lastRecoveryAt: number | null } }
+  summary: { totalTokens: number; todayTokens: number; dailyAverage: number; inputTokens: number; cachedInputTokens: number; uncachedInputTokens: number; outputTokens: number; reasoningOutputTokens: number; cacheHitPercent: number; sessions: number; tasksStarted: number; tasksCompleted: number; abortedTurns: number; compactions: number; completionPercent: number; tokensPerCompletedTask: number }
+  daily: Array<{ date: string; inputTokens: number; cachedInputTokens: number; uncachedInputTokens: number; outputTokens: number; reasoningOutputTokens: number; totalTokens: number; sessions: number; tasks: number; rollingAverage7d: number; isPartial: boolean }>
+  dailyModels: Array<{ date: string; totalTokens: number; isPartial: boolean; models: Array<{ key: string; label: string; totalTokens: number }> }>
+  models: Array<{ key: string; label: string; totalTokens: number; tasks: number; share: number }>
+  projects: Array<{ key: string; label: string; totalTokens: number; tasks: number; share: number }>
+  heatmap: Array<{ date: string; hour: number; totalTokens: number }>
+  filters: { models: string[]; projects: Array<{ key: string; label: string }> }
+}
 
 export type RequestLogRange = "1h" | "24h" | "7d"
 export type RequestOutcome =
@@ -258,16 +335,32 @@ export interface GatewayService {
   getSnapshot(): Promise<GatewaySnapshot>
   getAccounts(): Promise<AccountsResponse>
   getWebSocketConnections(): Promise<WebSocketConnectionView[]>
+  getCodexUsage(filters: CodexUsageFilters): Promise<CodexUsageDashboard>
   getRequestLogs(filters: RequestLogFilters): Promise<RequestLogsResponse>
   getWebSocketConnectionLogs(
     filters: WebSocketConnectionLogFilters
   ): Promise<WebSocketConnectionLogsResponse>
   setActiveAccount(id: string): Promise<AccountView>
   clearActiveAccount(): Promise<void>
-  updateAccount(id: string, values: { enabled: boolean }): Promise<AccountView>
+  updateAccount(
+    id: string,
+    values: {
+      enabled?: boolean
+      billingAnchorAt?: number | null
+      billingCadence?: BillingCadence | null
+    }
+  ): Promise<AccountView>
   removeAccount(id: string): Promise<void>
   refreshAccountAuth(id: string): Promise<AccountView>
   refreshAccountLimits(id: string): Promise<AccountView>
+  refreshAllAccountStatus(): Promise<{ started: boolean }>
+  consumeAccountResetCredit(
+    id: string,
+    input: { idempotencyKey: string; creditId?: string }
+  ): Promise<{
+    outcome: "reset" | "alreadyRedeemed" | "nothingToReset" | "noCredit"
+    account: AccountView
+  }>
   startLogin(): Promise<LoginSessionView>
   getLoginStatus(loginId: string): Promise<LoginSessionView>
   cancelLogin(loginId: string): Promise<void>

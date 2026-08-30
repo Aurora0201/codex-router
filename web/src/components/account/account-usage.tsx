@@ -1,56 +1,139 @@
-import {
-  Progress,
-  ProgressLabel,
-  ProgressValue,
-} from "@/components/ui/progress"
 import { useTranslation } from "react-i18next"
-import { formatRelativeTime, formatUsageWindow } from "@/lib/format"
+
+import { Progress, ProgressValue } from "@/components/ui/progress"
+import { QUOTA_TIGHT_PERCENT, remainingPercent } from "@/lib/account-state"
+import { formatCountdown, formatUsageWindow } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { UsageWindowView } from "@/services/contracts"
 
-function UsageLine({ window }: { window: UsageWindowView | null }) {
-  const { t } = useTranslation()
-  const reported = window?.usedPercent != null
-  const label = formatUsageWindow(window)
-  return (
-    <Progress
-      value={reported ? (window.usedPercent ?? 0) : null}
-      aria-label={reported ? t("{{label}}使用量", { label }) : t("{{label}}未报告", { label })}
-      className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-x-2 gap-y-2 [&_[data-slot=progress-track]]:col-span-2"
-    >
-      <ProgressLabel className="flex min-w-0 items-center gap-1.5">
-        <span className="shrink-0">{label}</span>
-        <span className="truncate text-xs font-normal text-muted-foreground">
-          ·{" "}
-          {reported
-            ? t("{{time}}重置", { time: formatRelativeTime(window.resetsAt) })
-            : t("暂无额度数据")}
-        </span>
-      </ProgressLabel>
-      <ProgressValue>
-        {(formattedValue) => (reported ? formattedValue : t("未报告"))}
-      </ProgressValue>
-    </Progress>
-  )
-}
+const METER = "grid gap-1.5"
+const HEAD = "flex items-center justify-between gap-4 text-xs font-medium"
+const TRACK =
+  "[&>[data-slot=progress-track]]:h-1.5 [&>[data-slot=progress-track]]:bg-foreground/15"
+const CAPTION = "text-[11px] text-muted-foreground/70"
 
-export function AccountUsage({
-  usage,
+/**
+ * One quota window inside an account card: name and remaining percentage on the
+ * first line, the bar under them, and the reset countdown beneath. The bar
+ * fills with what is left, not what was spent, so a fuller bar always means a
+ * better account to route through.
+ */
+export function QuotaMeter({
+  window,
+  placeholderMins,
+  known = true,
+  fallback,
   className,
 }: {
-  usage: { primary: UsageWindowView | null; secondary: UsageWindowView | null }
+  window: UsageWindowView | null
+  /** Names the slot when upstream omitted the window itself. */
+  placeholderMins?: number
+  /**
+   * Whether upstream reported this bucket at all. When it did, an absent window
+   * means there is no such cap; when it did not, an absent window means nothing
+   * is known and the slot must not claim otherwise.
+   */
+  known?: boolean
+  /** Shown on one unknown slot; repeating it on both is just noise. */
+  fallback?: string
   className?: string
 }) {
+  const { t } = useTranslation()
+  const remaining = window ? remainingPercent(window) : null
+  const label = formatUsageWindow(
+    window ??
+      (placeholderMins !== undefined
+        ? {
+            usedPercent: null,
+            resetsAt: null,
+            windowDurationMins: placeholderMins,
+          }
+        : null)
+  )
+
+  // An empty slot still holds its place, so both windows stay on screen and the
+  // cards keep the same height.
+  if (!window || remaining === null) {
+    const uncapped = !window && known
+    return (
+      <div
+        data-slot="quota-meter"
+        aria-label={label}
+        className={cn(METER, className)}
+      >
+        <div className={HEAD}>
+          <span className="truncate">{label}</span>
+          <span
+            aria-hidden="true"
+            className="shrink-0 text-muted-foreground tabular-nums"
+          >
+            {uncapped ? "∞" : null}
+          </span>
+        </div>
+        {/* No cap means nothing is spent, so the rule is drawn full rather than
+            empty. It is not a progressbar: there is no measurement behind it. */}
+        <div
+          data-slot="quota-bar"
+          className={cn(
+            "h-1.5 rounded-full",
+            uncapped ? "bg-primary" : "bg-foreground/15"
+          )}
+        />
+        <span className={CAPTION}>
+          {/* A window reported without a number is 未报告; an absent window on
+              a bucket upstream did report means there is no such cap. */}
+          {window ? t("未报告") : uncapped ? t("无限制") : fallback}
+        </span>
+      </div>
+    )
+  }
+
+  const empty = remaining <= 0
+  const tight = !empty && remaining <= QUOTA_TIGHT_PERCENT
+
   return (
-    <div
-      data-slot="account-usage"
+    <Progress
+      value={remaining}
+      aria-label={t("{{label}}剩余", { label })}
+      data-slot="quota-meter"
       className={cn(
-        "grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 lg:gap-5",
+        METER,
+        TRACK,
+        empty
+          ? "[&_[data-slot=progress-indicator]]:bg-destructive"
+          : tight
+            ? "[&_[data-slot=progress-indicator]]:bg-warning"
+            : "[&_[data-slot=progress-indicator]]:bg-primary",
         className
       )}
     >
-      <UsageLine window={usage.primary} />
-      <UsageLine window={usage.secondary} />
-    </div>
+      <div className={HEAD}>
+        {/* A plain span, not ProgressLabel: base-ui would wire it as
+            aria-labelledby and shadow the fuller aria-label above. */}
+        <span className="truncate">{label}</span>
+        <ProgressValue
+          className={cn(
+            "ml-0 shrink-0 tabular-nums",
+            empty
+              ? "text-destructive"
+              : tight
+                ? "text-warning"
+                : "text-muted-foreground"
+          )}
+        >
+          {() => t("{{value}}%", { value: Math.round(remaining) })}
+        </ProgressValue>
+      </div>
+      {/* Progress appends its own track last, so the caption is ordered past it. */}
+      <span
+        className={cn(
+          "order-3",
+          CAPTION,
+          empty && "font-medium text-foreground"
+        )}
+      >
+        {t("{{time}}重置", { time: formatCountdown(window.resetsAt) })}
+      </span>
+    </Progress>
   )
 }

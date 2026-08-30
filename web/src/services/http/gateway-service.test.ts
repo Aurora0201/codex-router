@@ -126,6 +126,10 @@ describe("HTTP GatewayService", () => {
     await service.setActiveAccount("account/one")
     await service.clearActiveAccount()
     await service.updateAccount("account/one", { enabled: false })
+    await service.updateAccount("account/one", {
+      billingAnchorAt: 1_786_089_600_000,
+      billingCadence: "monthly",
+    })
     await service.removeAccount("account/one")
     await service.refreshAccountAuth("account/one")
     await service.refreshAccountLimits("account/one")
@@ -149,6 +153,13 @@ describe("HTTP GatewayService", () => {
         "/api/accounts/account%2Fone/refresh-limits",
         "/api/account-logins/login%2Fone",
       ])
+    )
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/accounts/account%2Fone",
+      expect.objectContaining({
+        method: "PATCH",
+        body: '{"billingAnchorAt":1786089600000,"billingCadence":"monthly"}',
+      })
     )
   })
 
@@ -260,16 +271,14 @@ describe("HTTP GatewayService", () => {
   })
 
   it("maps separated request evidence and connection diagnostic filters", async () => {
-    const fetchMock = vi
-      .fn<typeof fetch>()
-      .mockImplementation(async () =>
-        jsonResponse({
-          items: [],
-          summary: { connections: 0, failures: 0, retired: 0 },
-          nextCursor: null,
-          pagination: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0 },
-        })
-      )
+    const fetchMock = vi.fn<typeof fetch>().mockImplementation(async () =>
+      jsonResponse({
+        items: [],
+        summary: { connections: 0, failures: 0, retired: 0 },
+        nextCursor: null,
+        pagination: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0 },
+      })
+    )
     vi.stubGlobal("fetch", fetchMock)
     const service = createHttpGatewayService()
     await service.getRequestLogs({

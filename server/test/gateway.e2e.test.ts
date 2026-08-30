@@ -269,7 +269,7 @@ beforeAll(async () => {
     accountsDir: path.join(root, "data", "accounts"),
     databasePath: path.join(root, "data", "gateway.db"),
     webDistDir: webDir,
-  });
+  }, { backgroundTasks: false });
   const accountHome = path.join(
     root,
     "data",
@@ -333,7 +333,7 @@ beforeAll(async () => {
     accountsDir: path.join(emptyGatewayRoot, "accounts"),
     databasePath: path.join(emptyGatewayRoot, "gateway.db"),
     webDistDir: webDir,
-  });
+  }, { backgroundTasks: false });
   emptyGatewayUrl = await emptyGateway.app.listen({
     host: "127.0.0.1",
     port: 0,
@@ -613,6 +613,9 @@ describe("HTTP, SSE, compact and models", () => {
     const refresh = vi
       .spyOn(gateway.auth, "refresh")
       .mockImplementation((id) => gateway.auth.getCredential(id));
+    const refreshInBackground = vi
+      .spyOn(gateway.usage, "refreshInBackground")
+      .mockResolvedValue(false);
     const partial = await streamRequest(
       `${gatewayUrl}/backend-api/codex/responses`,
       Buffer.from(
@@ -653,6 +656,8 @@ describe("HTTP, SSE, compact and models", () => {
     expect(Buffer.concat(compact.chunks).toString()).toBe(
       '{"error":"compact_invalid"}',
     );
+    expect(refreshInBackground).toHaveBeenCalledWith("local");
+    refreshInBackground.mockRestore();
     refresh.mockRestore();
     gateway.database.accounts.update("local", { authStatus: "ready" });
   });
@@ -950,6 +955,8 @@ describe("WebSocket transport", () => {
   });
 
   it("retires an idle connection when the active account changes", async () => {
+    gateway.database.accounts.update("second", { authStatus: "ready" });
+    gateway.database.accounts.update("local", { authStatus: "ready" });
     gateway.activeAccounts.select("local");
     const socket = new WebSocket(
       gatewayUrl.replace("http:", "ws:") + "/backend-api/codex/responses",
@@ -972,6 +979,8 @@ describe("WebSocket transport", () => {
   });
 
   it("lets an in-flight response finish before retiring the old account connection", async () => {
+    gateway.database.accounts.update("second", { authStatus: "ready" });
+    gateway.database.accounts.update("local", { authStatus: "ready" });
     gateway.activeAccounts.select("local");
     const socket = new WebSocket(
       gatewayUrl.replace("http:", "ws:") + "/backend-api/codex/responses",
@@ -1010,6 +1019,7 @@ describe("WebSocket transport", () => {
   });
 
   it("retires the active account connection when that account is disabled", async () => {
+    gateway.database.accounts.update("local", { authStatus: "ready" });
     gateway.activeAccounts.select("local");
     const socket = new WebSocket(
       gatewayUrl.replace("http:", "ws:") + "/backend-api/codex/responses",
@@ -1022,6 +1032,7 @@ describe("WebSocket transport", () => {
     expect(reason.toString()).toBe("account_changed");
 
     gateway.accounts.setEnabled("local", true);
+    gateway.database.accounts.update("local", { authStatus: "ready" });
     gateway.activeAccounts.select("local");
   });
 });
@@ -1069,7 +1080,7 @@ describe("security and admin API", () => {
       dataDir: path.join(root, "missing-ui-data"),
       databasePath: path.join(root, "missing-ui-data", "gateway.db"),
       webDistDir: missing,
-    });
+    }, { backgroundTasks: false });
     expect(
       (await withoutUi.app.inject({ method: "GET", url: "/admin" })).statusCode,
     ).toBe(503);
@@ -1233,6 +1244,7 @@ describe("security and admin API", () => {
       error: "no_active_account_selected",
     });
     gateway.accounts.setEnabled("local", true);
+    gateway.database.accounts.update("local", { authStatus: "ready" });
     gateway.activeAccounts.select("local");
   });
 });

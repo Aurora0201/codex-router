@@ -385,6 +385,16 @@ describe("RequestLogsPage", () => {
     const connectionTab = screen.getByRole("tab", { name: "连接诊断" })
     await userEvent.click(connectionTab)
     expect(await screen.findByText("connection-1")).toBeInTheDocument()
+    expect(
+      screen
+        .getByText("connection-1")
+        .closest('[data-slot="animate-tabs-panel"]')
+    ).toHaveClass("flex", "h-full", "min-h-0", "flex-col", "gap-4")
+    const tabsPanels = document.querySelector(
+      '[data-slot="animate-tabs-panels"]'
+    )
+    expect(tabsPanels).toHaveClass("min-h-0", "flex-1")
+    expect(tabsPanels).toHaveStyle({ overflow: "visible" })
     expect(screen.getByText("101")).toBeInTheDocument()
     expect(screen.getAllByText("正常退役").length).toBeGreaterThanOrEqual(2)
     expect(

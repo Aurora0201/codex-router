@@ -18,6 +18,8 @@
 - Define colors, radii, shadows, and font families as CSS variables in `web/src/index.css` using the standard shadcn token set (`background`, `card`, `popover`, `foreground`, `muted`, `border`, `input`, `ring`, `primary`, `secondary`, `accent`, `destructive`, …).
 - Consume semantic tokens instead of page-local hex colors.
 - Status must always include a text label; color is supplemental.
+- Accent tone follows what a state asks of the reader, not what kind of state it is: `--muted-foreground` when there is nothing to do (including every healthy default), `--warning` when it clears on its own or is only a reminder, `--destructive` when routing is blocked until someone acts, `--primary` for the account traffic is routed through. A default state never wears an accent, or the exceptions have nothing to stand out against.
+- `--warning` and `--destructive` are tuned to the same contrast weight (4.77:1 on the light card, ~6.2:1 on the dark one) so neither out-shouts the other. Re-check any change to these tokens against WCAG AA (4.5:1) in both themes.
 
 ## Component seams
 
@@ -36,14 +38,43 @@
 
 - Keep Accounts and Settings as separate page components selected by the top-level app shell.
 - Desktop layouts may use dense tables and side panels; below tablet width, switch to readable stacked cards without horizontal scrolling.
+- Pages whose main content scrolls internally (Accounts, Gateway, Request logs) opt into `lg:h-full` in the app shell so the page itself does not scroll on desktop.
 - The transport trace is the sole signature visual and must encode live Gateway-to-account flow, not serve as decoration.
 
 ## Accounts page rules
 
+> **Superseded, pending rewrite.** The account routing page has been rebuilt
+> from a new UI design (`D:\codespace\my-front`) as a card grid, so the row,
+> baseline and column rules below no longer describe the code. They are kept
+> only for the parts that are still true — identity, quota semantics, tone, and
+> ordering — and this section will be rewritten once the redesign settles.
+
+
+- The page is a comparison surface: exactly one account is live and the rest are standby reserves, and the layout must encode that asymmetry rather than render peer cards.
 - The account identity shown first is the real ChatGPT Account ID (`chatgptAccountId`) in a monospace font, with email and plan as auxiliary information.
 - Never show a user-entered account label input; add-account dialog starts official Codex Browser OAuth with no label.
-- The current account is selected via the shadcn Select at the top of the Accounts page; switching takes effect on the next request for all traffic.
-- Usage is shown as "已使用 X%" with the shadcn Progress component, driven by the upstream `usedPercent`; `null` usage renders as "Not reported", never as 0%.
+- Accounts are listed one per row across two aligned lines. The list is a single shadcn RadioGroup and each row leads with its radio, because exactly one of N accounts is live. Do not reintroduce a separate account picker or a per-row switch button.
+- The list is filtered but never re-sorted: it keeps the server order, which is `created_at ASC`. Ranking rows by health or by remaining quota reshuffles them as accounts are used, so a row is rarely where it was last seen. Anything that varies with usage or status must not decide row order.
+- `清除路由` lives in the route summary at the top of the list, never in a row.
+- A row that cannot be routed has a disabled radio. Whether the radio is locked follows routability, never the presence of a button.
+- A repair button appears only where a row stays broken until someone acts (`relogin_required`, `error`). A deliberately disabled account is not a fault, and checking, waiting or rate-limited rows clear on their own, so none of them get one; the actions menu still covers those cases.
+- Each row leads with the OpenAI mark in a rounded tile; it is `aria-hidden` brand furniture, not status, and reuses `@/components/app/openai-mark`.
+- Every column in a row shares the same two baselines via `grid-rows-subgrid` against `ROW_BASELINES`, and the column header borrows `ROW_COLUMNS` alone. Columns must not carry their own line heights.
+- Leftover width goes to the quota columns, which are the flexible tracks. Identity and status are capped, so slack is spent on content rather than pooling as a void.
+- Quota meters fill by remaining, not used, so a fuller bar always means a better route. The meter keeps the same shape in every state; only emphasis moves.
+- Healthy meters use `--primary` on every row; the live account is marked by its radio and row tint, not by bar colour. `--warning` (tight) and `--destructive` (exhausted) override it.
+- The subscription expiry date is a manual reminder that never blocks routing, so a lapsed one is `--warning`, never `--destructive`. A date that has not lapsed carries no accent at all.
+- The meter track is `--foreground/20`, dark enough that a full bar is still readable as a bar rather than disappearing into the card.
+- The two quota windows sit in their own columns side by side, not stacked. They are the only content in the row that can honestly use the width, and stacking them left roughly half the row empty.
+- A meter spans both row baselines: window name, bar and percentage share the first line so the bar fills the space between the label and the number, and the second line carries the state — the reset countdown, or "无限制" / "未报告" / "额度尚未刷新" when there is no number. Nothing in a row may leave a horizontal gap wider than about 40px.
+- An unmeasured window still reserves the number column, so both windows keep the same bar geometry.
+- Every row renders both window slots even when a window is unreported or limits were never fetched, so the layout never collapses and the percentages stay aligned down each window column.
+- `null` usage renders as "未报告" with no bar, never as 0%.
+- Both slots are always named from `SLOT_WINDOW_MINS` (7 天额度 / 5 小时额度), even when upstream omitted the window, and the slots are filled by role so a lone weekly window leaves the short slot empty rather than the other way round.
+- A window upstream omitted entirely reads as "无限制" with a full rule and an `∞` where a percentage would sit, but only when the bucket itself was reported; when limits were never fetched the slot keeps its name, says so, and draws a muted rule instead of claiming there is no cap.
+- Reset times count down in two units ("3 天 5 小时后重置"), dropping the minor unit when it is zero.
+- Subscription state in a row is the date itself ("2026-09-15 到期"), not a word like "即将到期"; tone escalates but the date is always the label.
+- At most one qualifier per row (subscription state, then stale auth, then stale limits). Everything else — plan, auth mode, credits, per-bucket windows, reset credits — belongs in the detail sheet.
 - Destructive actions (remove account) use shadcn AlertDialog instead of native `confirm()`.
 - Icon-only actions get a shadcn Tooltip; account actions beyond the primary one live in a shadcn DropdownMenu.
 

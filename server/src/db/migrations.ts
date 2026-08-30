@@ -2,7 +2,7 @@ import type Database from "better-sqlite3";
 
 type SqliteDatabase = Database.Database;
 
-export const SCHEMA_VERSION = 11;
+export const SCHEMA_VERSION = 17;
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -15,6 +15,11 @@ CREATE TABLE IF NOT EXISTS accounts (
   label TEXT NOT NULL,
   email TEXT,
   plan_type TEXT,
+  subscription_started_at INTEGER,
+  subscription_expires_at INTEGER,
+  subscription_expiry_source TEXT,
+  billing_anchor_at INTEGER,
+  billing_cadence TEXT,
   codex_home TEXT NOT NULL UNIQUE,
   enabled INTEGER NOT NULL DEFAULT 1,
   is_default INTEGER NOT NULL DEFAULT 0,
@@ -28,6 +33,11 @@ CREATE TABLE IF NOT EXISTS accounts (
   secondary_resets_at INTEGER,
   secondary_window_minutes INTEGER,
   rate_limit_reached_type TEXT,
+  auth_mode TEXT,
+  auth_checked_at INTEGER,
+  auth_last_successful_at INTEGER,
+  auth_error_code TEXT,
+  limits_snapshot_json TEXT,
   last_auth_refresh_at INTEGER,
   last_limits_refresh_at INTEGER,
   last_used_at INTEGER,
@@ -275,6 +285,135 @@ export function migrate(db: SqliteDatabase): void {
     const logColumns = tableColumns(db, "request_log");
     if (!logColumns.has("transport_error_json")) {
       db.exec("ALTER TABLE request_log ADD COLUMN transport_error_json TEXT");
+    }
+  }
+  if (version < 12) {
+    const accountColumns = tableColumns(db, "accounts");
+    if (!accountColumns.has("subscription_started_at")) {
+      db.exec("ALTER TABLE accounts ADD COLUMN subscription_started_at INTEGER");
+    }
+  }
+  if (version < 13) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS codex_usage_rollout (
+        thread_id TEXT PRIMARY KEY,
+        source_hash TEXT NOT NULL,
+        relative_path TEXT NOT NULL,
+        encoding TEXT NOT NULL,
+        file_size INTEGER NOT NULL,
+        mtime_ms INTEGER NOT NULL,
+        byte_offset INTEGER NOT NULL DEFAULT 0,
+        next_ordinal INTEGER NOT NULL DEFAULT 0,
+        session_started_at INTEGER,
+        last_event_at INTEGER,
+        project_key TEXT,
+        project_label TEXT,
+        latest_model TEXT,
+        previous_input_tokens INTEGER,
+        previous_cached_input_tokens INTEGER,
+        previous_output_tokens INTEGER,
+        previous_reasoning_output_tokens INTEGER,
+        warning_count INTEGER NOT NULL DEFAULT 0,
+        last_scanned_at INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS codex_usage_event (
+        thread_id TEXT NOT NULL,
+        ordinal INTEGER NOT NULL,
+        occurred_at INTEGER NOT NULL,
+        kind TEXT NOT NULL,
+        model TEXT,
+        project_key TEXT,
+        project_label TEXT,
+        input_tokens INTEGER NOT NULL DEFAULT 0,
+        cached_input_tokens INTEGER NOT NULL DEFAULT 0,
+        output_tokens INTEGER NOT NULL DEFAULT 0,
+        reasoning_output_tokens INTEGER NOT NULL DEFAULT 0,
+        total_tokens INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY(thread_id, ordinal),
+        FOREIGN KEY(thread_id) REFERENCES codex_usage_rollout(thread_id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_codex_usage_event_time ON codex_usage_event(occurred_at);
+      CREATE INDEX IF NOT EXISTS idx_codex_usage_event_model_time ON codex_usage_event(model, occurred_at);
+      CREATE INDEX IF NOT EXISTS idx_codex_usage_event_project_time ON codex_usage_event(project_key, occurred_at);
+    `);
+  }
+  if (version < 14) {
+    // Usage rows are derived from rollout files. Rebuild them so project
+    // classification changes never leave stale date-based project buckets.
+    db.exec("DELETE FROM codex_usage_rollout");
+  }
+  if (version < 15) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS codex_usage_retained_rollout (
+        source_hash TEXT NOT NULL,
+        thread_id TEXT NOT NULL,
+        source_category TEXT NOT NULL,
+        session_started_at INTEGER,
+        last_event_at INTEGER,
+        project_key TEXT,
+        project_label TEXT,
+        latest_model TEXT,
+        warning_count INTEGER NOT NULL DEFAULT 0,
+        last_scanned_at INTEGER NOT NULL,
+        missing_at INTEGER NOT NULL,
+        restored_at INTEGER,
+        PRIMARY KEY(source_hash, thread_id)
+      );
+      CREATE TABLE IF NOT EXISTS codex_usage_retained_event (
+        source_hash TEXT NOT NULL,
+        thread_id TEXT NOT NULL,
+        ordinal INTEGER NOT NULL,
+        occurred_at INTEGER NOT NULL,
+        kind TEXT NOT NULL,
+        model TEXT,
+        project_key TEXT,
+        project_label TEXT,
+        input_tokens INTEGER NOT NULL DEFAULT 0,
+        cached_input_tokens INTEGER NOT NULL DEFAULT 0,
+        output_tokens INTEGER NOT NULL DEFAULT 0,
+        reasoning_output_tokens INTEGER NOT NULL DEFAULT 0,
+        total_tokens INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY(source_hash, thread_id, ordinal),
+        FOREIGN KEY(source_hash, thread_id) REFERENCES codex_usage_retained_rollout(source_hash, thread_id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_codex_usage_retained_event_source_time ON codex_usage_retained_event(source_hash, occurred_at);
+      CREATE INDEX IF NOT EXISTS idx_codex_usage_retained_event_source_model_time ON codex_usage_retained_event(source_hash, model, occurred_at);
+      CREATE INDEX IF NOT EXISTS idx_codex_usage_retained_event_source_project_time ON codex_usage_retained_event(source_hash, project_key, occurred_at);
+    `);
+  }
+  if (version < 16) {
+    const accountColumns = tableColumns(db, "accounts");
+    const additions = [
+      ["subscription_expires_at", "INTEGER"],
+      ["subscription_expiry_source", "TEXT"],
+      ["auth_mode", "TEXT"],
+      ["auth_checked_at", "INTEGER"],
+      ["auth_last_successful_at", "INTEGER"],
+      ["auth_error_code", "TEXT"],
+      ["limits_snapshot_json", "TEXT"],
+    ] as const;
+    for (const [column, type] of additions) {
+      if (!accountColumns.has(column)) db.exec(`ALTER TABLE accounts ADD COLUMN ${column} ${type}`);
+    }
+    db.exec(`
+      UPDATE accounts
+      SET subscription_expires_at = subscription_started_at + 2592000000,
+          subscription_expiry_source = 'legacy_estimate'
+      WHERE subscription_started_at IS NOT NULL
+        AND subscription_expires_at IS NULL;
+      UPDATE accounts
+      SET auth_last_successful_at = last_auth_refresh_at
+      WHERE auth_last_successful_at IS NULL
+        AND last_auth_refresh_at IS NOT NULL;
+    `);
+  }
+  if (version < 17) {
+    const accountColumns = tableColumns(db, "accounts");
+    if (!accountColumns.has("billing_anchor_at")) {
+      db.exec("ALTER TABLE accounts ADD COLUMN billing_anchor_at INTEGER");
+    }
+    if (!accountColumns.has("billing_cadence")) {
+      db.exec("ALTER TABLE accounts ADD COLUMN billing_cadence TEXT");
     }
   }
 

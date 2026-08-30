@@ -1,370 +1,400 @@
-import { render, screen } from "@testing-library/react"
+import { render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { describe, expect, it, vi } from "vitest"
 
 import { TooltipProvider } from "@/components/ui/tooltip"
-import type { AccountView } from "@/services/contracts"
+import type {
+  AccountView,
+  RateLimitBucketView,
+  UsageWindowView,
+} from "@/services/contracts"
 import { AccountList } from "./account-list"
 
-function account(values: Partial<AccountView>): AccountView {
+const HOUR = 60 * 60 * 1000
+
+function window(usedPercent: number | null, mins: number): UsageWindowView {
   return {
-    id: "account-1",
-    chatgptAccountId: "account-1234567890",
-    email: "user@example.com",
-    planType: "Plus",
-    enabled: true,
-    isActive: false,
-    authStatus: "ready",
+    usedPercent,
+    resetsAt: Date.now() + 3 * HOUR,
+    windowDurationMins: mins,
+  }
+}
+
+function bucket(
+  values: Partial<RateLimitBucketView> = {}
+): RateLimitBucketView {
+  return {
+    key: "codex",
+    limitId: null,
+    limitName: "Codex",
+    primary: null,
+    secondary: null,
+    credits: null,
+    individualLimit: null,
+    spendControlReached: false,
+    planType: "plus",
     rateLimitReachedType: null,
-    usage: { primary: null, secondary: null },
-    lastAuthRefreshAt: null,
-    lastLimitsRefreshAt: null,
     ...values,
   }
 }
 
+function quota(buckets: RateLimitBucketView[]): AccountView["limits"] {
+  return {
+    buckets,
+    defaultBucketKey: "codex",
+    resetCredits: null,
+    checkedAt: Date.now(),
+  }
+}
+
+function account(values: Partial<AccountView> = {}): AccountView {
+  const authStatus = values.authStatus ?? values.auth?.status ?? "ready"
+  return {
+    id: "acct-1",
+    chatgptAccountId: "acct-alpha",
+    email: "alpha@example.com",
+    planType: "Plus",
+    enabled: true,
+    isActive: false,
+    authStatus,
+    rateLimitReachedType: null,
+    usage: { primary: null, secondary: null },
+    lastAuthRefreshAt: null,
+    lastLimitsRefreshAt: null,
+    auth: {
+      status: authStatus,
+      mode: "chatgpt",
+      checkedAt: Date.now(),
+      lastSuccessfulAt: Date.now(),
+      stale: false,
+      errorCode: null,
+    },
+    billing: { anchorAt: null, cadence: null },
+    limits: {
+      buckets: [],
+      defaultBucketKey: null,
+      resetCredits: null,
+      checkedAt: null,
+    },
+    ...values,
+  }
+}
+
+const renderList = (
+  accounts: AccountView[],
+  props: Partial<Parameters<typeof AccountList>[0]> = {}
+) =>
+  render(
+    <TooltipProvider>
+      <AccountList
+        accounts={accounts}
+        busyId={null}
+        onSelect={vi.fn()}
+        onClearRoute={vi.fn()}
+        onAction={vi.fn()}
+        onConsumeReset={vi.fn(async () => undefined)}
+        {...props}
+      />
+    </TooltipProvider>
+  )
+
+const cards = () =>
+  Array.from(document.querySelectorAll<HTMLElement>("[data-slot=account-card]"))
+
+const card = (id: string) =>
+  cards().find((item) => item.textContent?.includes(id))!
+
+const meters = (item: HTMLElement) =>
+  Array.from(item.querySelectorAll("[data-slot=quota-meter]"))
+
 describe("AccountList", () => {
-  it("fills its desktop parent without a viewport height cap", () => {
-    const { container } = render(
-      <TooltipProvider>
-        <AccountList accounts={[account({})]} busyId={null} onSelect={vi.fn()} onAction={vi.fn()} />
-      </TooltipProvider>
+  it("names the live route in the summary and offers to clear it", async () => {
+    const onClearRoute = vi.fn()
+    renderList(
+      [
+        account({
+          id: "live",
+          chatgptAccountId: "acct-live",
+          isActive: true,
+          limits: quota([bucket({ primary: window(62, 300) })]),
+        }),
+      ],
+      { onClearRoute }
     )
 
-    const card = container.querySelector('[data-slot="card"]')
-    expect(card).toHaveClass("h-[30rem]", "lg:h-full")
-    expect(card?.className).not.toContain("100dvh")
-    expect(card?.className).not.toContain("48rem")
+    const summary = screen
+      .getByText("当前请求路由")
+      .closest("div")!.parentElement!
+    expect(summary).toHaveTextContent("acct-live")
+    expect(screen.getByText("紧要额度").nextElementSibling).toHaveTextContent(
+      "38%"
+    )
+    await userEvent.click(screen.getByRole("button", { name: "清除路由" }))
+    expect(onClearRoute).toHaveBeenCalled()
   })
 
-  it("selects a ready account and keeps row actions available", async () => {
-    const user = userEvent.setup()
-    const onSelect = vi.fn()
-    const accounts = [
-      account({ id: "active", isActive: true }),
-      account({ id: "candidate", chatgptAccountId: "account-candidate" }),
-    ]
-
-    render(
-      <TooltipProvider>
-        <AccountList
-          accounts={accounts}
-          busyId={null}
-          onSelect={onSelect}
-          onAction={vi.fn()}
-        />
-      </TooltipProvider>
-    )
-
-    const [activeRadio, candidateRadio] = screen.getAllByRole("radio", {
-      name: /设为当前路由/,
-    })
-
-    expect(activeRadio).toBeChecked()
-    await user.click(candidateRadio)
-
-    expect(onSelect).toHaveBeenCalledWith(accounts[1])
-    expect(activeRadio).toBeChecked()
-    expect(screen.queryByText("当前路由")).not.toBeInTheDocument()
-    expect(screen.queryByText("设为当前")).not.toBeInTheDocument()
-    expect(screen.getAllByRole("button", { name: "账号操作" })).toHaveLength(2)
-    expect(screen.getByText("已选择路由").closest('[data-slot="badge"]')).toHaveClass("text-success")
-  })
-
-  it("orders route selection, identity, usage, and secondary actions by priority", () => {
-    const { container } = render(
-      <TooltipProvider>
-        <AccountList
-          accounts={[
-            account({
-              email: "a-very-long-account-address@example.com",
-              authStatus: "error",
-            }),
-          ]}
-          busyId={null}
-          onSelect={vi.fn()}
-          onAction={vi.fn()}
-        />
-      </TooltipProvider>
-    )
-
-    const item = container.querySelector('[data-slot="item"]')
-    const media = item?.querySelector('[data-slot="item-media"]')
-    const content = item?.querySelector('[data-slot="item-content"]')
-    const usage = item?.querySelector('[data-slot="account-usage"]')
-    const actions = item?.querySelector('[data-slot="item-actions"]')
-
-    expect(item?.querySelector('[data-slot="item-header"]')).toBeNull()
-    expect(item?.querySelector('[data-slot="item-footer"]')).toBeNull()
-    expect(media?.contains(screen.getByRole("radio"))).toBe(true)
-    expect(media?.compareDocumentPosition(content as Node)).toBe(
-      Node.DOCUMENT_POSITION_FOLLOWING
-    )
-    expect(content?.compareDocumentPosition(usage as Node)).toBe(
-      Node.DOCUMENT_POSITION_FOLLOWING
-    )
-    expect(usage?.compareDocumentPosition(actions as Node)).toBe(
-      Node.DOCUMENT_POSITION_FOLLOWING
-    )
-    expect(usage).toHaveClass("col-end-3", "xl:col-end-4")
-    expect(actions).toHaveClass("row-end-3", "xl:row-end-2")
+  it("explains passthrough when no account is routed", () => {
+    renderList([account()])
     expect(
-      screen.getByText("a-very-long-account-address@example.com")
+      screen.getByText("尚未选择路由账号 · 请求使用 Codex 当前登录账号透传")
     ).toBeInTheDocument()
-    expect(screen.getByText("认证异常")).toBeInTheDocument()
+    expect(
+      screen.queryByRole("button", { name: "清除路由" })
+    ).not.toBeInTheDocument()
   })
 
-  it("keeps authentication status directly after the account id", () => {
-    const { container } = render(
-      <TooltipProvider>
-        <AccountList
-          accounts={[
-            account({
-              chatgptAccountId:
-                "account-with-an-intentionally-long-identifier-1234567890",
-              authStatus: "ready",
-            }),
-          ]}
-          busyId={null}
-          onSelect={vi.fn()}
-          onAction={vi.fn()}
-        />
-      </TooltipProvider>
-    )
+  it("routes through a single radio group with exactly one account checked", async () => {
+    const onSelect = vi.fn()
+    const standby = account({ id: "standby", chatgptAccountId: "acct-standby" })
+    renderList([account({ id: "live", isActive: true }), standby], { onSelect })
 
-    const title = container.querySelector('[data-slot="item-title"]')
-    const status = title?.querySelector('[data-slot="account-status"]')
+    const group = screen.getByRole("radiogroup", { name: "选择路由账号" })
+    const radios = within(group).getAllByRole("radio")
+    expect(radios.map((radio) => radio.getAttribute("aria-checked"))).toEqual([
+      "true",
+      "false",
+    ])
 
-    expect(title?.children).toHaveLength(2)
-    expect(title?.lastElementChild).toBe(status)
-    expect(title).toHaveClass(
-      "flex-nowrap",
-      "whitespace-nowrap",
-      "[display:flex]",
-      "[-webkit-line-clamp:unset]"
+    await userEvent.click(
+      screen.getByRole("radio", { name: "路由到 acct-standby" })
     )
-    expect(title?.firstElementChild).toHaveClass("min-w-0", "truncate")
-    expect(title?.firstElementChild).not.toHaveClass("flex-1")
-    expect(status).not.toHaveClass("ml-auto")
-    expect(status).toHaveClass("shrink-0", "whitespace-nowrap")
-    expect(status).toHaveTextContent("认证就绪")
+    expect(onSelect).toHaveBeenCalledWith(standby)
   })
 
-  it("reveals the scrollbar on interaction and fades overflowing edges", () => {
-    const { container } = render(
-      <TooltipProvider>
-        <AccountList
-          accounts={[account({})]}
-          busyId={null}
-          onSelect={vi.fn()}
-          onAction={vi.fn()}
-        />
-      </TooltipProvider>
-    )
-
-    const scrollArea = container.querySelector('[data-slot="scroll-area"]')
-
-    expect(scrollArea).toHaveClass(
-      "[&_[data-slot=scroll-area-scrollbar]]:opacity-0",
-      "[&_[data-slot=scroll-area-scrollbar][data-hovering]]:opacity-100",
-      "[&_[data-slot=scroll-area-scrollbar][data-scrolling]]:opacity-100",
-      "focus-within:[&_[data-slot=scroll-area-scrollbar]]:opacity-100",
-      "data-[overflow-y-start]:before:opacity-100",
-      "data-[overflow-y-end]:after:opacity-100"
-    )
-    expect(scrollArea).toHaveClass("before:h-5", "after:h-5")
-    expect(scrollArea?.className).not.toContain("backdrop-blur")
-  })
-
-  it("uses a larger outlined action button and a non-wrapping menu", async () => {
-    const user = userEvent.setup()
-
-    render(
-      <TooltipProvider>
-        <AccountList
-          accounts={[account({})]}
-          busyId={null}
-          onSelect={vi.fn()}
-          onAction={vi.fn()}
-        />
-      </TooltipProvider>
-    )
-
-    const actionButton = screen.getByRole("button", { name: "账号操作" })
-    expect(actionButton).toHaveClass("size-8", "border-border")
-
-    await user.click(actionButton)
-
-    const menuItem = await screen.findByText("复制 Account ID")
-    expect(menuItem.closest('[data-slot="dropdown-menu-content"]')).toHaveClass(
-      "w-44",
-      "whitespace-nowrap"
-    )
-  })
-
-  it("searches accounts by id or email and clears an empty result", async () => {
-    const user = userEvent.setup()
-
-    render(
-      <TooltipProvider>
-        <AccountList
-          accounts={[
-            account({
-              id: "ready",
-              chatgptAccountId: "account-ready-123",
-              email: "ready@example.com",
-            }),
-            account({
-              id: "disabled",
-              chatgptAccountId: "account-disabled-456",
-              email: "operations@example.com",
-              enabled: false,
-              authStatus: "disabled",
-            }),
-          ]}
-          busyId={null}
-          onSelect={vi.fn()}
-          onAction={vi.fn()}
-        />
-      </TooltipProvider>
-    )
-
-    const search = screen.getByRole("textbox", { name: "搜索授权账号" })
-    expect(screen.getByText("显示 2 / 共 2")).toBeInTheDocument()
-
-    await user.type(search, "OPERATIONS")
-    expect(screen.getByText("operations@example.com")).toBeInTheDocument()
-    expect(screen.queryByText("ready@example.com")).not.toBeInTheDocument()
-    expect(screen.getByText("显示 1 / 共 2")).toBeInTheDocument()
-
-    await user.clear(search)
-    await user.type(search, "disabled-456")
-    expect(screen.getByText("operations@example.com")).toBeInTheDocument()
-
-    await user.clear(search)
-    await user.type(search, "missing-account")
-    expect(screen.getByText("没有匹配的账号")).toBeInTheDocument()
-
-    await user.click(screen.getByRole("button", { name: "清除筛选" }))
-    expect(screen.getAllByRole("radio")).toHaveLength(2)
-    expect(search).toHaveValue("")
-  })
-
-  it.each([
-    {
-      option: "可路由（1）",
-      visible: "ready@example.com",
-      hidden: ["attention@example.com", "disabled@example.com"],
-    },
-    {
-      option: "需处理（1）",
-      visible: "attention@example.com",
-      hidden: ["ready@example.com", "disabled@example.com"],
-    },
-    {
-      option: "已停用（1）",
-      visible: "disabled@example.com",
-      hidden: ["ready@example.com", "attention@example.com"],
-    },
-  ])("filters accounts with $option", async ({ option, visible, hidden }) => {
-    const user = userEvent.setup()
-    const accounts = [
-      account({ id: "ready", email: "ready@example.com" }),
+  it("locks the radio on every account that cannot be routed", () => {
+    renderList([
+      account({ id: "ready", chatgptAccountId: "acct-ready" }),
       account({
-        id: "attention",
-        email: "attention@example.com",
-        authStatus: "error",
+        id: "off",
+        chatgptAccountId: "acct-off",
+        enabled: false,
+        authStatus: "disabled",
       }),
       account({
-        id: "disabled",
-        email: "disabled@example.com",
+        id: "limited",
+        chatgptAccountId: "acct-limited",
+        authStatus: "rate_limited",
+      }),
+    ])
+
+    for (const id of ["acct-off", "acct-limited"]) {
+      expect(
+        screen.getByRole("radio", { name: `路由到 ${id}` })
+      ).toHaveAttribute("aria-disabled", "true")
+    }
+    expect(
+      screen.getByRole("radio", { name: "路由到 acct-ready" })
+    ).not.toHaveAttribute("aria-disabled", "true")
+  })
+
+  it("keeps the order the server gave, whatever the accounts are doing", () => {
+    const pool = [
+      account({
+        id: "tight",
+        chatgptAccountId: "acct-tight",
+        limits: quota([bucket({ primary: window(90, 300) })]),
+      }),
+      account({
+        id: "broken",
+        chatgptAccountId: "acct-broken",
+        authStatus: "relogin_required",
+      }),
+      account({
+        id: "roomy",
+        chatgptAccountId: "acct-roomy",
+        limits: quota([bucket({ primary: window(10, 300) })]),
+      }),
+      account({
+        id: "off",
+        chatgptAccountId: "acct-off",
         enabled: false,
         authStatus: "disabled",
       }),
     ]
+    const expected = [
+      expect.stringContaining("acct-tight"),
+      expect.stringContaining("acct-broken"),
+      expect.stringContaining("acct-roomy"),
+      expect.stringContaining("acct-off"),
+    ]
+    const { rerender } = renderList(pool)
+    expect(cards().map((item) => item.textContent)).toEqual(expected)
 
-    render(
-      <TooltipProvider>
-        <AccountList
-          accounts={accounts}
-          busyId={null}
-          onSelect={vi.fn()}
-          onAction={vi.fn()}
-        />
-      </TooltipProvider>
-    )
-
-    const filter = screen.getByRole("combobox", { name: "筛选账号状态" })
-
-    await user.click(filter)
-    await user.click(await screen.findByRole("option", { name: option }))
-    expect(screen.getByText(visible)).toBeInTheDocument()
-    hidden.forEach((email) => {
-      expect(screen.queryByText(email)).not.toBeInTheDocument()
-    })
-    expect(screen.getByText("显示 1 / 共 3")).toBeInTheDocument()
-  })
-
-  it("preserves the service account order", () => {
-    const { container } = render(
+    // Spending quota and losing auth must not move anybody.
+    rerender(
       <TooltipProvider>
         <AccountList
           accounts={[
-            account({ id: "first", email: "first@example.com" }),
-            account({ id: "second", email: "second@example.com" }),
-            account({ id: "third", email: "third@example.com" }),
+            {
+              ...pool[0],
+              limits: quota([bucket({ primary: window(5, 300) })]),
+            },
+            { ...pool[1], isActive: true },
+            {
+              ...pool[2],
+              limits: quota([bucket({ primary: window(99, 300) })]),
+            },
+            pool[3],
           ]}
           busyId={null}
           onSelect={vi.fn()}
+          onClearRoute={vi.fn()}
           onAction={vi.fn()}
+          onConsumeReset={vi.fn(async () => undefined)}
         />
       </TooltipProvider>
     )
+    expect(cards().map((item) => item.textContent)).toEqual(expected)
+  })
 
-    expect(
-      Array.from(container.querySelectorAll('[role="listitem"]')).map(
-        (item) => item.textContent
-      )
-    ).toEqual([
-      expect.stringContaining("first@example.com"),
-      expect.stringContaining("second@example.com"),
-      expect.stringContaining("third@example.com"),
+  it("gives every card both windows, the brand mark and a renewal footer", () => {
+    renderList([
+      account({
+        billing: { anchorAt: Date.UTC(2026, 7, 15), cadence: "monthly" },
+        limits: quota([
+          bucket({ primary: window(25, 300), secondary: window(50, 10080) }),
+        ]),
+      }),
+      account({ id: "none", chatgptAccountId: "acct-none" }),
     ])
+
+    for (const item of cards()) {
+      expect(meters(item)).toHaveLength(2)
+      expect(item.querySelectorAll("[data-slot=metric-mark]")).toHaveLength(1)
+    }
+    expect(screen.getByText(/^\d{4}\/\d{2}\/\d{2} 自动续订 ·/)).toBeInTheDocument()
+    expect(screen.getByText("未设置自动续订时间")).toBeInTheDocument()
+
+    // Both slots stay named even with nothing to report, and never claim 无限制.
+    const none = card("acct-none")
+    expect(within(none).getByText("7 天额度")).toBeInTheDocument()
+    expect(within(none).getByText("5 小时额度")).toBeInTheDocument()
+    expect(within(none).getAllByText("额度尚未刷新")).toHaveLength(1)
+    expect(within(none).queryByText("无限制")).not.toBeInTheDocument()
   })
 
-  it("disables route selection for unavailable accounts", () => {
-    render(
-      <TooltipProvider>
-        <AccountList
-          accounts={[account({ enabled: false, authStatus: "disabled" })]}
-          busyId={null}
-          onSelect={vi.fn()}
-          onAction={vi.fn()}
-        />
-      </TooltipProvider>
-    )
-
-    expect(screen.getByRole("radio")).toHaveAttribute("aria-disabled", "true")
+  it("keeps missing billing metadata out of the attention state", () => {
+    renderList([
+      account(),
+    ])
+    expect(screen.getByRole("button", { name: "需处理（0）" })).toBeInTheDocument()
   })
 
-  it("shows a spinner and locks route selection while switching", () => {
-    render(
-      <TooltipProvider>
-        <AccountList
-          accounts={[
-            account({ id: "active", isActive: true }),
-            account({ id: "candidate" }),
-          ]}
-          busyId="candidate"
-          onSelect={vi.fn()}
-          onAction={vi.fn()}
-        />
-      </TooltipProvider>
+  it("names the missing window by its role, whichever one upstream omitted", () => {
+    renderList([
+      account({
+        id: "no-short",
+        chatgptAccountId: "acct-no-short",
+        limits: quota([bucket({ secondary: window(12, 10080) })]),
+      }),
+      account({
+        id: "no-long",
+        chatgptAccountId: "acct-no-long",
+        limits: quota([bucket({ primary: window(30, 300) })]),
+      }),
+    ])
+
+    // The uncapped slot is the one upstream left out, not simply the last one.
+    expect(meters(card("acct-no-short"))[1]).toHaveTextContent("无限制")
+    expect(meters(card("acct-no-long"))[0]).toHaveTextContent("无限制")
+  })
+
+  it("offers a repair only where a card stays broken until someone acts", async () => {
+    const onAction = vi.fn()
+    renderList(
+      [
+        account({ id: "ready", chatgptAccountId: "acct-ready" }),
+        account({
+          id: "broken",
+          chatgptAccountId: "acct-broken",
+          authStatus: "error",
+        }),
+        // Disabling is a deliberate act, not a fault to repair.
+        account({
+          id: "off",
+          chatgptAccountId: "acct-off",
+          enabled: false,
+          authStatus: "disabled",
+        }),
+        // Transient and self-clearing states resolve without a button.
+        account({
+          id: "busy",
+          chatgptAccountId: "acct-busy",
+          authStatus: "checking",
+        }),
+      ],
+      { onAction }
     )
 
-    expect(
-      screen.getByRole("status", { name: "正在切换路由账号" })
-    ).toBeInTheDocument()
-    expect(screen.getByRole("radio")).toHaveAttribute("aria-disabled", "true")
+    for (const id of ["acct-ready", "acct-off", "acct-busy"]) {
+      expect(
+        within(card(id)).queryByRole("button", { name: "刷新认证" })
+      ).not.toBeInTheDocument()
+    }
+    await userEvent.click(
+      within(card("acct-broken")).getByRole("button", { name: "刷新认证" })
+    )
+    expect(onAction.mock.calls[0][1]).toBe("auth")
+  })
+
+  it("searches and filters with counted state toggles", async () => {
+    const user = userEvent.setup()
+    renderList([
+      account({ id: "ready", chatgptAccountId: "acct-ready" }),
+      account({
+        id: "off",
+        chatgptAccountId: "acct-off",
+        email: "off@example.com",
+        enabled: false,
+        authStatus: "disabled",
+      }),
+    ])
+
+    const search = screen.getByRole("searchbox", { name: "搜索授权账号" })
+    await user.type(search, "acct-off")
+    expect(cards()).toHaveLength(1)
+    await user.clear(search)
+
+    await user.click(screen.getByRole("button", { name: "已停用（1）" }))
+    expect(cards()).toHaveLength(1)
+    expect(screen.getByText("acct-off")).toBeInTheDocument()
+    expect(screen.queryByText("acct-ready")).not.toBeInTheDocument()
+  })
+
+  it("opens the detail sheet from the account id and spends a reset credit once", async () => {
+    const user = userEvent.setup()
+    const onConsumeReset = vi.fn(async () => undefined)
+    const value = account({
+      limits: {
+        buckets: [bucket({ primary: window(20, 300) })],
+        defaultBucketKey: "codex",
+        checkedAt: Date.now(),
+        resetCredits: {
+          availableCount: 1,
+          credits: [
+            {
+              id: "credit-1",
+              resetType: "weekly",
+              status: "available",
+              grantedAt: Date.now(),
+              expiresAt: Date.UTC(2026, 7, 31),
+              title: "Weekly reset",
+              description: null,
+            },
+          ],
+        },
+      },
+    })
+    renderList([value], { onConsumeReset })
+
+    await user.click(screen.getByRole("button", { name: /acct-alpha/ }))
+    const sheet = screen.getByRole("dialog")
+    expect(within(sheet).getByText("全部额度窗口")).toBeInTheDocument()
+    await user.click(within(sheet).getByRole("button", { name: "使用重置券" }))
+    await user.click(screen.getByRole("button", { name: "确认使用" }))
+    expect(onConsumeReset).toHaveBeenCalledWith(value, {
+      idempotencyKey: expect.any(String),
+      creditId: "credit-1",
+    })
   })
 })

@@ -14,6 +14,7 @@ import { AccountsPage } from "@/pages/accounts-page"
 import { SettingsPage } from "@/pages/settings-page"
 import { PreferencesPage } from "@/pages/preferences-page"
 import { RequestLogsPage } from "@/pages/request-logs-page"
+import { UsagePage } from "@/pages/usage-page"
 import { cn } from "@/lib/utils"
 import type { GatewayService, GatewaySnapshot } from "@/services/contracts"
 import { createHttpGatewayService } from "@/services/http/gateway-service"
@@ -46,6 +47,7 @@ export function App({
   const [snapshot, setSnapshot] = useState<GatewaySnapshot | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [logsRevision, setLogsRevision] = useState(0)
+  const [usageRevision, setUsageRevision] = useState(0)
   const [logsErrorsOnly, setLogsErrorsOnly] = useState(false)
   const { t } = useTranslation()
   const { setTheme } = useTheme()
@@ -94,6 +96,9 @@ export function App({
       unsubscribe = service.subscribe(
         (resources) => {
           if (resources.includes("logs")) setLogsRevision((value) => value + 1)
+          if (resources.includes("usage"))
+            setUsageRevision((value) => value + 1)
+          if (resources.length === 1 && resources[0] === "usage") return
           window.clearTimeout(debounce)
           debounce = window.setTimeout(refresh, 100)
         },
@@ -141,6 +146,7 @@ export function App({
   }
   const fixedLogsLayout = page === "logs" && Boolean(snapshot) && !error
   const gatewayLayout = page === "gateway" && Boolean(snapshot) && !error
+  // The account list scrolls inside its own card, so the page itself must not.
   const accountsLayout = page === "accounts" && Boolean(snapshot) && !error
 
   return (
@@ -160,7 +166,7 @@ export function App({
         <ScrollArea
           className={cn(
             "min-h-0 flex-1",
-            fixedLogsLayout &&
+            (fixedLogsLayout || accountsLayout) &&
               "lg:[&_[data-slot=scroll-area-viewport]]:overflow-hidden"
           )}
         >
@@ -204,6 +210,8 @@ export function App({
                 onShowAccounts={() => setPage("accounts")}
                 logsRevision={logsRevision}
               />
+            ) : page === "usage" ? (
+              <UsagePage service={service} revision={usageRevision} />
             ) : page === "logs" ? (
               <RequestLogsPage
                 service={service}

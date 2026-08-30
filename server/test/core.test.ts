@@ -14,6 +14,7 @@ import { GatewayDatabase } from "../src/db/database.js";
 import { buildUpstreamHeaders, isCompactionRequest } from "../src/proxy/headers.js";
 import { ActiveAccountService } from "../src/routing/active-account-service.js";
 import { parseRateLimitResponse } from "../src/accounts/rate-limit-parser.js";
+import { toAccountView } from "../src/api/admin/context.js";
 import Database from "better-sqlite3";
 
 const temporary: string[] = [];
@@ -145,13 +146,55 @@ describe("security and routing core", () => {
   });
 
   it("parses rate limit responses in both case conventions", () => {
-    const camel = parseRateLimitResponse({ rateLimits: { primary: { usedPercent: 63, resetsAt: 1, windowDurationMins: 300 }, secondary: null }, rateLimitReachedType: "unlimited" });
+    const camel = parseRateLimitResponse({ rateLimits: { primary: { usedPercent: 63, resetsAt: 1, windowDurationMins: 300 }, secondary: null, planType: "free" }, rateLimitReachedType: "unlimited" });
     expect(camel.primary).toMatchObject({ usedPercent: 63, resetsAt: 1000, windowDurationMins: 300 });
     expect(camel.secondary).toBeNull();
     expect(camel.rateLimitReachedType).toBe("unlimited");
+    expect(camel.planType).toBe("free");
     const snake = parseRateLimitResponse({ rate_limits: { primary: { used_percent: 10, resets_at: 2, window_duration_mins: 60 }, secondary: { used_percent: 5 } } });
     expect(snake.primary).toMatchObject({ usedPercent: 10, resetsAt: 2000, windowDurationMins: 60 });
     expect(snake.secondary).toMatchObject({ usedPercent: 5 });
+    expect(snake.planType).toBeNull();
+  });
+
+  it("persists billing settings and updates plans from complete usage snapshots", async () => {
+    const root = await tempDir();
+    const database = new GatewayDatabase(path.join(root, "account-metadata.db"));
+    database.accounts.insert({ id: "account", codexHome: path.join(root, "account") });
+    database.accounts.update("account", {
+      planType: "plus",
+      subscriptionStartedAt: 1_786_089_600_000,
+      subscriptionExpiresAt: 1_786_089_600_000 + 30 * 24 * 60 * 60_000,
+      subscriptionExpirySource: "legacy_estimate",
+      billingAnchorAt: Date.UTC(2026, 7, 24),
+      billingCadence: "monthly",
+    });
+    database.accounts.updateRateLimits("account", {
+      primary: null,
+      secondary: null,
+      rateLimitReachedType: null,
+      planType: "free",
+      loadedAt: 1_786_089_601_000,
+    });
+    expect(database.accounts.get("account")).toMatchObject({
+      planType: "free",
+      subscriptionStartedAt: 1_786_089_600_000,
+      billingAnchorAt: Date.UTC(2026, 7, 24),
+      billingCadence: "monthly",
+    });
+    expect(toAccountView(database.accounts.get("account")!, null).billing).toEqual({
+      anchorAt: Date.UTC(2026, 7, 24),
+      cadence: "monthly",
+    });
+    database.accounts.updateRateLimits("account", {
+      primary: null,
+      secondary: null,
+      rateLimitReachedType: null,
+      planType: null,
+      loadedAt: 1_786_089_602_000,
+    });
+    expect(database.accounts.get("account")?.planType).toBe("free");
+    database.close();
   });
 });
 
@@ -187,6 +230,7 @@ describe("database migration v2", () => {
     const account = database.accounts.get("legacy-1")!;
     expect(account).toBeTruthy();
     expect(account.chatgptAccountId).toBeNull();
+    expect(account.subscriptionStartedAt).toBeNull();
     expect(database.getActiveAccountId()).toBeNull();
     expect(database.settings.get().requestMetadataLogging).toBe(true);
     const tables = database.raw.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as { name: string }[];
@@ -195,6 +239,57 @@ describe("database migration v2", () => {
     expect(database.accounts.get("legacy-1")!.chatgptAccountId).toBe("acct-upgraded");
     database.setActiveAccountId("legacy-1");
     expect(database.getActiveAccountId()).toBe("legacy-1");
+    database.close();
+  });
+});
+
+
+describe("database migration v16", () => {
+  it("converts legacy subscription starts into pending expiration estimates", async () => {
+    const root = await tempDir();
+    const dbPath = path.join(root, "subscription-v16.db");
+    const database = new GatewayDatabase(dbPath);
+    database.accounts.insert({ id: "legacy-subscription", codexHome: path.join(root, "legacy-account") });
+    database.accounts.update("legacy-subscription", {
+      subscriptionStartedAt: Date.UTC(2026, 7, 1),
+      subscriptionExpiresAt: null,
+      subscriptionExpirySource: null,
+    });
+    database.raw.prepare("UPDATE schema_migrations SET version = 15 WHERE version = 17").run();
+    database.close();
+
+    const migrated = new GatewayDatabase(dbPath);
+    expect(migrated.accounts.get("legacy-subscription")).toMatchObject({
+      subscriptionExpiresAt: Date.UTC(2026, 7, 31),
+      subscriptionExpirySource: "legacy_estimate",
+    });
+    migrated.close();
+  });
+});
+
+describe("database migration v17", () => {
+  it("adds empty billing fields without converting legacy expiration data", async () => {
+    const root = await tempDir();
+    const dbPath = path.join(root, "billing-v17.db");
+    const database = new GatewayDatabase(dbPath);
+    database.accounts.insert({ id: "legacy-billing", codexHome: path.join(root, "legacy-billing") });
+    database.accounts.update("legacy-billing", {
+      subscriptionStartedAt: Date.UTC(2026, 7, 1),
+      subscriptionExpiresAt: Date.UTC(2026, 7, 31),
+      subscriptionExpirySource: "manual",
+    });
+    expect(database.accounts.get("legacy-billing")).toMatchObject({
+      billingAnchorAt: null,
+      billingCadence: null,
+    });
+    database.accounts.update("legacy-billing", {
+      billingAnchorAt: Date.UTC(2026, 7, 24),
+      billingCadence: "annual",
+    });
+    expect(database.accounts.get("legacy-billing")).toMatchObject({
+      billingAnchorAt: Date.UTC(2026, 7, 24),
+      billingCadence: "annual",
+    });
     database.close();
   });
 });
@@ -448,34 +543,14 @@ describe("Codex app-server adapter", () => {  it("uses isolated CODEX_HOME and J
     database.close();
   });
 
-  it("retries a background quota refresh once without retrying a manual refresh", async () => {
+  it("can disable automatic quota refreshes without disabling manual refresh", async () => {
     const root = await tempDir();
     const database = new GatewayDatabase(path.join(root, "gateway.db"));
     database.accounts.insert({ id: "account", codexHome: path.join(root, "account") });
     database.accounts.update("account", { authStatus: "ready" });
-    const usage = new AccountUsageService({} as never, database);
-    const snapshot = { primary: null, secondary: null, rateLimitReachedType: null, loadedAt: Date.now() };
-    const refreshOnce = vi.spyOn(
-      usage as unknown as { refreshOnce(accountId: string): Promise<typeof snapshot> },
-      "refreshOnce",
-    );
-
-    refreshOnce.mockRejectedValueOnce(new Error("temporary"));
-    await expect(usage.refresh("account")).rejects.toThrow("temporary");
-    expect(refreshOnce).toHaveBeenCalledTimes(1);
-
-    vi.useFakeTimers();
-    try {
-      refreshOnce.mockReset()
-        .mockRejectedValueOnce(new Error("temporary"))
-        .mockResolvedValueOnce(snapshot);
-      const background = usage.refreshInBackground("account");
-      await vi.advanceTimersByTimeAsync(2_500);
-      await expect(background).resolves.toBe(true);
-      expect(refreshOnce).toHaveBeenCalledTimes(2);
-    } finally {
-      vi.useRealTimers();
-    }
+    const usage = new AccountUsageService({} as never, database, undefined, false);
+    usage.refreshIfStale("account");
+    await expect(usage.refreshInBackground("account")).resolves.toBe(false);
     database.close();
   });
 

@@ -4,6 +4,7 @@ import {
   SlidersHorizontalIcon,
   RouteIcon,
   ScrollTextIcon,
+  ChartNoAxesCombinedIcon,
   UsersRoundIcon,
 } from "lucide-react"
 import { useTranslation } from "react-i18next"
@@ -31,13 +32,18 @@ import {
 } from "@/components/ui/tooltip"
 import type { AccountView } from "@/services/contracts"
 
-export type AppPage = "accounts" | "gateway" | "logs" | "preferences"
+export type AppPage = "accounts" | "usage" | "gateway" | "logs" | "preferences"
 
 const navigation = [
   {
     value: "accounts" as const,
     label: "账号路由",
     icon: UsersRoundIcon,
+  },
+  {
+    value: "usage" as const,
+    label: "用量分析",
+    icon: ChartNoAxesCombinedIcon,
   },
   {
     value: "gateway" as const,
