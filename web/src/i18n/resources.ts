@@ -4,11 +4,14 @@ export const zhCN = {
 
 export const en = {
   搜索请求: "Search requests",
+  搜索连接: "Search connections",
   请求结果筛选: "Filter by outcome",
   时间窗口: "Time window",
   故障细节: "Failure detail",
   "{{range}}的请求": "Requests, {{range}}",
+  "{{range}}的连接": "Connections, {{range}}",
   "{{percent}}% 成功": "{{percent}}% succeeded",
+  "{{percent}}% 无故障": "{{percent}}% without failures",
   请求量与结果的时间分布: "Request volume and outcomes over time",
   "{{time}} · 请求 {{requests}} · 故障 {{errors}}":
     "{{time}} · requests {{requests}} · failures {{errors}}",
@@ -16,11 +19,26 @@ export const en = {
     "{{time}} · requests {{requests}} · failures {{errors}} · rejected {{rejected}}",
   "点选任意一格，把下方列表收窄到那一段":
     "Click any bar to narrow the list below to that slice",
+  "点选任意一格，把下方连接列表收窄到该时段":
+    "Click any bar to narrow the connections below to that interval",
+  连接量与结果的时间分布: "Connection volume and outcomes over time",
+  "{{time}} · 连接 {{connections}} · 故障 {{failures}}":
+    "{{time}} · connections {{connections}} · failures {{failures}}",
+  "{{time}} · 连接 {{connections}} · 故障 {{failures}} · 退役 {{retired}}":
+    "{{time}} · connections {{connections}} · failures {{failures}} · retired {{retired}}",
+  连接结果分布: "Connection outcome breakdown",
+  这段范围内没有连接: "No connections in this range",
+  其他连接: "Other connections",
+  "失败 / 拒绝": "Failed / rejected",
+  正常退役: "Gracefully retired",
   故障分布: "Failure breakdown",
   "共 {{count}} 次": "{{count}} in total",
   这段范围内没有故障: "No failures in this range",
   最常见诊断码: "Most common diagnostic codes",
   "{{from}} 起": "From {{from}}",
+  "{{from}} 至 {{to}}": "{{from}} to {{to}}",
+  选择日期范围: "Select date range",
+  日期范围: "Date range",
   "按时间倒序 · 共 {{total}} 条": "Newest first · {{total}} in total",
   无可用账号: "No usable account",
   未选择账号: "No account selected",

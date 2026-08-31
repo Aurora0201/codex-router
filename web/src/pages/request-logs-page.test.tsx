@@ -169,23 +169,37 @@ describe("RequestLogsPage", () => {
     )
     expect(screen.getByText("81 ms")).not.toHaveClass("text-right")
     expect(screen.getByText("120 B / 40 B")).not.toHaveClass("text-right")
-    // One panel now, not two cards glued together: the toolbar, the rows and
-    // the pagination all sit on the same inset.
+    // The card owns the outline while the complete table surface owns the
+    // muted background.
     const records = screen
       .getByRole("heading", { name: "请求记录" })
       .closest("section") as HTMLElement
+    expect(records.closest('[role="tabpanel"]')).toHaveClass("pb-4")
     expect(records).toContainElement(
       screen.getByRole("button", { name: "更多筛选" })
     )
     expect(records).toContainElement(
       screen.getByRole("button", { name: "查看请求 req-1" })
     )
-    expect(records).toHaveClass("flex-1", "min-h-0")
+    expect(records).toHaveClass("bg-card", "ring-1")
+    expect(records).not.toHaveClass("bg-muted")
+    const recordsScrollArea = screen
+      .getByRole("button", { name: "查看请求 req-1" })
+      .closest("[data-slot=scroll-area]")
+    expect(recordsScrollArea).toHaveClass("h-[520px]")
+    expect(recordsScrollArea?.parentElement).toHaveClass("bg-muted")
+    expect(recordsScrollArea?.parentElement).not.toHaveClass("mx-3", "mb-3")
     expect(
-      screen
-        .getByRole("button", { name: "查看请求 req-1" })
-        .closest("[data-slot=scroll-area]")
-    ).toBeInTheDocument()
+      screen.getByRole("columnheader", { name: "路由" }).closest("thead")
+    ).toHaveClass("[&_th]:bg-muted")
+    expect(screen.getByText("POST")).toHaveClass("text-primary")
+    expect(screen.getByTitle("POST /responses")).toBeInTheDocument()
+    expect(
+      screen.getByRole("heading", { name: "故障分布" }).closest("section")
+    ).toHaveClass("xl:h-72")
+    expect(
+      screen.getByText("最近 24 小时的请求").closest("section")
+    ).toHaveClass("xl:h-72")
     await userEvent.click(
       screen.getByRole("button", { name: "查看请求 req-1" })
     )
@@ -206,6 +220,169 @@ describe("RequestLogsPage", () => {
     expect(
       JSON.stringify(await service.getRequestLogs({ range: "24h" }))
     ).not.toContain("prompt")
+  })
+
+  it("shows the real request protocol beside each route", async () => {
+    const service = createGatewayServiceFixture()
+    const baseItem = {
+      accountLabel: "account@example.com",
+      state: "completed" as const,
+      outcome: "success" as const,
+      identityMode: "managed_account" as const,
+      startedAt: Date.now(),
+      completedAt: Date.now(),
+      bytesIn: 0,
+      bytesOut: 0,
+    }
+    service.getRequestLogs = vi.fn().mockResolvedValue({
+      items: [
+        {
+          ...baseItem,
+          id: "http-response",
+          route: "/responses",
+          transport: "http",
+        },
+        {
+          ...baseItem,
+          id: "models",
+          route: "/models",
+          transport: "models",
+        },
+        {
+          ...baseItem,
+          id: "ws-response",
+          route: "/responses",
+          transport: "ws",
+        },
+        {
+          ...baseItem,
+          id: "ws-compact",
+          requestId: "connection-id:1",
+          route: "/responses",
+          transport: "compact",
+        },
+      ],
+      summary: {
+        requests: 4,
+        errors: 0,
+        rejected: 0,
+        cancelled: 0,
+        availabilityRequests: 4,
+        availabilityErrors: 0,
+        averageDurationMs: 1,
+      },
+      timeline: [],
+      histogram: [],
+      failureSources: [],
+      diagnosticCodes: [],
+      nextCursor: null,
+      pagination: { page: 1, pageSize: 20, totalItems: 4, totalPages: 1 },
+    })
+
+    render(
+      <RequestLogsPage
+        service={service}
+        accounts={[]}
+        enabled
+        initialErrorsOnly={false}
+        revision={0}
+        onShowPreferences={vi.fn()}
+      />
+    )
+
+    expect(await screen.findByTitle("POST /responses")).toBeInTheDocument()
+    expect(screen.getByTitle("GET /models")).toBeInTheDocument()
+    expect(screen.getAllByTitle("WS /responses")).toHaveLength(2)
+  })
+
+  it("applies and clears a local whole-day date range", async () => {
+    const user = userEvent.setup()
+    const service = createGatewayServiceFixture()
+    const getRequestLogs = vi.fn(service.getRequestLogs.bind(service))
+    service.getRequestLogs = getRequestLogs
+    render(
+      <RequestLogsPage
+        service={service}
+        accounts={[]}
+        enabled
+        initialErrorsOnly={false}
+        revision={0}
+        onShowPreferences={vi.fn()}
+      />
+    )
+
+    await user.click(screen.getByRole("button", { name: "更多筛选" }))
+    await user.click(screen.getByRole("button", { name: "日期范围" }))
+    const availableDays = Array.from(
+      document.querySelectorAll<HTMLButtonElement>(
+        '[data-slot="calendar"] button[data-day]'
+      )
+    ).filter((button) => !button.closest('[data-outside="true"]'))
+    const first = availableDays[7]
+    const last = availableDays[9]
+    expect(first).toBeDefined()
+    expect(last).toBeDefined()
+    const firstDay = first!.dataset.day!
+    const lastDay = last!.dataset.day!
+    await user.click(first!)
+    await waitFor(() => {
+      const firstButton = document.querySelector<HTMLButtonElement>(
+        `[data-slot="calendar"] button[data-day="${firstDay}"]`
+      )
+      expect(firstButton).toHaveAttribute("data-range-start", "true")
+    })
+    const lastButton = document.querySelector<HTMLButtonElement>(
+      `[data-slot="calendar"] button[data-day="${lastDay}"]`
+    )!
+    await user.click(lastButton)
+    await waitFor(() => {
+      const firstButton = document.querySelector<HTMLButtonElement>(
+        `[data-slot="calendar"] button[data-day="${firstDay}"]`
+      )
+      const lastButton = document.querySelector<HTMLButtonElement>(
+        `[data-slot="calendar"] button[data-day="${lastDay}"]`
+      )
+      expect(firstButton).toHaveAttribute("data-range-start", "true")
+      expect(lastButton).toHaveAttribute("data-range-end", "true")
+    })
+    await user.click(screen.getByRole("button", { name: "保存" }))
+
+    const parseDay = (value: string) => {
+      const [year, month, day] = value.split("/").map(Number)
+      return new Date(year, month - 1, day)
+    }
+    const firstDate = parseDay(firstDay)
+    const lastDate = parseDay(lastDay)
+    await waitFor(() =>
+      expect(getRequestLogs).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          from: new Date(
+            firstDate.getFullYear(),
+            firstDate.getMonth(),
+            firstDate.getDate()
+          ).getTime(),
+          to: new Date(
+            lastDate.getFullYear(),
+            lastDate.getMonth(),
+            lastDate.getDate(),
+            23,
+            59,
+            59,
+            999
+          ).getTime(),
+          page: 1,
+        })
+      )
+    )
+
+    const rangeChip = await screen.findByRole("button", {
+      name: /移除筛选.*至/,
+    })
+    await user.click(rangeChip)
+    await waitFor(() => {
+      expect(getRequestLogs.mock.lastCall?.[0]).not.toHaveProperty("from")
+      expect(getRequestLogs.mock.lastCall?.[0]).not.toHaveProperty("to")
+    })
   })
 
   it("links to preferences when metadata recording is disabled", async () => {
@@ -435,6 +612,8 @@ describe("RequestLogsPage", () => {
 
   it("keeps connection diagnostics separate from request rows", async () => {
     const service = createGatewayServiceFixture()
+    const bucketStartedAt = Date.now() - 60_000
+    const bucketEndedAt = Date.now()
     service.getWebSocketConnectionLogs = vi.fn().mockResolvedValue({
       items: [
         {
@@ -449,6 +628,15 @@ describe("RequestLogsPage", () => {
         },
       ],
       summary: { connections: 1, failures: 0, retired: 1 },
+      histogram: [
+        {
+          startedAt: bucketStartedAt,
+          endedAt: bucketEndedAt,
+          connections: 1,
+          failures: 0,
+          retired: 1,
+        },
+      ],
       nextCursor: null,
       pagination: { page: 1, pageSize: 20, totalItems: 1, totalPages: 1 },
     })
@@ -469,7 +657,7 @@ describe("RequestLogsPage", () => {
       screen
         .getByText("connection-1")
         .closest('[data-slot="animate-tabs-panel"]')
-    ).toHaveClass("flex", "h-full", "min-h-0", "flex-col", "gap-4")
+    ).toHaveClass("flex", "flex-col", "gap-4", "pb-4")
     const tabsPanels = document.querySelector(
       '[data-slot="animate-tabs-panels"]'
     )
@@ -477,18 +665,55 @@ describe("RequestLogsPage", () => {
     expect(tabsPanels).toHaveStyle({ overflow: "visible" })
     expect(screen.getByText("101")).toBeInTheDocument()
     expect(screen.getAllByText("正常退役").length).toBeGreaterThanOrEqual(2)
-    expect(
-      connectionTab.compareDocumentPosition(screen.getByText("连接总数")) &
-        Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBeTruthy()
-    const diagnosticsHeaderCard = screen
+    const overview = screen.getByRole("group", {
+      name: "连接量与结果的时间分布",
+    })
+    expect(overview.closest("section")).toHaveClass(
+      "xl:col-span-8",
+      "xl:h-72",
+      "bg-emphasis"
+    )
+    expect(screen.getByText("连接结果分布").closest("section")).toHaveClass(
+      "xl:col-span-4",
+      "xl:h-72"
+    )
+    const connectionBucket = screen.getByRole("button", {
+      name: /连接 1 · 故障 0/,
+    })
+    await userEvent.click(connectionBucket)
+    await waitFor(() =>
+      expect(service.getWebSocketConnectionLogs).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          from: bucketStartedAt,
+          to: bucketEndedAt,
+          page: 1,
+        })
+      )
+    )
+    const diagnosticsSection = screen
       .getByText("WebSocket 连接诊断")
-      .closest('[data-slot="card"]')
-    expect(diagnosticsHeaderCard).toContainElement(
-      screen.getByRole("button", { name: "更多筛选" })
+      .closest("section") as HTMLElement
+    expect(diagnosticsSection).toHaveClass(
+      "rounded-2xl",
+      "bg-card",
+      "p-2",
+      "ring-1"
+    )
+    const moreFilters = screen.getByRole("button", { name: /^更多筛选/ })
+    expect(diagnosticsSection).toContainElement(moreFilters)
+    expect(screen.getByRole("searchbox", { name: "搜索连接" })).toHaveClass(
+      "bg-transparent"
     )
     expect(
-      screen.getByText("connection-1").closest('[data-slot="card"]')
-    ).toHaveClass("rounded-t-none", "lg:flex-1")
+      screen.getByText("connection-1").closest("div.overflow-hidden")
+    ).toHaveClass("rounded-lg", "bg-muted")
+    expect(
+      screen.getByText("connection-1").closest('[data-slot="scroll-area"]')
+    ).toHaveClass("h-[520px]")
+    await userEvent.click(moreFilters)
+    expect(
+      await screen.findByRole("button", { name: "日期范围" })
+    ).toBeInTheDocument()
+    expect(document.querySelector('input[type="datetime-local"]')).toBeNull()
   })
 })

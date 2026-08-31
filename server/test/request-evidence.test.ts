@@ -316,6 +316,19 @@ describe("request evidence lifecycle", () => {
     });
     expect(result.items).toHaveLength(1);
     expect(result.summary).toEqual({ connections: 2, failures: 2, retired: 0 });
+    expect(result.histogram).toHaveLength(96);
+    expect(
+      result.histogram.reduce(
+        (connections, bucket) => connections + bucket.connections,
+        0,
+      ),
+    ).toBe(2);
+    expect(
+      result.histogram.reduce(
+        (failures, bucket) => failures + bucket.failures,
+        0,
+      ),
+    ).toBe(2);
     expect(result.pagination.totalPages).toBe(2);
     database.close();
   });

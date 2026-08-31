@@ -18,14 +18,11 @@ import { useTranslation } from "react-i18next"
 
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { LogDateRangePicker } from "@/components/request/log-date-range-picker"
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+  ConnectionOutcomePanel,
+  ConnectionVolumeHero,
+} from "@/components/request/websocket-connection-overview"
 import {
   Combobox,
   ComboboxContent,
@@ -98,6 +95,7 @@ const PAGE_SIZE = 20
 const EMPTY: WebSocketConnectionLogsResponse = {
   items: [],
   summary: { connections: 0, failures: 0, retired: 0 },
+  histogram: [],
   nextCursor: null,
   pagination: { page: 1, pageSize: PAGE_SIZE, totalItems: 0, totalPages: 0 },
 }
@@ -140,12 +138,6 @@ function ConnectionOutcomeBadge({
 }
 const value = (input: unknown) =>
   input === undefined || input === null ? "—" : String(input)
-const local = (time?: number) =>
-  time
-    ? new Date(time - new Date(time).getTimezoneOffset() * 60_000)
-        .toISOString()
-        .slice(0, 16)
-    : ""
 type Token = number | "start" | "end"
 const tokens = (page: number, total: number): Token[] =>
   total <= 7
@@ -382,199 +374,192 @@ export function WebSocketConnectionLogsPanel({
     columns,
     getCoreRowModel: getCoreRowModel(),
   })
+  const rangeLabel = t(
+    filters.from !== undefined
+      ? "自定义时间"
+      : filters.range === "1h"
+        ? "最近 1 小时"
+        : filters.range === "7d"
+          ? "最近 7 天"
+          : "最近 24 小时"
+  )
   return (
     <>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        {[
-          [t("连接总数"), result.summary.connections],
-          [t("失败 / 拒绝"), result.summary.failures],
-          [t("正常退役"), result.summary.retired],
-        ].map(([label, count], index) => (
-          <Card key={String(label)} size="sm">
-            <CardHeader>
-              <CardDescription>{label}</CardDescription>
-              <CardTitle
-                className={cn(
-                  "text-2xl tabular-nums",
-                  index === 1 && Number(count) > 0 && "text-destructive"
-                )}
-              >
-                {Number(count).toLocaleString(locale)}
-              </CardTitle>
-            </CardHeader>
-          </Card>
-        ))}
+      <div className="grid shrink-0 grid-cols-12 gap-4">
+        <ConnectionVolumeHero
+          className="col-span-12 xl:col-span-8 xl:h-72"
+          summary={result.summary}
+          histogram={result.histogram}
+          rangeLabel={rangeLabel}
+          onSelectWindow={(from, to) => update({ from, to })}
+        />
+        <ConnectionOutcomePanel
+          className="col-span-12 xl:col-span-4 xl:h-72"
+          summary={result.summary}
+        />
       </div>
-      <Card className="gap-3 rounded-b-none pb-3 lg:shrink-0">
-        <CardHeader>
-          <CardTitle>{t("WebSocket 连接诊断")}</CardTitle>
-          <CardDescription>
-            {t("握手与关闭证据独立于请求结果，不参与请求成功率。")}
-          </CardDescription>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <Choice
-              label={t("时间范围")}
-              value={filters.from !== undefined ? "custom" : filters.range}
-              onChange={(range) =>
-                update(
-                  range === "custom"
-                    ? { from: Date.now() - 3_600_000, to: Date.now() }
-                    : {
-                        range: range as WebSocketConnectionLogFilters["range"],
-                        from: undefined,
-                        to: undefined,
-                      }
-                )
-              }
-              items={[
-                { value: "1h", label: t("最近 1 小时") },
-                { value: "24h", label: t("最近 24 小时") },
-                { value: "7d", label: t("最近 7 天") },
-                { value: "custom", label: t("自定义时间") },
-              ]}
+      <section className="flex flex-col rounded-2xl bg-card p-2 ring-1 ring-foreground/10">
+        <header className="flex h-11 shrink-0 items-center justify-between gap-4 px-2">
+          <h2 className="flex min-w-0 items-center gap-2 text-sm font-semibold">
+            <RadioIcon
+              aria-hidden="true"
+              className="size-4 text-muted-foreground"
             />
-            <Choice
-              label={t("连接结果")}
-              value={filters.outcome ?? "all"}
-              onChange={(outcome) =>
-                update({
-                  outcome:
-                    outcome === "all"
-                      ? undefined
-                      : (outcome as WebSocketConnectionLogFilters["outcome"]),
-                })
-              }
-              items={[
-                { value: "all", label: t("全部结果") },
-                ...Object.entries(LABELS).map(([value, label]) => ({
-                  value,
-                  label: t(label),
-                })),
-              ]}
+            <span className="truncate">{t("WebSocket 连接诊断")}</span>
+          </h2>
+          <span
+            className="truncate text-xs text-muted-foreground/70"
+            title={t("握手与关闭证据独立于请求结果，不参与请求成功率。")}
+          >
+            {t("按时间倒序 · 共 {{total}} 条", {
+              total: result.pagination.totalItems,
+            })}
+          </span>
+        </header>
+        <div className="mx-3 mt-1 mb-3 flex flex-wrap items-center gap-2">
+          <label className="flex h-9 w-full min-w-0 items-center gap-2 rounded-xl bg-muted px-3 text-muted-foreground sm:w-72">
+            <SearchIcon aria-hidden="true" className="size-4 shrink-0" />
+            <input
+              className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/70"
+              type="search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              aria-label={t("搜索连接")}
+              placeholder={t("搜索连接 ID、关闭原因或账号")}
             />
-            <div className="relative min-w-64 flex-1">
-              <SearchIcon className="pointer-events-none absolute top-2 left-2.5 size-4 text-muted-foreground" />
-              <Input
-                className="pl-8"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder={t("搜索连接 ID、关闭原因或账号")}
-              />
-            </div>
-            <Popover>
-              <PopoverTrigger render={<Button variant="outline" />}>
-                <SlidersHorizontalIcon data-icon="inline-start" />
-                {t("更多筛选")}
-                {advancedCount > 0 && (
-                  <Badge variant="secondary">{advancedCount}</Badge>
-                )}
-              </PopoverTrigger>
-              <PopoverContent
-                align="end"
-                className="w-[min(34rem,calc(100vw-2rem))]"
-              >
-                <PopoverHeader>
-                  <PopoverTitle>{t("更多筛选")}</PopoverTitle>
-                  <PopoverDescription>
-                    {t("摘要和连接列表使用相同筛选范围。")}
-                  </PopoverDescription>
-                </PopoverHeader>
-                {filters.from !== undefined && (
-                  <FieldGroup className="grid gap-3 sm:grid-cols-2">
-                    <Field>
-                      <Input
-                        type="datetime-local"
-                        aria-label={t("开始时间")}
-                        className="w-full"
-                        value={local(filters.from)}
-                        onChange={(event) =>
-                          event.target.value &&
-                          update({
-                            from: new Date(event.target.value).getTime(),
-                          })
-                        }
-                      />
-                    </Field>
-                    <Field>
-                      <Input
-                        type="datetime-local"
-                        aria-label={t("结束时间")}
-                        className="w-full"
-                        value={local(filters.to)}
-                        onChange={(event) =>
-                          event.target.value &&
-                          update({ to: new Date(event.target.value).getTime() })
-                        }
-                      />
-                    </Field>
-                  </FieldGroup>
-                )}
-                <FieldGroup className="grid gap-3 sm:grid-cols-2">
-                  <Field>
-                    <AccountFilter
-                      accounts={accounts}
-                      value={filters.accountId}
-                      onChange={(accountId) => update({ accountId })}
-                    />
-                  </Field>
-                  <Field>
-                    <Choice
+          </label>
+          <Choice
+            label={t("时间范围")}
+            value={filters.from !== undefined ? "custom" : filters.range}
+            onChange={(range) =>
+              update(
+                range === "custom"
+                  ? { from: Date.now() - 3_600_000, to: Date.now() }
+                  : {
+                      range: range as WebSocketConnectionLogFilters["range"],
+                      from: undefined,
+                      to: undefined,
+                    }
+              )
+            }
+            items={[
+              { value: "1h", label: t("最近 1 小时") },
+              { value: "24h", label: t("最近 24 小时") },
+              { value: "7d", label: t("最近 7 天") },
+              { value: "custom", label: t("自定义时间") },
+            ]}
+          />
+          <Choice
+            label={t("连接结果")}
+            value={filters.outcome ?? "all"}
+            onChange={(outcome) =>
+              update({
+                outcome:
+                  outcome === "all"
+                    ? undefined
+                    : (outcome as WebSocketConnectionLogFilters["outcome"]),
+              })
+            }
+            items={[
+              { value: "all", label: t("全部结果") },
+              ...Object.entries(LABELS).map(([value, label]) => ({
+                value,
+                label: t(label),
+              })),
+            ]}
+          />
+          <Popover>
+            <PopoverTrigger
+              render={<Button variant="outline" size="sm" />}
+              className="ml-auto"
+            >
+              <SlidersHorizontalIcon data-icon="inline-start" />
+              {t("更多筛选")}
+              {advancedCount > 0 && (
+                <Badge variant="secondary">{advancedCount}</Badge>
+              )}
+            </PopoverTrigger>
+            <PopoverContent
+              align="end"
+              className="w-[min(34rem,calc(100vw-2rem))]"
+            >
+              <PopoverHeader>
+                <PopoverTitle>{t("更多筛选")}</PopoverTitle>
+                <PopoverDescription>
+                  {t("摘要和连接列表使用相同筛选范围。")}
+                </PopoverDescription>
+              </PopoverHeader>
+              <FieldGroup className="grid gap-3 sm:grid-cols-2">
+                <LogDateRangePicker
+                  from={filters.from}
+                  to={filters.to}
+                  onApply={(from, to) => update({ from, to })}
+                  onClear={() => update({ from: undefined, to: undefined })}
+                />
+              </FieldGroup>
+              <FieldGroup className="grid gap-3 sm:grid-cols-2">
+                <Field>
+                  <AccountFilter
+                    accounts={accounts}
+                    value={filters.accountId}
+                    onChange={(accountId) => update({ accountId })}
+                  />
+                </Field>
+                <Field>
+                  <Choice
+                    className="w-full"
+                    label={t("关闭发起方")}
+                    value={filters.closeInitiator ?? "all"}
+                    onChange={(closeInitiator) =>
+                      update({
+                        closeInitiator:
+                          closeInitiator === "all"
+                            ? undefined
+                            : (closeInitiator as WebSocketConnectionLogFilters["closeInitiator"]),
+                      })
+                    }
+                    items={[
+                      { value: "all", label: t("全部发起方") },
+                      { value: "client", label: "client" },
+                      { value: "upstream", label: "upstream" },
+                      { value: "gateway", label: "gateway" },
+                    ]}
+                  />
+                </Field>
+                {[
+                  ["handshakeHttpStatus", "握手 HTTP"],
+                  ["clientCloseCode", "客户端关闭码"],
+                  ["upstreamCloseCode", "上游关闭码"],
+                ].map(([key, label]) => (
+                  <Field key={key}>
+                    <Input
+                      key={key}
+                      aria-label={t(label)}
                       className="w-full"
-                      label={t("关闭发起方")}
-                      value={filters.closeInitiator ?? "all"}
-                      onChange={(closeInitiator) =>
+                      inputMode="numeric"
+                      placeholder={t(label)}
+                      value={
+                        (filters[
+                          key as keyof WebSocketConnectionLogFilters
+                        ] as number) ?? ""
+                      }
+                      onChange={(event) =>
                         update({
-                          closeInitiator:
-                            closeInitiator === "all"
-                              ? undefined
-                              : (closeInitiator as WebSocketConnectionLogFilters["closeInitiator"]),
+                          [key]: event.target.value
+                            ? Number(event.target.value)
+                            : undefined,
                         })
                       }
-                      items={[
-                        { value: "all", label: t("全部发起方") },
-                        { value: "client", label: "client" },
-                        { value: "upstream", label: "upstream" },
-                        { value: "gateway", label: "gateway" },
-                      ]}
                     />
                   </Field>
-                  {[
-                    ["handshakeHttpStatus", "握手 HTTP"],
-                    ["clientCloseCode", "客户端关闭码"],
-                    ["upstreamCloseCode", "上游关闭码"],
-                  ].map(([key, label]) => (
-                    <Field key={key}>
-                      <Input
-                        key={key}
-                        aria-label={t(label)}
-                        className="w-full"
-                        inputMode="numeric"
-                        placeholder={t(label)}
-                        value={
-                          (filters[
-                            key as keyof WebSocketConnectionLogFilters
-                          ] as number) ?? ""
-                        }
-                        onChange={(event) =>
-                          update({
-                            [key]: event.target.value
-                              ? Number(event.target.value)
-                              : undefined,
-                          })
-                        }
-                      />
-                    </Field>
-                  ))}
-                </FieldGroup>
-              </PopoverContent>
-            </Popover>
-          </div>
-        </CardHeader>
-      </Card>
-      <Card className="-mt-4 min-h-0 gap-0 overflow-hidden rounded-t-none py-0 lg:flex-1">
-        <CardContent className="flex min-h-0 flex-1 flex-col p-0">
+                ))}
+              </FieldGroup>
+            </PopoverContent>
+          </Popover>
+        </div>
+        <div className="flex flex-col overflow-hidden rounded-lg bg-muted">
           {error ? (
-            <Empty className="h-full min-h-80 border-0 lg:min-h-0">
+            <Empty className="h-[520px] border-0">
               <EmptyHeader>
                 <EmptyMedia variant="icon">
                   <RadioIcon />
@@ -586,7 +571,7 @@ export function WebSocketConnectionLogsPanel({
               </EmptyHeader>
             </Empty>
           ) : !loading && result.items.length === 0 ? (
-            <Empty className="h-full min-h-80 border-0 lg:min-h-0">
+            <Empty className="h-[520px] border-0">
               <EmptyHeader>
                 <EmptyMedia variant="icon">
                   <RadioIcon />
@@ -598,7 +583,7 @@ export function WebSocketConnectionLogsPanel({
           ) : (
             <ScrollArea
               ref={scroll}
-              className="min-h-0 flex-1 [&_[data-slot=table-container]]:overflow-visible"
+              className="h-[520px] [&_[data-slot=table-container]]:overflow-visible"
             >
               <Table className="min-w-[960px] table-fixed">
                 <colgroup>
@@ -608,7 +593,7 @@ export function WebSocketConnectionLogsPanel({
                   <col className="w-[140px]" />
                   <col />
                 </colgroup>
-                <TableHeader className="sticky top-0 z-10 [&_th]:bg-card [&_tr]:shadow-sm">
+                <TableHeader className="sticky top-0 z-10 [&_th]:bg-muted [&_tr]:shadow-sm">
                   {table.getHeaderGroups().map((group) => (
                     <TableRow key={group.id}>
                       {group.headers.map((header) => (
@@ -639,10 +624,7 @@ export function WebSocketConnectionLogsPanel({
                       }}
                     >
                       {row.getVisibleCells().map((cell) => (
-                        <TableCell
-                          key={cell.id}
-                          className="px-4"
-                        >
+                        <TableCell key={cell.id} className="px-4">
                           {flexRender(
                             cell.column.columnDef.cell,
                             cell.getContext()
@@ -656,81 +638,84 @@ export function WebSocketConnectionLogsPanel({
               <ScrollBar orientation="horizontal" />
             </ScrollArea>
           )}
-        </CardContent>
-        {result.pagination.totalPages > 0 && (
-          <CardFooter className="justify-between py-3">
-            <span className="text-sm text-muted-foreground tabular-nums">
-              {t("共 {{total}} 条 · 每页 {{size}} 条", {
-                total: result.pagination.totalItems,
-                size: result.pagination.pageSize,
-              })}
-            </span>
-            <Pagination className="mx-0 w-auto" aria-label={t("连接诊断分页")}>
-              <PaginationContent>
-                <PaginationItem>
-                  <PaginationPrevious
-                    href="#"
-                    text={t("上一页")}
-                    aria-disabled={loading || result.pagination.page === 1}
-                    className={cn(
-                      (loading || result.pagination.page === 1) &&
-                        "pointer-events-none opacity-50"
-                    )}
-                    onClick={(event) => {
-                      event.preventDefault()
-                      page(result.pagination.page - 1)
-                    }}
-                  />
-                </PaginationItem>
-                {tokens(
-                  result.pagination.page,
-                  result.pagination.totalPages
-                ).map((token) =>
-                  typeof token === "number" ? (
-                    <PaginationItem key={token}>
-                      <PaginationLink
-                        href="#"
-                        isActive={token === result.pagination.page}
-                        aria-label={t("第 {{page}} 页", { page: token })}
-                        onClick={(event) => {
-                          event.preventDefault()
-                          page(token)
-                        }}
-                      >
-                        {token}
-                      </PaginationLink>
-                    </PaginationItem>
-                  ) : (
-                    <PaginationItem key={token}>
-                      <PaginationEllipsis />
-                    </PaginationItem>
-                  )
-                )}
-                <PaginationItem>
-                  <PaginationNext
-                    href="#"
-                    text={t("下一页")}
-                    aria-disabled={
-                      loading ||
-                      result.pagination.page === result.pagination.totalPages
-                    }
-                    className={cn(
-                      (loading ||
-                        result.pagination.page ===
-                          result.pagination.totalPages) &&
-                        "pointer-events-none opacity-50"
-                    )}
-                    onClick={(event) => {
-                      event.preventDefault()
-                      page(result.pagination.page + 1)
-                    }}
-                  />
-                </PaginationItem>
-              </PaginationContent>
-            </Pagination>
-          </CardFooter>
-        )}
-      </Card>
+          {result.pagination.totalPages > 0 && (
+            <div className="flex items-center justify-between gap-3 border-t border-border px-3 py-2.5">
+              <span className="text-sm text-muted-foreground tabular-nums">
+                {t("共 {{total}} 条 · 每页 {{size}} 条", {
+                  total: result.pagination.totalItems,
+                  size: result.pagination.pageSize,
+                })}
+              </span>
+              <Pagination
+                className="mx-0 w-auto"
+                aria-label={t("连接诊断分页")}
+              >
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious
+                      href="#"
+                      text={t("上一页")}
+                      aria-disabled={loading || result.pagination.page === 1}
+                      className={cn(
+                        (loading || result.pagination.page === 1) &&
+                          "pointer-events-none opacity-50"
+                      )}
+                      onClick={(event) => {
+                        event.preventDefault()
+                        page(result.pagination.page - 1)
+                      }}
+                    />
+                  </PaginationItem>
+                  {tokens(
+                    result.pagination.page,
+                    result.pagination.totalPages
+                  ).map((token) =>
+                    typeof token === "number" ? (
+                      <PaginationItem key={token}>
+                        <PaginationLink
+                          href="#"
+                          isActive={token === result.pagination.page}
+                          aria-label={t("第 {{page}} 页", { page: token })}
+                          onClick={(event) => {
+                            event.preventDefault()
+                            page(token)
+                          }}
+                        >
+                          {token}
+                        </PaginationLink>
+                      </PaginationItem>
+                    ) : (
+                      <PaginationItem key={token}>
+                        <PaginationEllipsis />
+                      </PaginationItem>
+                    )
+                  )}
+                  <PaginationItem>
+                    <PaginationNext
+                      href="#"
+                      text={t("下一页")}
+                      aria-disabled={
+                        loading ||
+                        result.pagination.page === result.pagination.totalPages
+                      }
+                      className={cn(
+                        (loading ||
+                          result.pagination.page ===
+                            result.pagination.totalPages) &&
+                          "pointer-events-none opacity-50"
+                      )}
+                      onClick={(event) => {
+                        event.preventDefault()
+                        page(result.pagination.page + 1)
+                      }}
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            </div>
+          )}
+        </div>
+      </section>
       {selected ? (
         <Sheet open onOpenChange={(open) => !open && setSelected(null)}>
           <SheetContent>

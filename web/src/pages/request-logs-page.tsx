@@ -89,11 +89,11 @@ import {
   TabsPanels,
   TabsTab,
 } from "@/components/animate-ui/components/base/tabs"
-import { Panel } from "@/components/app/panel"
 import {
   FailureBreakdownPanel,
   RequestVolumeHero,
 } from "@/components/request/request-log-panels"
+import { LogDateRangePicker } from "@/components/request/log-date-range-picker"
 import { WebSocketConnectionLogsPanel } from "@/components/request/websocket-connection-logs-panel"
 import { FieldGroup } from "@/components/ui/field"
 import { cn } from "@/lib/utils"
@@ -130,12 +130,6 @@ const RANGE_OPTIONS: Array<{ value: RequestLogRange; label: string }> = [
   { value: "24h", label: "最近 24 小时" },
   { value: "7d", label: "最近 7 天" },
 ]
-const toLocalDateTime = (value?: number) =>
-  value
-    ? new Date(value - new Date(value).getTimezoneOffset() * 60_000)
-        .toISOString()
-        .slice(0, 16)
-    : ""
 const EMPTY_RESULT: RequestLogsResponse = {
   items: [],
   summary: {
@@ -163,6 +157,17 @@ const formatBytes = (value?: number) =>
       : `${(value / 1024).toFixed(1)} KB`
 const isFullRequest = (value: SelectedRequest): value is RequestLogView =>
   "route" in value
+
+function requestProtocol(item: RequestLogView): "GET" | "POST" | "WS" {
+  if (
+    item.transport === "ws" ||
+    (item.transport === "compact" &&
+      item.route === "/responses" &&
+      item.requestId?.includes(":"))
+  )
+    return "WS"
+  return item.route === "/models" ? "GET" : "POST"
+}
 
 const OUTCOME_LABELS: Record<RequestOutcome, string> = {
   success: "成功",
@@ -263,9 +268,7 @@ function FilterGroup({
   return (
     <section className="grid gap-2">
       <h4 className="text-[11px] text-muted-foreground/70">{title}</h4>
-      <FieldGroup className="grid gap-3 sm:grid-cols-2">
-        {children}
-      </FieldGroup>
+      <FieldGroup className="grid gap-3 sm:grid-cols-2">{children}</FieldGroup>
     </section>
   )
 }
@@ -370,14 +373,20 @@ function RequestDataTable({
       {
         accessorKey: "route",
         header: t("路由"),
-        cell: ({ row }) => (
-          <span
-            className="block truncate font-mono text-xs"
-            title={row.original.route}
-          >
-            {row.original.route}
-          </span>
-        ),
+        cell: ({ row }) => {
+          const protocol = requestProtocol(row.original)
+          return (
+            <span
+              className="flex min-w-0 items-center gap-2 font-mono text-xs"
+              title={`${protocol} ${row.original.route}`}
+            >
+              <span className="w-9 shrink-0 font-semibold text-primary">
+                {protocol}
+              </span>
+              <span className="truncate">{row.original.route}</span>
+            </span>
+          )
+        },
       },
       {
         id: "account",
@@ -426,7 +435,7 @@ function RequestDataTable({
   return (
     <ScrollArea
       ref={scrollAreaRef}
-      className="min-h-0 flex-1 [&_[data-slot=table-container]]:overflow-visible"
+      className="h-[520px] [&_[data-slot=table-container]]:overflow-visible"
     >
       <Table className="min-w-[980px] table-fixed">
         <colgroup>
@@ -436,7 +445,7 @@ function RequestDataTable({
           <col className="w-[140px]" />
           <col />
         </colgroup>
-        <TableHeader className="sticky top-0 z-10 [&_th]:bg-card [&_tr]:shadow-sm">
+        <TableHeader className="sticky top-0 z-10 [&_th]:bg-muted [&_tr]:shadow-sm">
           {table.getHeaderGroups().map((group) => (
             <TableRow key={group.id}>
               {group.headers.map((header) => (
@@ -778,12 +787,11 @@ export function RequestLogsPage({
     // so it needs a chip of its own or there is nothing to clear.
     [
       "from",
-      // Not `!== undefined &&`: that yields `false`, which survives the
-      // undefined filter below and would show an empty chip on every load.
       filters.from === undefined
         ? undefined
-        : t("{{from}} 起", {
-            from: new Date(filters.from).toLocaleString(locale),
+        : t("{{from}} 至 {{to}}", {
+            from: new Date(filters.from).toLocaleDateString(locale),
+            to: new Date(filters.to ?? filters.from).toLocaleDateString(locale),
           }),
     ],
     ["transport", filters.transport],
@@ -820,8 +828,14 @@ export function RequestLogsPage({
     })
 
   return (
-    <section className="flex w-full flex-col gap-4 lg:h-full lg:min-h-0">
-      <header className="flex flex-wrap items-start justify-between gap-4">
+    // The view switch chooses which page you are looking at, so it belongs on
+    // the title line rather than as a second row under it.
+    <Tabs
+      className="flex w-full flex-col gap-4 lg:h-full lg:min-h-0"
+      value={view}
+      onValueChange={(next) => setView(next as "requests" | "connections")}
+    >
+      <header className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">
             {t("请求日志")}
@@ -830,67 +844,27 @@ export function RequestLogsPage({
             {t("使用安全的结构化元数据定位失败请求，不读取请求或响应正文。")}
           </p>
         </div>
-        {/* The window everything below obeys, in the page header like every
-            other page's range. A custom window still lives in 更多筛选, and
-            picking one there deselects these. */}
-        {view === "requests" ? (
-          <Tabs
-            className="gap-0"
-            value={filters.from !== undefined ? "custom" : filters.range}
-            onValueChange={(next) => {
-              if (next === "custom") return
-              update({
-                range: next as RequestLogRange,
-                from: undefined,
-                to: undefined,
-              })
-            }}
-          >
-            <TabsList aria-label={t("时间范围")}>
-              {RANGE_OPTIONS.map((option) => (
-                <TabsTab
-                  className="text-xs"
-                  key={option.value}
-                  value={option.value}
-                >
-                  {t(option.label)}
-                </TabsTab>
-              ))}
-            </TabsList>
-          </Tabs>
-        ) : null}
-      </header>
-      <Tabs
-        className="min-h-0 flex-1 gap-4"
-        value={view}
-        onValueChange={(next) => setView(next as "requests" | "connections")}
-      >
         <TabsList>
           <TabsTab value="requests">{t("请求")}</TabsTab>
           <TabsTab value="connections">{t("连接诊断")}</TabsTab>
         </TabsList>
+      </header>
         <TabsPanels
           mode="layout"
           className="min-h-0 flex-1"
           style={{ overflow: "visible" }}
         >
-          <TabsPanel
-            value="connections"
-            className="flex h-full min-h-0 flex-col gap-4"
-          >
+          <TabsPanel value="connections" className="flex flex-col gap-4 pb-4">
             <WebSocketConnectionLogsPanel
               service={service}
               revision={revision}
               accounts={accounts}
             />
           </TabsPanel>
-          <TabsPanel
-            value="requests"
-            className="flex h-full min-h-0 flex-col gap-4"
-          >
+          <TabsPanel value="requests" className="flex flex-col gap-4 pb-4">
             <div className="grid shrink-0 grid-cols-12 gap-4">
               <RequestVolumeHero
-                className="col-span-12 xl:col-span-8"
+                className="col-span-12 xl:col-span-8 xl:h-72"
                 summary={result.summary}
                 histogram={result.histogram}
                 rangeLabel={t(
@@ -900,7 +874,7 @@ export function RequestLogsPage({
                 onSelectWindow={(from, to) => update({ from, to })}
               />
               <FailureBreakdownPanel
-                className="col-span-12 self-start xl:col-span-4"
+                className="col-span-12 xl:col-span-4 xl:h-72"
                 summary={result.summary}
                 failureSources={result.failureSources}
                 diagnosticCodes={result.diagnosticCodes}
@@ -908,23 +882,58 @@ export function RequestLogsPage({
                 onSelectCode={(code) => update({ diagnosticCode: code })}
               />
             </div>
-            {/* The list is what the page is for, so it takes whatever height
-                is left and scrolls inside its own card. */}
-            <Panel
-              title={t("请求记录")}
-              icon={Table2Icon}
-              hint={t("按时间倒序 · 共 {{total}} 条", {
-                total: result.pagination.totalItems,
-              })}
-              className="min-h-0 flex-1"
-              bodyClassName="min-h-0 flex-1 gap-3"
-            >
+            <section className="flex flex-col rounded-2xl bg-card p-2 ring-1 ring-foreground/10">
+              <header className="flex h-11 shrink-0 items-center justify-between gap-4 px-2">
+                <h2 className="flex min-w-0 items-center gap-2 text-sm font-semibold">
+                  <Table2Icon
+                    aria-hidden="true"
+                    className="size-4 text-muted-foreground"
+                  />
+                  <span className="truncate">{t("请求记录")}</span>
+                </h2>
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="truncate text-xs text-muted-foreground/70">
+                    {t("按时间倒序 · 共 {{total}} 条", {
+                      total: result.pagination.totalItems,
+                    })}
+                  </span>
+                  {/* The window the records are drawn from, beside the records
+                      themselves. A custom window still lives in 更多筛选, and
+                      picking one there deselects all three. */}
+                  <Tabs
+                    className="gap-0"
+                    value={
+                      filters.from !== undefined ? "custom" : filters.range
+                    }
+                    onValueChange={(next) => {
+                      if (next === "custom") return
+                      update({
+                        range: next as RequestLogRange,
+                        from: undefined,
+                        to: undefined,
+                      })
+                    }}
+                  >
+                    <TabsList aria-label={t("时间范围")}>
+                      {RANGE_OPTIONS.map((option) => (
+                        <TabsTab
+                          className="text-xs"
+                          key={option.value}
+                          value={option.value}
+                        >
+                          {t(option.label)}
+                        </TabsTab>
+                      ))}
+                    </TabsList>
+                  </Tabs>
+                </div>
+              </header>
               {/* Three controls, each with one job: what you are looking
                   for, which slice of results, and everything rarer behind one
                   door. Two selects sitting in the toolbar made the common case
                   (show me the failures) cost the same as the rare ones. */}
-              <div className="flex flex-wrap items-center gap-2">
-                <label className="flex h-9 w-full min-w-0 items-center gap-2 rounded-xl bg-card px-3 text-muted-foreground sm:w-72">
+              <div className="mx-3 mt-1 mb-3 flex flex-wrap items-center gap-2">
+                <label className="flex h-9 w-full min-w-0 items-center gap-2 rounded-xl bg-muted px-3 text-muted-foreground sm:w-72">
                   <SearchIcon aria-hidden="true" className="size-4 shrink-0" />
                   <input
                     className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/70"
@@ -986,34 +995,14 @@ export function RequestLogsPage({
                     </PopoverHeader>
 
                     {/* Grouped by the question each one answers, because eight
-                        fields in a row is a wall, not a form. */}
+                      fields in a row is a wall, not a form. */}
                     <div className="grid gap-4">
                       <FilterGroup title={t("时间窗口")}>
-                        <Input
-                          aria-label={t("开始时间")}
-                          type="datetime-local"
-                          className="w-full"
-                          value={toLocalDateTime(filters.from)}
-                          onChange={(event) =>
-                            update({
-                              from: event.target.value
-                                ? new Date(event.target.value).getTime()
-                                : undefined,
-                            })
-                          }
-                        />
-                        <Input
-                          aria-label={t("结束时间")}
-                          type="datetime-local"
-                          className="w-full"
-                          value={toLocalDateTime(filters.to)}
-                          onChange={(event) =>
-                            update({
-                              to: event.target.value
-                                ? new Date(event.target.value).getTime()
-                                : undefined,
-                            })
-                          }
+                        <LogDateRangePicker
+                          from={filters.from}
+                          to={filters.to}
+                          onApply={(from, to) => update({ from, to })}
+                          onClear={() => clearAdvanced("from")}
                         />
                       </FilterGroup>
 
@@ -1184,7 +1173,7 @@ export function RequestLogsPage({
                   toolbar shows in its own control needs no chip; what the
                   popover hides always gets one. */}
               {advancedEntries.length > 0 && (
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="mx-3 mb-3 flex flex-wrap items-center gap-2">
                   {advancedEntries.map(([key, label]) => (
                     <Badge key={key} variant="secondary">
                       {String(label)}
@@ -1208,9 +1197,9 @@ export function RequestLogsPage({
                   </Button>
                 </div>
               )}
-              <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg bg-card">
+              <div className="flex flex-col overflow-hidden rounded-lg bg-muted">
                 {!enabled || (!loading && result.items.length === 0) ? (
-                  <Empty className="h-full min-h-80 border-0 lg:min-h-0">
+                  <Empty className="h-[520px] border-0">
                     <EmptyHeader>
                       <EmptyMedia variant="icon">
                         <FileClockIcon />
@@ -1326,14 +1315,13 @@ export function RequestLogsPage({
                   </div>
                 )}
               </div>
-            </Panel>
+            </section>
             <RequestDetailSheet
               selected={selected}
               onClose={() => setSelected(null)}
             />
           </TabsPanel>
-        </TabsPanels>
-      </Tabs>
-    </section>
+      </TabsPanels>
+    </Tabs>
   )
 }

@@ -275,6 +275,7 @@ describe("HTTP GatewayService", () => {
       jsonResponse({
         items: [],
         summary: { connections: 0, failures: 0, retired: 0 },
+        histogram: [],
         nextCursor: null,
         pagination: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0 },
       })

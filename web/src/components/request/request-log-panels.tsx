@@ -210,6 +210,7 @@ export function FailureBreakdownPanel({
       icon={ServerCrashIcon}
       hint={t("共 {{count}} 次", { count: summary.errors })}
       className={className}
+      bodyClassName="xl:min-h-0 xl:flex-1 xl:overflow-y-auto"
     >
       {failureSources.length === 0 ? (
         <p className="py-6 text-center text-xs text-muted-foreground">
