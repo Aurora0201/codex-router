@@ -7,6 +7,103 @@ import { createGatewayServiceFixture } from "@/test/gateway-service-fixture"
 import { RequestLogsPage } from "./request-logs-page"
 
 describe("RequestLogsPage", () => {
+  it("marks a row as new only when it arrives on the page already on screen", async () => {
+    const user = userEvent.setup()
+    const service = createGatewayServiceFixture()
+    const item = (id: string) => ({
+      id,
+      requestId: id,
+      route: "/responses",
+      transport: "http" as const,
+      accountId: "account-1",
+      accountLabel: "account-1@example.com",
+      state: "succeeded" as const,
+      outcome: "success" as const,
+      failureSource: null,
+      failureStage: null,
+      httpStatus: 200,
+      protocolErrorCode: null,
+      diagnosticCode: null,
+      upstreamRequestId: null,
+      diagnosticHeaders: {},
+      transportErrorChain: [],
+      statusCode: 200,
+      errorCode: null,
+      durationMs: 40,
+      bytesIn: 10,
+      bytesOut: 20,
+      identityMode: "managed_account" as const,
+      startedAt: Date.now(),
+      completedAt: Date.now(),
+    })
+    const answer = (ids: string[]) => ({
+      items: ids.map(item),
+      summary: {
+        requests: ids.length,
+        errors: 0,
+        rejected: 0,
+        cancelled: 0,
+        availabilityRequests: ids.length,
+        availabilityErrors: 0,
+        averageDurationMs: 40,
+      },
+      timeline: [],
+      histogram: [],
+      failureSources: [],
+      diagnosticCodes: [],
+      nextCursor: null,
+      pagination: {
+        page: 1,
+        pageSize: 20,
+        totalItems: ids.length,
+        totalPages: 1,
+      },
+    })
+    const getRequestLogs = vi.fn().mockResolvedValue(answer(["log-1", "log-2"]))
+    service.getRequestLogs = getRequestLogs
+    const props = {
+      service,
+      accounts: service.snapshot.accounts.accounts,
+      enabled: true,
+      initialErrorsOnly: false,
+      onShowPreferences: () => {},
+    }
+    const { rerender } = render(
+      <Toaster>
+        <RequestLogsPage {...props} revision={0} />
+      </Toaster>
+    )
+    const rows = () => document.querySelectorAll("tbody tr").length
+    const marked = () =>
+      document.querySelectorAll("tbody tr.animate-in").length
+
+    // The first page to arrive is not an arrival, it is the answer.
+    await waitFor(() => expect(rows()).toBe(2))
+    expect(marked()).toBe(0)
+
+    // Neither is a different question, even though every row is different.
+    getRequestLogs.mockResolvedValue(answer(["log-3", "log-4"]))
+    await user.click(screen.getByRole("tab", { name: "故障" }))
+    await waitFor(() =>
+      expect(getRequestLogs).toHaveBeenLastCalledWith(
+        expect.objectContaining({ status: "error" })
+      )
+    )
+    await waitFor(() => expect(rows()).toBe(2))
+    expect(marked()).toBe(0)
+
+    // A refresh of the page on screen is: the row that was not there before
+    // is the only one that announces itself.
+    getRequestLogs.mockResolvedValue(answer(["log-5", "log-3", "log-4"]))
+    rerender(
+      <Toaster>
+        <RequestLogsPage {...props} revision={1} />
+      </Toaster>
+    )
+    await waitFor(() => expect(rows()).toBe(3))
+    await waitFor(() => expect(marked()).toBe(1))
+  })
+
   it("puts the coarse slice in the toolbar and every hidden filter on a chip", async () => {
     const user = userEvent.setup()
     const service = createGatewayServiceFixture()

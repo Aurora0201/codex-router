@@ -3,6 +3,7 @@ export const zhCN = {
 } as const
 
 export const en = {
+  "{{account}} · 剩余 {{remaining}}": "{{account}} · {{remaining}} left",
   搜索请求: "Search requests",
   搜索连接: "Search connections",
   请求结果筛选: "Filter by outcome",
@@ -240,6 +241,8 @@ export const en = {
   同一筛选范围: "Same filters",
   "按本机时区，星期 × 小时": "Local time zone, weekday x hour",
   用量结构: "Usage composition",
+  用量结构占比: "Usage composition by share",
+  总计: "Total",
   "缓存属于输入，推理属于输出，均不额外计入总量。":
     "Cache is part of input and reasoning is part of output; neither is added again.",
   "输入 Token": "Input tokens",

@@ -96,6 +96,7 @@ import {
 import { LogDateRangePicker } from "@/components/request/log-date-range-picker"
 import { WebSocketConnectionLogsPanel } from "@/components/request/websocket-connection-logs-panel"
 import { FieldGroup } from "@/components/ui/field"
+import { useSlowLoad } from "@/hooks/use-slow-load"
 import { cn } from "@/lib/utils"
 import type {
   AccountView,
@@ -698,10 +699,12 @@ export function RequestLogsPage({
   const [queryDraft, setQueryDraft] = useState("")
   const [result, setResult] = useState(EMPTY_RESULT)
   const [loading, setLoading] = useState(true)
+  const [loadedFilters, setLoadedFilters] = useState<string | null>(null)
   const [selected, setSelected] = useState<SelectedRequest | null>(null)
   const [newIds, setNewIds] = useState<Set<string>>(new Set())
   const [view, setView] = useState<"requests" | "connections">("requests")
   const knownIds = useRef(new Set<string>())
+  const knownFor = useRef<string | null>(null)
   const requestSequence = useRef(0)
 
   useEffect(() => {
@@ -722,6 +725,13 @@ export function RequestLogsPage({
     return () => window.clearTimeout(timer)
   }, [queryDraft])
 
+  // Page and cursor are left out: paging through the same window is not a new
+  // question, so it should not dim the histogram above the table.
+  const filterKey = JSON.stringify({ ...filters, page: 0, cursor: undefined })
+  // The row highlight is a different question — "did this arrive while I was
+  // watching this exact page" — so here the page number counts.
+  const queryKey = `${filterKey}#${filters.page}`
+
   useEffect(() => {
     if (!enabled) return
     const sequence = ++requestSequence.current
@@ -732,12 +742,20 @@ export function RequestLogsPage({
           .getRequestLogs({ ...filters, cursor: undefined })
           .then((next) => {
             if (sequence !== requestSequence.current) return
-            const incoming = new Set(
-              next.items
-                .filter((item) => !knownIds.current.has(item.id))
-                .map((item) => item.id)
-            )
+            // Only a refresh of the page already on screen can bring new
+            // rows. Changing the filter or turning the page replaces the
+            // whole set, and marking all twenty as new made every one of
+            // them fade in at once — the table flickered.
+            const sameQuestion = knownFor.current === queryKey
+            const incoming = sameQuestion
+              ? new Set(
+                  next.items
+                    .filter((item) => !knownIds.current.has(item.id))
+                    .map((item) => item.id)
+                )
+              : new Set<string>()
             knownIds.current = new Set(next.items.map((item) => item.id))
+            knownFor.current = queryKey
             setNewIds(incoming)
             setResult(next)
             if (next.pagination.page !== filters.page) {
@@ -755,14 +773,21 @@ export function RequestLogsPage({
               type: "error",
             })
           )
-          .finally(
-            () => sequence === requestSequence.current && setLoading(false)
-          )
+          .finally(() => {
+            if (sequence !== requestSequence.current) return
+            setLoading(false)
+            setLoadedFilters(filterKey)
+          })
       },
       revision ? 150 : 0
     )
     return () => window.clearTimeout(timer)
-  }, [enabled, filters, revision, service, t])
+  }, [enabled, filters, filterKey, queryKey, revision, service, t])
+
+  // The live stream refetches under the same filters several times a minute;
+  // only a change in the question dims the answer, and only once the answer is
+  // slow enough in coming to be worth saying so.
+  const refiltering = useSlowLoad(enabled && loadedFilters !== filterKey)
 
   const update = (values: Partial<RequestLogFilters>) =>
     setFilters((current) => ({
@@ -862,7 +887,13 @@ export function RequestLogsPage({
             />
           </TabsPanel>
           <TabsPanel value="requests" className="flex flex-col gap-4 pb-4">
-            <div className="grid shrink-0 grid-cols-12 gap-4">
+            <div
+              className={cn(
+                "grid shrink-0 grid-cols-12 gap-4 transition-opacity duration-200 motion-reduce:transition-none",
+                refiltering && "opacity-60"
+              )}
+              aria-busy={refiltering}
+            >
               <RequestVolumeHero
                 className="col-span-12 xl:col-span-8 xl:h-72"
                 summary={result.summary}

@@ -1,7 +1,7 @@
 import { ClockArrowUpIcon, MoonIcon, SunIcon, WifiOffIcon } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
-import type { AppPage } from "@/components/app/app-sidebar"
+import type { AppPage } from "@/components/app/navigation"
 import { useTheme } from "@/components/theme-provider"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
@@ -21,12 +21,15 @@ const pageTitle: Record<AppPage, string> = {
   logs: "请求日志",
 }
 
-function formatUptime(uptimeSeconds: number | undefined, t: ReturnType<typeof useTranslation>["t"]) {
+function formatUptime(
+  uptimeSeconds: number | undefined,
+  t: ReturnType<typeof useTranslation>["t"]
+) {
   if (uptimeSeconds == null || uptimeSeconds < 60) return t("运行不足 1 分钟")
   const days = Math.floor(uptimeSeconds / 86_400)
-  const hours = Math.floor(uptimeSeconds % 86_400 / 3_600)
+  const hours = Math.floor((uptimeSeconds % 86_400) / 3_600)
   if (days > 0) return t("运行 {{days}} 天 {{hours}} 小时", { days, hours })
-  const minutes = Math.floor(uptimeSeconds % 3_600 / 60)
+  const minutes = Math.floor((uptimeSeconds % 3_600) / 60)
   return t("运行 {{hours}} 小时 {{minutes}} 分", { hours, minutes })
 }
 
@@ -47,7 +50,9 @@ export function AppHeader({
     <header className="flex h-14 shrink-0 items-center gap-3 border-b px-4 lg:px-6">
       <SidebarTrigger className="md:hidden" />
       <Separator orientation="vertical" className="h-4 md:hidden" />
-      <p className="min-w-0 truncate text-base font-semibold leading-none">{t(pageTitle[page])}</p>
+      <p className="min-w-0 truncate text-base leading-none font-semibold">
+        {t(pageTitle[page])}
+      </p>
       <div className="ml-auto flex items-center gap-2">
         <div
           className={cn(
@@ -56,8 +61,14 @@ export function AppHeader({
           )}
           role="status"
         >
-          {online ? <ClockArrowUpIcon aria-hidden="true" /> : <WifiOffIcon aria-hidden="true" />}
-          <span className="tabular-nums">{online ? formatUptime(uptimeSeconds, t) : t("Codex Router 离线")}</span>
+          {online ? (
+            <ClockArrowUpIcon aria-hidden="true" />
+          ) : (
+            <WifiOffIcon aria-hidden="true" />
+          )}
+          <span className="tabular-nums">
+            {online ? formatUptime(uptimeSeconds, t) : t("Codex Router 离线")}
+          </span>
         </div>
         <Tooltip>
           <TooltipTrigger

@@ -16,7 +16,7 @@ import {
   PlayIcon,
 } from "lucide-react"
 import { useTranslation } from "react-i18next"
-import { Bar, ComposedChart, Line } from "recharts"
+import { Bar, ComposedChart, Line, Pie, PieChart } from "recharts"
 
 import {
   Tabs,
@@ -55,6 +55,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { useSlowLoad } from "@/hooks/use-slow-load"
 import { cn } from "@/lib/utils"
 import type {
   CodexUsageDashboard,
@@ -71,6 +72,13 @@ const trendConfig = {
   uncachedInputTokens: { label: "非缓存输入", color: "var(--chart-3)" },
   outputTokens: { label: "输出", color: "var(--chart-5)" },
   rollingAverage7d: { label: "7 日均线", color: "var(--emphasis-muted)" },
+} satisfies ChartConfig
+
+const compositionConfig = {
+  cachedInput: { label: "缓存输入", color: "var(--chart-1)" },
+  uncachedInput: { label: "非缓存输入", color: "var(--chart-3)" },
+  output: { label: "输出", color: "var(--chart-5)" },
+  reasoningOutput: { label: "推理输出", color: "var(--chart-4)" },
 } satisfies ChartConfig
 
 const ranges: Array<{ value: CodexUsageRange; label: string }> = [
@@ -178,7 +186,11 @@ function Ranking({
                 })}
               >
                 <div
-                  className="h-full rounded-full bg-chart-4"
+                  // The share slides to its new length rather than jumping to
+                  // it: on a fast range switch this is the only thing that
+                  // says the numbers moved, and a width is one of the few
+                  // things that can say it without anything blinking.
+                  className="h-full rounded-full bg-chart-4 transition-[width] duration-500 ease-out motion-reduce:transition-none"
                   style={{ width: `${Math.max(row.share * 100, 1)}%` }}
                 />
               </div>
@@ -220,10 +232,13 @@ export function UsagePage({
   const [model, setModel] = useState("all")
   const [project, setProject] = useState("all")
   const [data, setData] = useState<CodexUsageDashboard | null>(null)
+  const [loadedFilters, setLoadedFilters] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [request, setRequest] = useState(0)
   const heatmapScrollRef = useRef<HTMLDivElement>(null)
   const [heatmapFade, setHeatmapFade] = useState({ top: false, bottom: false })
+
+  const filterKey = `${range}|${model}|${project}`
 
   useEffect(() => {
     let cancelled = false
@@ -242,10 +257,19 @@ export function UsagePage({
       .catch((reason: Error) => {
         if (!cancelled) setError(reason.message)
       })
+      .finally(() => {
+        if (!cancelled) setLoadedFilters(filterKey)
+      })
     return () => {
       cancelled = true
     }
-  }, [service, range, model, project, revision, request])
+  }, [service, range, model, project, revision, request, filterKey])
+
+  // Derived, so the dim answers the question "is what is on screen the answer
+  // to what was asked" — and leaves the background refreshes alone, since they
+  // arrive under the same filters. Held back until the load is slow enough to
+  // need explaining; a switch that lands in 200ms just updates the numbers.
+  const busy = useSlowLoad(loadedFilters !== filterKey)
 
   // During local HMR the page can briefly talk to an older running gateway.
   // Ignore its former weekday/hour cells instead of taking down the page.
@@ -283,7 +307,10 @@ export function UsagePage({
     if (!viewport) return
 
     const updateFade = () => {
-      const maxScrollTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight)
+      const maxScrollTop = Math.max(
+        0,
+        viewport.scrollHeight - viewport.clientHeight
+      )
       setHeatmapFade({
         top: viewport.scrollTop > 1,
         bottom: viewport.scrollTop < maxScrollTop - 1,
@@ -300,8 +327,7 @@ export function UsagePage({
   const rhythm = useMemo(() => {
     const total = heatRows.reduce((sum, row) => sum + row.totalTokens, 0)
     const peak = heatRows.reduce<(typeof heatRows)[number] | null>(
-      (best, row) =>
-        best && best.totalTokens >= row.totalTokens ? best : row,
+      (best, row) => (best && best.totalTokens >= row.totalTokens ? best : row),
       null
     )
     const within = (predicate: (row: (typeof heatRows)[number]) => boolean) =>
@@ -331,24 +357,32 @@ export function UsagePage({
   const composition = summary
     ? [
         {
+          key: "cachedInput",
           label: t("缓存输入"),
           value: summary.cachedInputTokens,
           className: "bg-chart-1",
+          fill: "var(--chart-1)",
         },
         {
+          key: "uncachedInput",
           label: t("非缓存输入"),
           value: summary.uncachedInputTokens,
           className: "bg-chart-3",
+          fill: "var(--chart-3)",
         },
         {
+          key: "output",
           label: t("输出"),
           value: summary.outputTokens - summary.reasoningOutputTokens,
           className: "bg-chart-5",
+          fill: "var(--chart-5)",
         },
         {
+          key: "reasoningOutput",
           label: t("推理输出"),
           value: summary.reasoningOutputTokens,
           className: "bg-chart-4",
+          fill: "var(--chart-4)",
         },
       ]
     : []
@@ -377,9 +411,7 @@ export function UsagePage({
           className="h-9 w-44 rounded-md"
           aria-label={t("模型筛选")}
         >
-          <SelectValue>
-            {model === "all" ? t("全部模型") : model}
-          </SelectValue>
+          <SelectValue>{model === "all" ? t("全部模型") : model}</SelectValue>
         </SelectTrigger>
         <SelectContent>
           <SelectGroup>
@@ -496,13 +528,23 @@ export function UsagePage({
       ) : null}
 
       {data && data.coverage.rollouts > 0 && summary ? (
-        <div className="grid grid-cols-12 gap-4">
+        // The previous window stays up while the next one loads; the dim says
+        // "updating" without moving anything on the page.
+        <div
+          className={cn(
+            "grid grid-cols-12 gap-4 transition-opacity duration-200 motion-reduce:transition-none",
+            busy && "opacity-60"
+          )}
+          aria-busy={busy}
+        >
           {/* The one dark block on the page: the headline number and its shape.
               Everything else stays on light surfaces so this reads as the hero. */}
           <section className="col-span-12 rounded-2xl bg-emphasis p-2 text-emphasis-foreground xl:col-span-8">
             <div className="flex flex-wrap items-start justify-between gap-4 px-3 py-2.5">
               <div>
-                <p className="text-xs text-emphasis-muted">{t("区间总 Token")}</p>
+                <p className="text-xs text-emphasis-muted">
+                  {t("区间总 Token")}
+                </p>
                 <p
                   className="mt-1 text-3xl leading-none font-semibold tabular-nums"
                   title={fullTokens(summary.totalTokens)}
@@ -664,16 +706,77 @@ export function UsagePage({
               ))}
             </dl>
 
-            <div className="my-3.5 flex h-2 overflow-hidden rounded-full bg-foreground/10">
-              {composition.map((item) => (
+            {/* The total sits in the middle because every percentage in the
+                list below is a percentage of it, and it is the one number the
+                ring cannot show. It is laid over the chart rather than drawn
+                into it: real text, so it takes the same numerals as the rest
+                of the page. */}
+            <div className="relative mx-auto my-1 size-44">
+              <ChartContainer
+                config={compositionConfig}
+                className="size-full"
+                aria-label={t("用量结构占比") as string}
+              >
+                <PieChart>
+                  <ChartTooltip
+                    content={
+                      <ChartTooltipContent
+                        hideLabel
+                        formatter={(value, _name, item) => (
+                          <div className="flex min-w-36 items-center justify-between gap-3">
+                            <span className="flex items-center gap-1.5">
+                              <span
+                                className="size-2.5 shrink-0 rounded-[2px]"
+                                style={{
+                                  background: (
+                                    item?.payload as
+                                      { fill?: string } | undefined
+                                  )?.fill,
+                                }}
+                              />
+                              <span className="text-muted-foreground">
+                                {
+                                  (
+                                    item?.payload as
+                                      { label?: string } | undefined
+                                  )?.label
+                                }
+                              </span>
+                            </span>
+                            <span className="font-mono tabular-nums">
+                              {fullTokens(Number(value))}
+                            </span>
+                          </div>
+                        )}
+                      />
+                    }
+                  />
+                  <Pie
+                    data={composition}
+                    dataKey="value"
+                    nameKey="key"
+                    innerRadius="64%"
+                    outerRadius="94%"
+                    paddingAngle={1.5}
+                    stroke="none"
+                    isAnimationActive={false}
+                  />
+                </PieChart>
+              </ChartContainer>
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-0.5"
+              >
                 <span
-                  key={item.label}
-                  className={item.className}
-                  style={{
-                    width: `${share(item.value, summary.totalTokens)}%`,
-                  }}
-                />
-              ))}
+                  className="text-lg leading-none font-semibold tabular-nums"
+                  title={fullTokens(summary.totalTokens)}
+                >
+                  {formatTokens(summary.totalTokens)}
+                </span>
+                <span className="text-[10px] text-muted-foreground">
+                  {t("总计")}
+                </span>
+              </div>
             </div>
 
             <ul className="grid gap-3">
@@ -751,45 +854,51 @@ export function UsagePage({
                   aria-label={t("日期和小时 Token 热力图") as string}
                 >
                   {heatRows.map((row) => (
-                  <div className="flex items-center gap-1" key={row.date}>
-                    <span className="w-10 shrink-0 font-mono text-[10px] text-muted-foreground/70">
-                      {row.date.slice(5)}
-                    </span>
-                    <div className="grid flex-1 grid-cols-24 gap-1">
-                      {row.hours.map((totalTokens, hour) => {
-                        const level = heatMax ? totalTokens / heatMax : 0
-                        const label = t(
-                          "{{date}} {{hour}}:00 · {{tokens}} Token",
-                          {
-                            date: formatHeatmapDate(row.date),
-                            hour: String(hour).padStart(2, "0"),
-                            tokens: fullTokens(totalTokens),
-                          }
-                        )
-                        return (
-                          <Tooltip key={hour}>
-                            <TooltipTrigger
-                              aria-label={label}
-                              render={
-                                <span
-                                  className={cn(
-                                    "h-3.5 rounded-[3px]",
-                                    level === 0 && "bg-foreground/[0.06]",
-                                    level > 0 && level <= 0.25 && "bg-chart-1",
-                                    level > 0.25 && level <= 0.5 && "bg-chart-2",
-                                    level > 0.5 && level <= 0.75 && "bg-chart-3",
-                                    level > 0.75 && "bg-chart-5"
-                                  )}
-                                />
-                              }
-                            />
-                            <TooltipContent>{label}</TooltipContent>
-                          </Tooltip>
-                        )
-                      })}
+                    <div className="flex items-center gap-1" key={row.date}>
+                      <span className="w-10 shrink-0 font-mono text-[10px] text-muted-foreground/70">
+                        {row.date.slice(5)}
+                      </span>
+                      <div className="grid flex-1 grid-cols-24 gap-1">
+                        {row.hours.map((totalTokens, hour) => {
+                          const level = heatMax ? totalTokens / heatMax : 0
+                          const label = t(
+                            "{{date}} {{hour}}:00 · {{tokens}} Token",
+                            {
+                              date: formatHeatmapDate(row.date),
+                              hour: String(hour).padStart(2, "0"),
+                              tokens: fullTokens(totalTokens),
+                            }
+                          )
+                          return (
+                            <Tooltip key={hour}>
+                              <TooltipTrigger
+                                aria-label={label}
+                                render={
+                                  <span
+                                    className={cn(
+                                      "h-3.5 rounded-[3px]",
+                                      level === 0 && "bg-foreground/[0.06]",
+                                      level > 0 &&
+                                        level <= 0.25 &&
+                                        "bg-chart-1",
+                                      level > 0.25 &&
+                                        level <= 0.5 &&
+                                        "bg-chart-2",
+                                      level > 0.5 &&
+                                        level <= 0.75 &&
+                                        "bg-chart-3",
+                                      level > 0.75 && "bg-chart-5"
+                                    )}
+                                  />
+                                }
+                              />
+                              <TooltipContent>{label}</TooltipContent>
+                            </Tooltip>
+                          )
+                        })}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
                 </div>
               </ScrollArea>
               <div

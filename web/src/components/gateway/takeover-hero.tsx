@@ -82,6 +82,7 @@ export function TakeoverHero({
   rangeLabel,
   uptimeLabel,
   className,
+  reloading,
 }: {
   status: CodexStatusView
   accounts: AccountView[]
@@ -94,6 +95,8 @@ export function TakeoverHero({
   rangeLabel: string
   uptimeLabel: string
   className?: string
+  /** The window is reloading; the action buttons keep their own `busy`. */
+  reloading?: boolean
 }) {
   const { t, i18n } = useTranslation()
   const [confirming, setConfirming] = useState<CodexAction | null>(null)
@@ -196,13 +199,17 @@ export function TakeoverHero({
 
   return (
     <section
+      aria-busy={reloading}
       className={cn(
         "flex flex-col rounded-2xl bg-emphasis p-2 text-emphasis-foreground",
         className
       )}
     >
-      <div className="flex flex-wrap items-start justify-between gap-4 px-3 py-2.5">
-        <div className="min-w-0">
+      {/* No wrapping: the headline is a number whose width changes with the
+          window, and letting the figures drop to a second line made every
+          filter change reflow everything below them. */}
+      <div className="flex items-start justify-between gap-4 px-3 py-2.5">
+        <div className="min-w-0 flex-1">
           <p className="flex items-center gap-2 text-xs text-emphasis-muted">
             <span
               aria-hidden="true"
@@ -210,7 +217,7 @@ export function TakeoverHero({
             />
             {t("{{range}}经 Router 转发", { range: rangeLabel })}
           </p>
-          <p className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <p className="mt-1 flex items-baseline gap-x-3">
             <span className="font-brand text-3xl leading-none font-semibold tabular-nums">
               {forwarded.toLocaleString(locale)}
             </span>
