@@ -3,6 +3,7 @@ import { TriangleAlertIcon } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
 import { AppSidebar, type AppPage } from "@/components/app/app-sidebar"
+import { needsAttention } from "@/lib/account-state"
 import { AppHeader } from "@/components/app/app-header"
 import { useTheme, type Theme } from "@/components/theme-provider"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -154,6 +155,12 @@ export function App({
         page={page}
         onPageChange={navigate}
         activeAccount={activeAccount}
+        badges={{
+          // Only where something is actually waiting: accounts that cannot be
+          // routed until someone acts, and today's failed requests.
+          accounts: snapshot?.accounts.accounts.filter(needsAttention).length,
+          logs: snapshot?.stats.errorsToday,
+        }}
       />
       <SidebarInset className="min-h-0 overflow-hidden">
         <AppHeader

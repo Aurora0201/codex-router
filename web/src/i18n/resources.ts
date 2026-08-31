@@ -3,6 +3,7 @@ export const zhCN = {
 } as const
 
 export const en = {
+  "{{account}} · 剩余 {{remaining}}": "{{account}} · {{remaining}} left",
   搜索请求: "Search requests",
   搜索连接: "Search connections",
   请求结果筛选: "Filter by outcome",
