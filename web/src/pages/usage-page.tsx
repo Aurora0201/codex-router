@@ -220,10 +220,13 @@ export function UsagePage({
   const [model, setModel] = useState("all")
   const [project, setProject] = useState("all")
   const [data, setData] = useState<CodexUsageDashboard | null>(null)
+  const [loadedFilters, setLoadedFilters] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [request, setRequest] = useState(0)
   const heatmapScrollRef = useRef<HTMLDivElement>(null)
   const [heatmapFade, setHeatmapFade] = useState({ top: false, bottom: false })
+
+  const filterKey = `${range}|${model}|${project}`
 
   useEffect(() => {
     let cancelled = false
@@ -242,10 +245,18 @@ export function UsagePage({
       .catch((reason: Error) => {
         if (!cancelled) setError(reason.message)
       })
+      .finally(() => {
+        if (!cancelled) setLoadedFilters(filterKey)
+      })
     return () => {
       cancelled = true
     }
-  }, [service, range, model, project, revision, request])
+  }, [service, range, model, project, revision, request, filterKey])
+
+  // Derived, so the dim answers the question "is what is on screen the answer
+  // to what was asked" — and leaves the background refreshes alone, since they
+  // arrive under the same filters.
+  const busy = loadedFilters !== filterKey
 
   // During local HMR the page can briefly talk to an older running gateway.
   // Ignore its former weekday/hour cells instead of taking down the page.
@@ -496,7 +507,15 @@ export function UsagePage({
       ) : null}
 
       {data && data.coverage.rollouts > 0 && summary ? (
-        <div className="grid grid-cols-12 gap-4">
+        // The previous window stays up while the next one loads; the dim says
+        // "updating" without moving anything on the page.
+        <div
+          className={cn(
+            "grid grid-cols-12 gap-4 transition-opacity duration-200 motion-reduce:transition-none",
+            busy && "opacity-60"
+          )}
+          aria-busy={busy}
+        >
           {/* The one dark block on the page: the headline number and its shape.
               Everything else stays on light surfaces so this reads as the hero. */}
           <section className="col-span-12 rounded-2xl bg-emphasis p-2 text-emphasis-foreground xl:col-span-8">

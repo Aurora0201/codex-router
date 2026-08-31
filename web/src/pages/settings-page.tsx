@@ -16,6 +16,7 @@ import { TakeoverHero } from "@/components/gateway/takeover-hero"
 import { WebSocketActivityCard } from "@/components/gateway/websocket-activity-card"
 import { toast } from "@/components/ui/toast"
 import { formatDuration } from "@/lib/format"
+import { cn } from "@/lib/utils"
 import type {
   GatewayService,
   GatewaySnapshot,
@@ -65,6 +66,7 @@ export function SettingsPage({
   const [to, setTo] = useState(() => Date.now())
   const [now, setNow] = useState(() => Date.now())
   const [data, setData] = useState(EMPTY)
+  const [loadedRange, setLoadedRange] = useState<RequestLogRange | null>(null)
   const enabled = snapshot.settings.requestMetadataLogging
 
   // One fetch feeds the hero, the outcome breakdown and the availability
@@ -92,6 +94,9 @@ export function SettingsPage({
             type: "error",
           })
       })
+      .finally(() => {
+        if (!cancelled) setLoadedRange(range)
+      })
     return () => {
       cancelled = true
     }
@@ -112,6 +117,18 @@ export function SettingsPage({
   // Derived rather than stored: writing EMPTY back into state from the effect
   // is a synchronous setState that cascades a second render for nothing.
   const shown = enabled ? data : EMPTY
+  // Derived, so the dim answers the question "is the window on screen the one
+  // that was asked for" — and stays out of the way of the background refreshes
+  // that arrive with live traffic, which keep the same range.
+  const busy = enabled && loadedRange !== range
+  // Only the three panels that read the window dim while it reloads. The
+  // connection list and the environment strip come from the snapshot and have
+  // nothing to do with the range; fading them made them look like they had
+  // lost their data.
+  const stale = cn(
+    "transition-opacity duration-200 motion-reduce:transition-none",
+    busy && "opacity-60"
+  )
   const selected = RANGES.find((item) => item.value === range) ?? RANGES[1]
   const from = to - selected.ms
 
@@ -121,7 +138,10 @@ export function SettingsPage({
       onValueChange={(value) => {
         const next = RANGES.find((item) => item.value === value)
         if (!next || next.value === range) return
-        setData(EMPTY)
+        // The previous window's numbers stay up while the next ones load.
+        // Blanking them first collapsed the page by 50px and bounced
+        // everything below the hero; the panels dim instead, which says
+        // "updating" without moving anything.
         setTo(Date.now())
         setRange(next.value)
       }}
@@ -153,7 +173,8 @@ export function SettingsPage({
 
       <div className="grid grid-cols-12 gap-4">
         <TakeoverHero
-          className="col-span-12 xl:col-span-8"
+          reloading={busy}
+          className={cn("col-span-12 xl:col-span-8", stale)}
           status={snapshot.codex}
           accounts={snapshot.accounts.accounts}
           service={service}
@@ -167,7 +188,8 @@ export function SettingsPage({
         />
 
         <RequestOutcomePanel
-          className="col-span-12 self-start xl:col-span-4"
+          busy={busy}
+          className={cn("col-span-12 self-start xl:col-span-4", stale)}
           summary={shown.summary}
           enabled={enabled}
         />
@@ -175,7 +197,8 @@ export function SettingsPage({
         {/* Ninety-six cells need the full width, and nothing else on the page
             wants to sit beside a strip this long. */}
         <AvailabilityPanel
-          className="col-span-12"
+          busy={busy}
+          className={cn("col-span-12", stale)}
           timeline={shown.timeline}
           summary={shown.summary}
           enabled={enabled}

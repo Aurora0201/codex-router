@@ -698,6 +698,7 @@ export function RequestLogsPage({
   const [queryDraft, setQueryDraft] = useState("")
   const [result, setResult] = useState(EMPTY_RESULT)
   const [loading, setLoading] = useState(true)
+  const [loadedFilters, setLoadedFilters] = useState<string | null>(null)
   const [selected, setSelected] = useState<SelectedRequest | null>(null)
   const [newIds, setNewIds] = useState<Set<string>>(new Set())
   const [view, setView] = useState<"requests" | "connections">("requests")
@@ -721,6 +722,10 @@ export function RequestLogsPage({
     )
     return () => window.clearTimeout(timer)
   }, [queryDraft])
+
+  // Page and cursor are left out: paging through the same window is not a new
+  // question, so it should not dim the histogram above the table.
+  const filterKey = JSON.stringify({ ...filters, page: 0, cursor: undefined })
 
   useEffect(() => {
     if (!enabled) return
@@ -755,14 +760,20 @@ export function RequestLogsPage({
               type: "error",
             })
           )
-          .finally(
-            () => sequence === requestSequence.current && setLoading(false)
-          )
+          .finally(() => {
+            if (sequence !== requestSequence.current) return
+            setLoading(false)
+            setLoadedFilters(filterKey)
+          })
       },
       revision ? 150 : 0
     )
     return () => window.clearTimeout(timer)
-  }, [enabled, filters, revision, service, t])
+  }, [enabled, filters, filterKey, revision, service, t])
+
+  // The live stream refetches under the same filters several times a minute;
+  // only a change in the question dims the answer.
+  const refiltering = enabled && loadedFilters !== filterKey
 
   const update = (values: Partial<RequestLogFilters>) =>
     setFilters((current) => ({
@@ -862,7 +873,13 @@ export function RequestLogsPage({
             />
           </TabsPanel>
           <TabsPanel value="requests" className="flex flex-col gap-4 pb-4">
-            <div className="grid shrink-0 grid-cols-12 gap-4">
+            <div
+              className={cn(
+                "grid shrink-0 grid-cols-12 gap-4 transition-opacity duration-200 motion-reduce:transition-none",
+                refiltering && "opacity-60"
+              )}
+              aria-busy={refiltering}
+            >
               <RequestVolumeHero
                 className="col-span-12 xl:col-span-8 xl:h-72"
                 summary={result.summary}

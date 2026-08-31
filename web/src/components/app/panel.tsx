@@ -17,6 +17,7 @@ export function Panel({
   action,
   className,
   bodyClassName,
+  busy,
   children,
 }: {
   title: string
@@ -25,10 +26,13 @@ export function Panel({
   action?: React.ReactNode
   className?: string
   bodyClassName?: string
+  /** Marks the panel while its data reloads, for both the tone and readers. */
+  busy?: boolean
   children: React.ReactNode
 }) {
   return (
     <section
+      aria-busy={busy}
       className={cn(
         "flex flex-col rounded-2xl bg-card px-2 pb-2 ring-1 ring-foreground/10",
         className

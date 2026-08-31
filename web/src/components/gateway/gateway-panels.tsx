@@ -61,10 +61,12 @@ export function RequestOutcomePanel({
   summary,
   enabled,
   className,
+  busy,
 }: {
   summary: Summary
   enabled: boolean
   className?: string
+  busy?: boolean
 }) {
   const { t } = useTranslation()
   const successful = Math.max(
@@ -92,6 +94,7 @@ export function RequestOutcomePanel({
       icon={LayersIcon}
       hint={t("拒绝与取消不计入可用性")}
       className={className}
+      busy={busy}
     >
       {!enabled ? (
         <p className="py-6 text-center text-xs text-muted-foreground">
@@ -170,6 +173,7 @@ export function AvailabilityPanel({
   to,
   action,
   className,
+  busy,
 }: {
   timeline: TimelinePoint[]
   summary: Summary
@@ -178,6 +182,7 @@ export function AvailabilityPanel({
   to: number
   action?: React.ReactNode
   className?: string
+  busy?: boolean
 }) {
   const { t, i18n } = useTranslation()
   const locale = i18n.resolvedLanguage ?? "zh-CN"
@@ -205,6 +210,7 @@ export function AvailabilityPanel({
       title={t("API 可用性")}
       icon={ActivityIcon}
       className={className}
+      busy={busy}
       action={
         <div className="flex items-center gap-3">
           <span className="text-sm font-semibold tabular-nums">
