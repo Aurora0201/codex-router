@@ -223,15 +223,17 @@ export function App({
               "lg:[&_[data-slot=scroll-area-viewport]]:overflow-hidden"
           )}
         >
-          {/* Keyed on the page, so each arrival is a fresh mount and gets one
-              short fade with a few pixels of travel. Enough to say the content
-              changed; not enough to make the switch feel slow. */}
+          {/* Keyed on the page, so each arrival is a fresh mount and settles
+              the last four pixels into place. No fade: the switch is instant
+              because the data is already here, so starting from transparent
+              only put a blank frame in front of it, which reads as a blink
+              rather than as movement. */}
           <div
             key={page}
             data-slot="page-content"
             className={cn(
               "mx-auto w-full max-w-[88rem] px-4 py-6 sm:px-6 lg:px-8 lg:py-4",
-              "motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-1 motion-safe:duration-200",
+              "motion-safe:animate-in motion-safe:slide-in-from-bottom-1 motion-safe:duration-300 motion-safe:ease-out",
               fixedLogsLayout && "lg:h-full",
               accountsLayout && "lg:h-full"
             )}
