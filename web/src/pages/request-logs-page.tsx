@@ -96,6 +96,7 @@ import {
 import { LogDateRangePicker } from "@/components/request/log-date-range-picker"
 import { WebSocketConnectionLogsPanel } from "@/components/request/websocket-connection-logs-panel"
 import { FieldGroup } from "@/components/ui/field"
+import { useSlowLoad } from "@/hooks/use-slow-load"
 import { cn } from "@/lib/utils"
 import type {
   AccountView,
@@ -772,8 +773,9 @@ export function RequestLogsPage({
   }, [enabled, filters, filterKey, revision, service, t])
 
   // The live stream refetches under the same filters several times a minute;
-  // only a change in the question dims the answer.
-  const refiltering = enabled && loadedFilters !== filterKey
+  // only a change in the question dims the answer, and only once the answer is
+  // slow enough in coming to be worth saying so.
+  const refiltering = useSlowLoad(enabled && loadedFilters !== filterKey)
 
   const update = (values: Partial<RequestLogFilters>) =>
     setFilters((current) => ({

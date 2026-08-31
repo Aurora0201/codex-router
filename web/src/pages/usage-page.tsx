@@ -55,6 +55,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { useSlowLoad } from "@/hooks/use-slow-load"
 import { cn } from "@/lib/utils"
 import type {
   CodexUsageDashboard,
@@ -178,7 +179,11 @@ function Ranking({
                 })}
               >
                 <div
-                  className="h-full rounded-full bg-chart-4"
+                  // The share slides to its new length rather than jumping to
+                  // it: on a fast range switch this is the only thing that
+                  // says the numbers moved, and a width is one of the few
+                  // things that can say it without anything blinking.
+                  className="h-full rounded-full bg-chart-4 transition-[width] duration-500 ease-out motion-reduce:transition-none"
                   style={{ width: `${Math.max(row.share * 100, 1)}%` }}
                 />
               </div>
@@ -255,8 +260,9 @@ export function UsagePage({
 
   // Derived, so the dim answers the question "is what is on screen the answer
   // to what was asked" — and leaves the background refreshes alone, since they
-  // arrive under the same filters.
-  const busy = loadedFilters !== filterKey
+  // arrive under the same filters. Held back until the load is slow enough to
+  // need explaining; a switch that lands in 200ms just updates the numbers.
+  const busy = useSlowLoad(loadedFilters !== filterKey)
 
   // During local HMR the page can briefly talk to an older running gateway.
   // Ignore its former weekday/hour cells instead of taking down the page.
@@ -687,7 +693,10 @@ export function UsagePage({
               {composition.map((item) => (
                 <span
                   key={item.label}
-                  className={item.className}
+                  className={cn(
+                    item.className,
+                    "transition-[width] duration-500 ease-out motion-reduce:transition-none"
+                  )}
                   style={{
                     width: `${share(item.value, summary.totalTokens)}%`,
                   }}

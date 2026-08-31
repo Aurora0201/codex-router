@@ -15,6 +15,7 @@ import {
 import { TakeoverHero } from "@/components/gateway/takeover-hero"
 import { WebSocketActivityCard } from "@/components/gateway/websocket-activity-card"
 import { toast } from "@/components/ui/toast"
+import { useSlowLoad } from "@/hooks/use-slow-load"
 import { formatDuration } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type {
@@ -119,8 +120,9 @@ export function SettingsPage({
   const shown = enabled ? data : EMPTY
   // Derived, so the dim answers the question "is the window on screen the one
   // that was asked for" — and stays out of the way of the background refreshes
-  // that arrive with live traffic, which keep the same range.
-  const busy = enabled && loadedRange !== range
+  // that arrive with live traffic, which keep the same range. Held back until
+  // the load is slow enough to need explaining.
+  const busy = useSlowLoad(enabled && loadedRange !== range)
   // Only the three panels that read the window dim while it reloads. The
   // connection list and the environment strip come from the snapshot and have
   // nothing to do with the range; fading them made them look like they had
