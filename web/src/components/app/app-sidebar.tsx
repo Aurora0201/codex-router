@@ -167,7 +167,9 @@ export function AppSidebar({
     // on its own rounded, ringed surface, which put a second outline language
     // around every card that already draws one.
     <Sidebar collapsible="icon">
-      <SidebarHeader className="p-0">
+      {/* Both rules or neither: the footer carries one, so the header needs
+          its match or the rail reads as two zones with a stray line. */}
+      <SidebarHeader className="border-b border-sidebar-border p-0">
         {state === "collapsed" && !isMobile ? (
           <div className="flex h-14 items-center justify-center">
             <Tooltip>
@@ -192,7 +194,9 @@ export function AppSidebar({
           // px-5 rather than px-3: the brand mark then starts on the same
           // 20px rail as every nav icon below it, instead of four pixels left
           // of them.
-          <div className="flex h-14 items-center gap-3 px-5">
+          // The brand keeps the 20px rail every nav icon stands on; the
+          // trigger is chrome, so it sits nearer the edge than the content.
+          <div className="flex h-14 items-center gap-3 pr-2.5 pl-5">
             <BrandMark className="size-6 text-sidebar-foreground" />
             <p className="min-w-0 truncate font-logo text-lg leading-none font-semibold">
               Codex Router
@@ -228,7 +232,9 @@ export function AppSidebar({
           onNavigate={navigate}
         />
       </SidebarMenu>
-      <SidebarFooter>
+      {/* The header carries a rule, so the quota panel needs the matching one
+          or it reads as the tail of the nav rather than its own block. */}
+      <SidebarFooter className="border-t border-sidebar-border">
         {/* What the routed account has left, not which one it is: the name is
             on the accounts page, but the headroom decides whether the next
             request goes through. The plan sits in the heading because it is
@@ -273,13 +279,17 @@ export function AppSidebar({
               // A transition rather than an enter animation: an animation with
               // fill-mode both can be interrupted mid-toggle and leave the
               // block stuck at opacity 0.
-              <span className="grid gap-2 overflow-hidden transition-[height,opacity] duration-200 group-data-[collapsible=icon]:h-0 group-data-[collapsible=icon]:opacity-0 motion-reduce:transition-none">
+              <span className="grid gap-3 overflow-hidden transition-[height,opacity] duration-200 group-data-[collapsible=icon]:h-0 group-data-[collapsible=icon]:opacity-0 motion-reduce:transition-none">
                 {slots.map((window, index) => {
                   const remaining = window ? remainingPercent(window) : null
                   return (
                     <span className="grid gap-1" key={SLOT_WINDOW_MINS[index]}>
-                      <span className="flex items-baseline gap-2">
-                        <span className="shrink-0 text-[11px] font-medium">
+                      {/* Name and number on one line, bar on the next, the
+                          countdown under it — the same three lines the account
+                          cards use, because three columns in 200px of rail was
+                          more than the width could hold. */}
+                      <span className="flex items-baseline justify-between gap-2">
+                        <span className="min-w-0 truncate text-xs font-medium">
                           {formatUsageWindow(
                             window ?? {
                               usedPercent: null,
@@ -288,16 +298,9 @@ export function AppSidebar({
                             }
                           )}
                         </span>
-                        <span className="min-w-0 flex-1 truncate text-right text-[10px] text-muted-foreground/70">
-                          {window?.resetsAt
-                            ? t("{{time}}重置", {
-                                time: formatCountdown(window.resetsAt),
-                              })
-                            : t("未报告")}
-                        </span>
                         <span
                           className={cn(
-                            "shrink-0 text-[11px] font-medium tabular-nums",
+                            "shrink-0 text-xs font-medium tabular-nums",
                             remaining === null
                               ? "text-muted-foreground/70"
                               : quotaTone(remaining, "text")
@@ -320,6 +323,13 @@ export function AppSidebar({
                           )}
                           style={{ width: `${remaining ?? 0}%` }}
                         />
+                      </span>
+                      <span className="truncate text-[11px] text-muted-foreground/70">
+                        {window?.resetsAt
+                          ? t("{{time}}重置", {
+                              time: formatCountdown(window.resetsAt),
+                            })
+                          : t("未报告")}
                       </span>
                     </span>
                   )
