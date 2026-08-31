@@ -1,6 +1,6 @@
 import type { LucideIcon } from "lucide-react"
 import {
-  ChartNoAxesCombinedIcon,
+  ChartPieIcon,
   ScrollTextIcon,
   Settings2Icon,
   SettingsIcon,
@@ -34,7 +34,7 @@ export const navigation: NavItem[] = [
   {
     value: "usage" as const,
     label: "用量分析",
-    icon: ChartNoAxesCombinedIcon,
+    icon: ChartPieIcon,
     chord: "u",
   },
   {
