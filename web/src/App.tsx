@@ -2,7 +2,12 @@ import { useCallback, useEffect, useState } from "react"
 import { TriangleAlertIcon } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
-import { AppSidebar, type AppPage } from "@/components/app/app-sidebar"
+import { AppSidebar } from "@/components/app/app-sidebar"
+import {
+  NAV_CHORDS,
+  NAV_CHORD_PREFIX,
+  type AppPage,
+} from "@/components/app/navigation"
 import { needsAttention } from "@/lib/account-state"
 import { AppHeader } from "@/components/app/app-header"
 import { useTheme, type Theme } from "@/components/theme-provider"
@@ -141,10 +146,52 @@ export function App({
   const activeAccount = snapshot?.accounts.accounts.find(
     (account) => account.id === snapshot.accounts.activeAccountId
   )
-  const navigate = (nextPage: AppPage) => {
+  // Stable, so the chord listener below is not torn down on every render — a
+  // resubscribe between "g" and its letter would silently drop the chord.
+  const navigate = useCallback((nextPage: AppPage) => {
     if (nextPage === "logs") setLogsErrorsOnly(false)
     setPage(nextPage)
-  }
+  }, [])
+  // `g` then a letter. The hints printed in the nav have to be true, so the
+  // binding lives beside the page switch rather than in the sidebar that draws
+  // them, and both read the same table.
+  useEffect(() => {
+    let armed = false
+    let timer = 0
+    const disarm = () => {
+      armed = false
+      window.clearTimeout(timer)
+    }
+    const isTyping = (target: EventTarget | null) =>
+      target instanceof HTMLElement &&
+      (target.isContentEditable ||
+        /^(input|textarea|select)$/i.test(target.tagName))
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.metaKey || event.ctrlKey || event.altKey) return disarm()
+      if (isTyping(event.target)) return disarm()
+      const key = event.key.toLowerCase()
+      if (!armed) {
+        if (key !== NAV_CHORD_PREFIX) return
+        armed = true
+        window.clearTimeout(timer)
+        // Long enough to be a chord, short enough that a stray "g" does not
+        // hijack the next keystroke.
+        timer = window.setTimeout(disarm, 1500)
+        return
+      }
+      disarm()
+      const next = NAV_CHORDS[key]
+      if (!next) return
+      event.preventDefault()
+      navigate(next)
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => {
+      window.removeEventListener("keydown", onKeyDown)
+      window.clearTimeout(timer)
+    }
+  }, [navigate])
+
   const fixedLogsLayout = page === "logs" && Boolean(snapshot) && !error
   // The account list scrolls inside its own card, so the page itself must not.
   const accountsLayout = page === "accounts" && Boolean(snapshot) && !error

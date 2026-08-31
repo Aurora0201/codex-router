@@ -1,16 +1,14 @@
-import {
-  ChevronRightIcon,
-  PanelLeftIcon,
-  Settings2Icon,
-  SlidersHorizontalIcon,
-  RouteIcon,
-  ScrollTextIcon,
-  ChartNoAxesCombinedIcon,
-  UsersRoundIcon,
-} from "lucide-react"
+import { ChevronRightIcon, PanelLeftIcon, RouteIcon } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
 import { BrandMark } from "@/components/app/brand-mark"
+import {
+  NAV_CHORD_PREFIX,
+  navigation,
+  settingsItem,
+  type AppPage,
+  type NavItem,
+} from "@/components/app/navigation"
 import { Button } from "@/components/ui/button"
 import {
   Sidebar,
@@ -52,35 +50,60 @@ function quotaTone(remaining: number, kind: "bg" | "text"): string {
   return kind === "bg" ? "bg-primary" : "text-muted-foreground"
 }
 
-export type AppPage = "accounts" | "usage" | "gateway" | "logs" | "preferences"
-
-const navigation = [
-  {
-    value: "accounts" as const,
-    label: "账号路由",
-    icon: UsersRoundIcon,
-  },
-  {
-    value: "usage" as const,
-    label: "用量分析",
-    icon: ChartNoAxesCombinedIcon,
-  },
-  {
-    value: "gateway" as const,
-    label: "运行状态",
-    icon: Settings2Icon,
-  },
-  {
-    value: "logs" as const,
-    label: "请求日志",
-    icon: ScrollTextIcon,
-  },
-  {
-    value: "preferences" as const,
-    label: "偏好设置",
-    icon: SlidersHorizontalIcon,
-  },
-]
+/**
+ * The current page is marked, not filled. A solid pill was the loudest block of
+ * colour in the window and fought the one dark panel every page is built
+ * around; a rule down the left edge and a weight change say it quietly.
+ *
+ * The right slot holds one thing, and the more urgent wins it: a count when
+ * something is waiting, otherwise the chord that gets you here.
+ */
+function NavRow({
+  item,
+  page,
+  count,
+  onNavigate,
+}: {
+  item: NavItem
+  page: AppPage
+  count?: number
+  onNavigate(next: AppPage): void
+}) {
+  const { t } = useTranslation()
+  const Icon = item.icon
+  const current = page === item.value
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton
+        isActive={current}
+        tooltip={t(item.label)}
+        aria-label={t(item.label)}
+        onClick={() => onNavigate(item.value)}
+        aria-current={current ? "page" : undefined}
+        className={cn(
+          "relative",
+          "data-active:bg-sidebar-accent data-active:text-sidebar-accent-foreground",
+          "data-active:hover:bg-sidebar-accent data-active:hover:text-sidebar-accent-foreground",
+          "data-active:before:absolute data-active:before:top-1.5 data-active:before:bottom-1.5 data-active:before:left-0 data-active:before:w-0.5 data-active:before:rounded-full data-active:before:bg-sidebar-primary data-active:before:content-['']"
+        )}
+      >
+        <Icon aria-hidden="true" />
+        <span className="truncate group-data-[collapsible=icon]:hidden">
+          {t(item.label)}
+        </span>
+        {count ? null : (
+          <span
+            aria-hidden="true"
+            className="ml-auto font-mono text-[10px] tracking-wider text-sidebar-foreground/50 uppercase opacity-0 transition-opacity group-hover/menu-button:opacity-100 group-focus-visible/menu-button:opacity-100 group-data-[collapsible=icon]:hidden"
+          >
+            {NAV_CHORD_PREFIX} {item.chord}
+          </span>
+        )}
+      </SidebarMenuButton>
+      {count ? <SidebarMenuBadge>{count}</SidebarMenuBadge> : null}
+    </SidebarMenuItem>
+  )
+}
 
 export function AppSidebar({
   page,
@@ -176,33 +199,27 @@ export function AppSidebar({
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu className="gap-1">
-              {navigation.map((item) => {
-                const Icon = item.icon
-                const count = badges?.[item.value]
-                return (
-                  <SidebarMenuItem key={item.value}>
-                    <SidebarMenuButton
-                      isActive={page === item.value}
-                      tooltip={t(item.label)}
-                      aria-label={t(item.label)}
-                      onClick={() => navigate(item.value)}
-                      aria-current={page === item.value ? "page" : undefined}
-                    >
-                      <Icon aria-hidden="true" />
-                      <span className="truncate group-data-[collapsible=icon]:hidden">
-                        {t(item.label)}
-                      </span>
-                    </SidebarMenuButton>
-                    {count ? (
-                      <SidebarMenuBadge>{count}</SidebarMenuBadge>
-                    ) : null}
-                  </SidebarMenuItem>
-                )
-              })}
+              {navigation.map((item) => (
+                <NavRow
+                  key={item.value}
+                  item={item}
+                  page={page}
+                  count={badges?.[item.value]}
+                  onNavigate={navigate}
+                />
+              ))}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+      <SidebarMenu className="px-2 pb-2">
+        <NavRow
+          item={settingsItem}
+          page={page}
+          count={badges?.[settingsItem.value]}
+          onNavigate={navigate}
+        />
+      </SidebarMenu>
       <SidebarFooter>
         {/* What the routed account has left, not which one it is: the name is
             on the accounts page, but the headroom decides whether the next
@@ -300,3 +317,5 @@ export function AppSidebar({
     </Sidebar>
   )
 }
+
+export type { AppPage }
