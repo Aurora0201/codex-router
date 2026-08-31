@@ -764,7 +764,6 @@ export function RequestLogsPage({
                 page: next.pagination.page,
               }))
             }
-            window.setTimeout(() => setNewIds(new Set()), 500)
           })
           .catch((error) =>
             toast.add({
