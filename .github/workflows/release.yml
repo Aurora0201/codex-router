@@ -21,7 +21,7 @@ jobs:
       - name: Create short-lived GitHub App token
         id: app-token
         if: env.RELEASE_APP_ID != '' && env.RELEASE_APP_PRIVATE_KEY != ''
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v3
         env:
           RELEASE_APP_ID: ${{ secrets.RELEASE_APP_ID }}
           RELEASE_APP_PRIVATE_KEY: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
