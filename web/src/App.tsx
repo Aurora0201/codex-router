@@ -223,9 +223,15 @@ export function App({
               "lg:[&_[data-slot=scroll-area-viewport]]:overflow-hidden"
           )}
         >
+          {/* Keyed on the page, so each arrival is a fresh mount and gets one
+              short fade with a few pixels of travel. Enough to say the content
+              changed; not enough to make the switch feel slow. */}
           <div
+            key={page}
+            data-slot="page-content"
             className={cn(
               "mx-auto w-full max-w-[88rem] px-4 py-6 sm:px-6 lg:px-8 lg:py-4",
+              "motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-1 motion-safe:duration-200",
               fixedLogsLayout && "lg:h-full",
               accountsLayout && "lg:h-full"
             )}

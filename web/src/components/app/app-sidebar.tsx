@@ -193,11 +193,9 @@ export function AppSidebar({
             </Tooltip>
           </div>
         ) : (
-          // px-5 rather than px-3: the brand mark then starts on the same
-          // 20px rail as every nav icon below it, instead of four pixels left
-          // of them.
-          // The brand keeps the 20px rail every nav icon stands on; the
-          // trigger is chrome, so it sits nearer the edge than the content.
+          // The brand mark keeps the same 20px rail every nav icon below it
+          // stands on; the collapse trigger is chrome, so it sits nearer the
+          // edge than the content does.
           <div className="flex h-full items-center gap-3 pr-2.5 pl-5">
             <BrandMark className="size-6 text-sidebar-foreground" />
             <p className="min-w-0 truncate font-logo text-lg leading-none font-semibold">
