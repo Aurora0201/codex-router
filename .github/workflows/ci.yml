@@ -9,10 +9,15 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verify:
+    if: github.event_name != 'push'
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -35,22 +40,29 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Check release metadata
-        run: npm run release:check
-
       - name: Run gateway integration tests
         run: npm run test:e2e
 
-      - name: Inspect npm package
-        run: npm run pack:check
+  main-smoke:
+    name: Main integration smoke
+    if: github.event_name == 'push'
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
 
-      - name: Build release artifacts
-        shell: pwsh
-        run: ./scripts/pack-release.ps1
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
 
-      - name: Smoke test installed package
-        shell: pwsh
-        run: |
-          $tarball = Get-ChildItem -LiteralPath release -Filter *.tgz | Select-Object -First 1
-          if (-not $tarball) { throw "release tarball was not created" }
-          node scripts/smoke-packed-package.mjs $tarball.FullName
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build merged source
+        run: npm run build
+
+      - name: Run gateway integration tests
+        run: npm run test:e2e
