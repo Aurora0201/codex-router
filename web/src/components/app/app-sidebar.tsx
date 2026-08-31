@@ -168,10 +168,12 @@ export function AppSidebar({
     // around every card that already draws one.
     <Sidebar collapsible="icon">
       {/* Both rules or neither: the footer carries one, so the header needs
-          its match or the rail reads as two zones with a stray line. */}
-      <SidebarHeader className="border-b border-sidebar-border p-0">
+          its match. The height lives here with the rule so the border is
+          inside the same 56px the page header measures — hung on the row
+          below, it sat a pixel lower and the two lines did not meet. */}
+      <SidebarHeader className="h-14 border-b border-sidebar-border p-0">
         {state === "collapsed" && !isMobile ? (
-          <div className="flex h-14 items-center justify-center">
+          <div className="flex h-full items-center justify-center">
             <Tooltip>
               <TooltipTrigger
                 render={
@@ -196,7 +198,7 @@ export function AppSidebar({
           // of them.
           // The brand keeps the 20px rail every nav icon stands on; the
           // trigger is chrome, so it sits nearer the edge than the content.
-          <div className="flex h-14 items-center gap-3 pr-2.5 pl-5">
+          <div className="flex h-full items-center gap-3 pr-2.5 pl-5">
             <BrandMark className="size-6 text-sidebar-foreground" />
             <p className="min-w-0 truncate font-logo text-lg leading-none font-semibold">
               Codex Router
