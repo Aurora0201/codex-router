@@ -3,7 +3,7 @@ import {
   ChartNoAxesCombinedIcon,
   ScrollTextIcon,
   Settings2Icon,
-  SlidersHorizontalIcon,
+  SettingsIcon,
   UsersRoundIcon,
 } from "lucide-react"
 
@@ -55,7 +55,7 @@ export const navigation: NavItem[] = [
 export const settingsItem: NavItem = {
   value: "preferences" as const,
   label: "偏好设置",
-  icon: SlidersHorizontalIcon,
+  icon: SettingsIcon,
   chord: "p",
 }
 

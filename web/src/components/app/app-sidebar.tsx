@@ -81,7 +81,9 @@ function NavRow({
         onClick={() => onNavigate(item.value)}
         aria-current={current ? "page" : undefined}
         className={cn(
-          "relative",
+          // px-3 rather than the variant's p-2, so the icon and the chord are
+          // not pressed against the edges of a 256px rail.
+          "relative px-3",
           "data-active:bg-sidebar-accent data-active:text-sidebar-accent-foreground",
           "data-active:hover:bg-sidebar-accent data-active:hover:text-sidebar-accent-foreground",
           "data-active:before:absolute data-active:before:top-1.5 data-active:before:bottom-1.5 data-active:before:left-0 data-active:before:w-0.5 data-active:before:rounded-full data-active:before:bg-sidebar-primary data-active:before:content-['']"
@@ -100,7 +102,10 @@ function NavRow({
           </span>
         )}
       </SidebarMenuButton>
-      {count ? <SidebarMenuBadge>{count}</SidebarMenuBadge> : null}
+      {count ? (
+        // Lands on the same right edge as the chord it replaces.
+        <SidebarMenuBadge className="right-3">{count}</SidebarMenuBadge>
+      ) : null}
     </SidebarMenuItem>
   )
 }
@@ -184,7 +189,10 @@ export function AppSidebar({
             </Tooltip>
           </div>
         ) : (
-          <div className="flex h-14 items-center gap-3 px-3">
+          // px-5 rather than px-3: the brand mark then starts on the same
+          // 20px rail as every nav icon below it, instead of four pixels left
+          // of them.
+          <div className="flex h-14 items-center gap-3 px-5">
             <BrandMark className="size-6 text-sidebar-foreground" />
             <p className="min-w-0 truncate font-logo text-lg leading-none font-semibold">
               Codex Router
@@ -257,7 +265,15 @@ export function AppSidebar({
             </span>
 
             {activeAccount ? (
-              <span className="grid gap-2 group-data-[collapsible=icon]:hidden">
+              // The collapsible attribute flips the instant the toggle is
+              // pressed while the rail takes 200ms to widen, so this block
+              // used to arrive at full strength inside a rail that was still
+              // narrow. It collapses its own height and fades over the same
+              // 200ms instead, landing with the rail rather than ahead of it.
+              // A transition rather than an enter animation: an animation with
+              // fill-mode both can be interrupted mid-toggle and leave the
+              // block stuck at opacity 0.
+              <span className="grid gap-2 overflow-hidden transition-[height,opacity] duration-200 group-data-[collapsible=icon]:h-0 group-data-[collapsible=icon]:opacity-0 motion-reduce:transition-none">
                 {slots.map((window, index) => {
                   const remaining = window ? remainingPercent(window) : null
                   return (
