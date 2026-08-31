@@ -135,7 +135,10 @@ export function AppSidebar({
     : t("尚未选择路由")
 
   return (
-    <Sidebar variant="inset" collapsible="icon">
+    // The seam is a rule, not a gutter. The inset variant floated the content
+    // on its own rounded, ringed surface, which put a second outline language
+    // around every card that already draws one.
+    <Sidebar collapsible="icon">
       <SidebarHeader className="p-0">
         {state === "collapsed" && !isMobile ? (
           <div className="flex h-14 items-center justify-center">
