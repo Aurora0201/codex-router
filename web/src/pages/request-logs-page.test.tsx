@@ -102,6 +102,15 @@ describe("RequestLogsPage", () => {
     )
     await waitFor(() => expect(rows()).toBe(3))
     await waitFor(() => expect(marked()).toBe(1))
+
+    // The next snapshot naturally retires the arrival marker; no wall-clock
+    // timeout can erase it before a slow client has rendered the row.
+    rerender(
+      <Toaster>
+        <RequestLogsPage {...props} revision={2} />
+      </Toaster>
+    )
+    await waitFor(() => expect(marked()).toBe(0))
   })
 
   it("puts the coarse slice in the toolbar and every hidden filter on a chip", async () => {
