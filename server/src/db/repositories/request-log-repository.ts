@@ -11,6 +11,9 @@ import type {
 import type { RequestEvidence } from "../../proxy/request-classification.js";
 import type { SettingsRepository } from "./settings-repository.js";
 
+/** Matches the 96 cells the runtime and log pages both draw. */
+const HISTOGRAM_BUCKETS = 96;
+
 type SqliteDatabase = Database.Database;
 
 export interface StartRequestInput {
@@ -324,6 +327,74 @@ export class RequestLogRepository {
       FROM request_log LEFT JOIN accounts ON accounts.id=request_log.account_id WHERE ${baseWhere}`,
       )
       .get(...values) as Record<string, number | null>;
+    // The timeline is capped at 500 rows, so it is a sample and cannot be
+    // counted or bucketed. Anything that needs a shape over the whole window
+    // has to be aggregated here, where the filter already lives.
+    const windowStart = filters.since;
+    const windowEnd = filters.until ?? Date.now();
+    const bucketMs = Math.max(
+      1,
+      Math.ceil((windowEnd - windowStart) / HISTOGRAM_BUCKETS),
+    );
+    const histogramRows = this.db
+      .prepare(
+        `SELECT CAST((request_log.started_at - ?) / ? AS INTEGER) bucket,
+      COUNT(CASE WHEN state <> 'running' THEN 1 END) requests,
+      COUNT(CASE WHEN outcome IN ('upstream_error','gateway_error') THEN 1 END) errors,
+      COUNT(CASE WHEN outcome='rejected' THEN 1 END) rejected,
+      COUNT(CASE WHEN outcome='client_cancelled' THEN 1 END) cancelled
+      FROM request_log LEFT JOIN accounts ON accounts.id=request_log.account_id
+      WHERE ${baseWhere} GROUP BY bucket`,
+      )
+      .all(windowStart, bucketMs, ...values) as Array<{
+      bucket: number;
+      requests: number;
+      errors: number;
+      rejected: number;
+      cancelled: number;
+    }>;
+    const histogram = Array.from(
+      { length: HISTOGRAM_BUCKETS },
+      (_unused, index) => ({
+        startedAt: windowStart + index * bucketMs,
+        endedAt: windowStart + (index + 1) * bucketMs,
+        requests: 0,
+        errors: 0,
+        rejected: 0,
+        cancelled: 0,
+      }),
+    );
+    for (const row of histogramRows) {
+      const slot = histogram[row.bucket];
+      if (!slot) continue;
+      slot.requests = row.requests ?? 0;
+      slot.errors = row.errors ?? 0;
+      slot.rejected = row.rejected ?? 0;
+      slot.cancelled = row.cancelled ?? 0;
+    }
+
+    const failureSources = (
+      this.db
+        .prepare(
+          `SELECT request_log.failure_source source, COUNT(*) count
+      FROM request_log LEFT JOIN accounts ON accounts.id=request_log.account_id
+      WHERE ${baseWhere} AND request_log.failure_source IS NOT NULL
+      GROUP BY request_log.failure_source ORDER BY count DESC`,
+        )
+        .all(...values) as Array<{ source: FailureSource; count: number }>
+    ).map((row) => ({ source: row.source, count: row.count }));
+
+    const diagnosticCodes = (
+      this.db
+        .prepare(
+          `SELECT request_log.diagnostic_code code, COUNT(*) count
+      FROM request_log LEFT JOIN accounts ON accounts.id=request_log.account_id
+      WHERE ${baseWhere} AND request_log.diagnostic_code IS NOT NULL
+      GROUP BY request_log.diagnostic_code ORDER BY count DESC LIMIT 5`,
+        )
+        .all(...values) as Array<{ code: string; count: number }>
+    ).map((row) => ({ code: row.code, count: row.count }));
+
     const timelineRows = this.db
       .prepare(
         `SELECT request_log.id, request_log.started_at, request_log.completed_at, request_log.http_status, request_log.state, request_log.outcome, request_log.transport
@@ -386,6 +457,9 @@ export class RequestLogRepository {
         availabilityErrors: summary.availability_errors ?? 0,
         averageDurationMs: summary.average_duration_ms,
       },
+      histogram,
+      failureSources,
+      diagnosticCodes,
       timeline: timelineRows.map((row) => ({
         id: row.id,
         startedAt: row.started_at,

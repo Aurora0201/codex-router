@@ -111,10 +111,58 @@ export function createGatewayServiceFixture({
       return structuredClone(snapshot.websocketConnections)
     },
     async getCodexUsage() {
-      return { status: "ready", scope: "local_codex_home", generatedAt: Date.now(), timezone: "Asia/Shanghai",
-        coverage: { firstEventAt: null, lastEventAt: null, rollouts: 0, sourceRollouts: 0, retainedRollouts: 0, lastScannedAt: null, lastRetentionAt: null, parseWarnings: 0, scan: { complete: true, lastSuccessfulAt: null, pendingMissingRollouts: 0 }, retention: { pendingAuditEvents: 0, lastVerifiedAt: null }, backup: { status: "unavailable" as const, lastSuccessfulAt: null, generations: 0, lastRecoveryAt: null } },
-        summary: { totalTokens: 0, todayTokens: 0, dailyAverage: 0, inputTokens: 0, cachedInputTokens: 0, uncachedInputTokens: 0, outputTokens: 0, reasoningOutputTokens: 0, cacheHitPercent: 0, sessions: 0, tasksStarted: 0, tasksCompleted: 0, abortedTurns: 0, compactions: 0, completionPercent: 0, tokensPerCompletedTask: 0 },
-        daily: [], dailyModels: [], models: [], projects: [], heatmap: [], filters: { models: [], projects: [] } }
+      return {
+        status: "ready",
+        scope: "local_codex_home",
+        generatedAt: Date.now(),
+        timezone: "Asia/Shanghai",
+        coverage: {
+          firstEventAt: null,
+          lastEventAt: null,
+          rollouts: 0,
+          sourceRollouts: 0,
+          retainedRollouts: 0,
+          lastScannedAt: null,
+          lastRetentionAt: null,
+          parseWarnings: 0,
+          scan: {
+            complete: true,
+            lastSuccessfulAt: null,
+            pendingMissingRollouts: 0,
+          },
+          retention: { pendingAuditEvents: 0, lastVerifiedAt: null },
+          backup: {
+            status: "unavailable" as const,
+            lastSuccessfulAt: null,
+            generations: 0,
+            lastRecoveryAt: null,
+          },
+        },
+        summary: {
+          totalTokens: 0,
+          todayTokens: 0,
+          dailyAverage: 0,
+          inputTokens: 0,
+          cachedInputTokens: 0,
+          uncachedInputTokens: 0,
+          outputTokens: 0,
+          reasoningOutputTokens: 0,
+          cacheHitPercent: 0,
+          sessions: 0,
+          tasksStarted: 0,
+          tasksCompleted: 0,
+          abortedTurns: 0,
+          compactions: 0,
+          completionPercent: 0,
+          tokensPerCompletedTask: 0,
+        },
+        daily: [],
+        dailyModels: [],
+        models: [],
+        projects: [],
+        heatmap: [],
+        filters: { models: [], projects: [] },
+      }
     },
     async getRequestLogs() {
       return {
@@ -129,6 +177,9 @@ export function createGatewayServiceFixture({
           averageDurationMs: null,
         },
         timeline: [],
+        histogram: [],
+        failureSources: [],
+        diagnosticCodes: [],
         nextCursor: null,
         pagination: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0 },
       }
@@ -137,6 +188,7 @@ export function createGatewayServiceFixture({
       return {
         items: [],
         summary: { connections: 0, failures: 0, retired: 0 },
+        histogram: [],
         nextCursor: null,
         pagination: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0 },
       }
@@ -162,7 +214,10 @@ export function createGatewayServiceFixture({
         selected.enabled = values.enabled
         selected.authStatus = values.enabled ? "ready" : "disabled"
       }
-      if (values.billingAnchorAt !== undefined && values.billingCadence !== undefined) {
+      if (
+        values.billingAnchorAt !== undefined &&
+        values.billingCadence !== undefined
+      ) {
         selected.billing = {
           anchorAt: values.billingAnchorAt,
           cadence: values.billingCadence,

@@ -36,7 +36,6 @@ import type {
 } from "@/services/contracts"
 
 type CodexAction = "apply" | "restore" | "restart"
-type TimelinePoint = RequestLogsResponse["timeline"][number]
 
 const TONE: Record<
   ReturnType<typeof runtimeTone>,
@@ -71,31 +70,15 @@ const ACTION_COPY = {
   restart: ["重启 Codex？", "Codex 将短暂关闭并重新启动，以读取当前配置。"],
 } as const
 
-/** Hourly buckets over the selected window, oldest first. */
-function bucketSeries(
-  timeline: TimelinePoint[],
-  from: number,
-  to: number,
-  buckets: number
-): number[] {
-  const size = Math.max(1, (to - from) / buckets)
-  const counts = new Array<number>(buckets).fill(0)
-  for (const point of timeline) {
-    const index = Math.floor((point.createdAt - from) / size)
-    if (index >= 0 && index < buckets) counts[index] += 1
-  }
-  return counts
-}
-
 export function TakeoverHero({
   status,
   accounts,
   service,
   reload,
   onShowAccounts,
-  timeline,
+  summary,
+  histogram,
   from,
-  to,
   rangeLabel,
   uptimeLabel,
   className,
@@ -105,9 +88,9 @@ export function TakeoverHero({
   service: GatewayService
   reload(): Promise<void>
   onShowAccounts(): void
-  timeline: TimelinePoint[]
+  summary: RequestLogsResponse["summary"]
+  histogram: RequestLogsResponse["histogram"]
   from: number
-  to: number
   rangeLabel: string
   uptimeLabel: string
   className?: string
@@ -124,11 +107,18 @@ export function TakeoverHero({
 
   // Nothing reaches us before the config is rewritten, so the count and the
   // bars stay at zero rather than borrowing the gateway's own totals.
-  const series = intercepting ? bucketSeries(timeline, from, to, 24) : []
-  const peak = Math.max(1, ...series)
-  const forwarded = intercepting ? timeline.length : 0
+  //
+  // Both come from the server aggregate rather than the timeline, which is a
+  // capped sample: counting it would have stopped at 500 and its oldest
+  // buckets would have read as idle on a busy day.
+  const series = intercepting ? histogram : []
+  const peak = Math.max(1, ...series.map((bucket) => bucket.requests))
+  const forwarded = intercepting ? summary.requests : 0
   const latest = intercepting
-    ? timeline.reduce((newest, point) => Math.max(newest, point.createdAt), 0)
+    ? series.reduce(
+        (newest, bucket) => (bucket.requests ? bucket.endedAt : newest),
+        0
+      )
     : 0
 
   const identity =
@@ -253,14 +243,16 @@ export function TakeoverHero({
               range: rangeLabel,
             })}
           >
-            {series.map((value, index) => (
+            {series.map((bucket) => (
               <span
                 className={cn(
                   "min-w-0 flex-1 rounded-[2px]",
-                  value ? "bg-chart-3" : "bg-emphasis-muted/25"
+                  bucket.requests ? "bg-chart-3" : "bg-emphasis-muted/25"
                 )}
-                style={{ height: `${Math.max((value / peak) * 100, 3)}%` }}
-                key={index}
+                style={{
+                  height: `${Math.max((bucket.requests / peak) * 100, 3)}%`,
+                }}
+                key={bucket.startedAt}
               />
             ))}
           </div>
@@ -324,7 +316,11 @@ export function TakeoverHero({
             ) : state === "route_blocked" ? (
               <>
                 {restore}
-                <Button size="sm" disabled={busy !== null} onClick={onShowAccounts}>
+                <Button
+                  size="sm"
+                  disabled={busy !== null}
+                  onClick={onShowAccounts}
+                >
                   <UserRoundIcon data-icon="inline-start" />
                   {t("前往账号路由")}
                 </Button>

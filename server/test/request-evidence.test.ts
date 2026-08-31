@@ -21,6 +21,90 @@ afterEach(async () => {
 });
 
 describe("request evidence lifecycle", () => {
+  it("aggregates the window server-side so the capped timeline is never counted", async () => {
+    const database = new GatewayDatabase(await databasePath("aggregates.db"));
+    const since = 1_000_000;
+    const until = since + 96 * 60_000;
+    // More requests than the timeline's 500-row cap, so anything derived from
+    // the timeline would under-report both the total and the busy buckets.
+    for (let index = 0; index < 620; index += 1) {
+      const startedAt = since + Math.floor(index / 10) * 60_000;
+      const id = database.requestLog.startRequest({
+        requestId: `request-${index}`,
+        route: "/responses",
+        transport: "http",
+        startedAt,
+      })!;
+      const failing = index % 20 === 0;
+      database.requestLog.finishRequest(id, {
+        ...classifyHttpStatus(failing ? 502 : 200)!,
+        completedAt: startedAt + 40,
+      });
+    }
+
+    const result = database.requestLog.query({ since, until, limit: 20 });
+    expect(result.timeline).toHaveLength(500);
+    expect(result.summary.requests).toBe(620);
+
+    expect(result.histogram).toHaveLength(96);
+    const counted = result.histogram.reduce(
+      (sum, bucket) => sum + bucket.requests,
+      0,
+    );
+    expect(counted).toBe(620);
+    // The first bucket is the oldest, and it is exactly the slice the timeline
+    // had already dropped.
+    expect(result.histogram[0]).toMatchObject({
+      startedAt: since,
+      requests: 10,
+    });
+    expect(
+      result.histogram.reduce((sum, bucket) => sum + bucket.errors, 0),
+    ).toBe(31);
+
+    expect(result.failureSources).toEqual([
+      { source: "upstream_http", count: 31 },
+    ]);
+    // A plain 502 carries no diagnostic code, so the list is legitimately
+    // empty here; what matters is that it is aggregated, not sampled.
+    expect(result.diagnosticCodes).toEqual([]);
+    database.close();
+  });
+
+  it("narrows every aggregate with the same filter as the rows", async () => {
+    const database = new GatewayDatabase(
+      await databasePath("aggregate-filter.db"),
+    );
+    const since = 2_000_000;
+    for (const [index, status] of [200, 200, 502, 200, 502].entries()) {
+      const id = database.requestLog.startRequest({
+        requestId: `request-${index}`,
+        route: index % 2 === 0 ? "/responses" : "/models",
+        transport: "http",
+        startedAt: since + index * 1_000,
+      })!;
+      database.requestLog.finishRequest(id, {
+        ...classifyHttpStatus(status)!,
+        completedAt: since + index * 1_000 + 10,
+      });
+    }
+
+    const all = database.requestLog.query({ since, limit: 20 });
+    const failures = database.requestLog.query({
+      since,
+      status: "error",
+      limit: 20,
+    });
+    expect(all.summary.requests).toBe(5);
+    expect(failures.summary.requests).toBe(2);
+    expect(
+      failures.histogram.reduce((sum, bucket) => sum + bucket.requests, 0),
+    ).toBe(2);
+    expect(failures.failureSources).toEqual([
+      { source: "upstream_http", count: 2 },
+    ]);
+    database.close();
+  });
   it("inserts running immediately and completes the same record once", async () => {
     const database = new GatewayDatabase(await databasePath("lifecycle.db"));
     const started = vi.fn();
@@ -189,7 +273,9 @@ describe("request evidence lifecycle", () => {
     database.close();
 
     const reopened = new GatewayDatabase(file);
-    expect(reopened.requestLog.query({ since: 0, limit: 10 }).items[0]).toMatchObject({
+    expect(
+      reopened.requestLog.query({ since: 0, limit: 10 }).items[0],
+    ).toMatchObject({
       diagnosticCode: "ETIMEDOUT",
       transportErrorChain: [
         { name: "ConnectTimeoutError", code: "UND_ERR_CONNECT_TIMEOUT" },
@@ -230,6 +316,19 @@ describe("request evidence lifecycle", () => {
     });
     expect(result.items).toHaveLength(1);
     expect(result.summary).toEqual({ connections: 2, failures: 2, retired: 0 });
+    expect(result.histogram).toHaveLength(96);
+    expect(
+      result.histogram.reduce(
+        (connections, bucket) => connections + bucket.connections,
+        0,
+      ),
+    ).toBe(2);
+    expect(
+      result.histogram.reduce(
+        (failures, bucket) => failures + bucket.failures,
+        0,
+      ),
+    ).toBe(2);
     expect(result.pagination.totalPages).toBe(2);
     database.close();
   });

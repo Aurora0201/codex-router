@@ -145,6 +145,18 @@ other, one of them is wrong; fix it rather than choosing freely.
 - Any two percentages describing the same thing must be the same number: the outcome panel's success share is `successful / countable`, matching the availability headline, not a share of all traffic.
 - Runtime facts are file paths and URLs, so the environment strip stacks label over value; side by side, the label is the half that gets crushed.
 
+## Request log page rules
+
+- The list is what the page is for, so it takes whatever height is left and scrolls inside its own panel; the toolbar and the pagination stay put.
+- The emphasis block's chart is 96 bars where height is request volume and colour is the worst outcome in that bucket, because a log page's headline is not a total but where in the window things went wrong. Clicking a bar narrows the list to that slice.
+- A healthy bucket wears the measurement blue, not a green badge of health: ninety-six cells of "all clear" would shout down the few worth clicking.
+- Anything counted or shaped over the whole window is aggregated server-side. The timeline is capped at 500 rows, so counting it stops at 500 and its oldest buckets read as idle on a busy day — `histogram`, `failureSources` and `diagnosticCodes` all narrow with the same filter as the rows.
+- A failed row carries `bg-destructive/5`. A log is scanned for its failures, so they must be findable without reading the outcome column — this is the exception to "a default state never wears an accent".
+- The toolbar carries three controls and no more: a search field, the coarse outcome slice as tabs, and one door to everything rarer. "Show me the failures" is the common move and must cost one click, not the same as picking a protocol error code.
+- A filter visible in its own control needs no chip; a filter the popover hides always gets one, and the chips sit in the toolbar rather than inside the popover that set them. A filter you cannot see is a filter you will forget you set.
+- The advanced popover groups its fields by the question each answers (time window / request / failure detail). Eight fields in a row is a wall, not a form.
+- Removing a chip deletes the field rather than sending it as `undefined`, so the query stops carrying it; a chip entry must therefore be `undefined` when unset, not `false`.
+
 ## Interaction and accessibility
 
 - Every control uses a native semantic element, visible keyboard focus, an accessible name, and a disabled/busy state where applicable.

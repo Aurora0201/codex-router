@@ -31,9 +31,11 @@ const RANGES: Array<{ value: RequestLogRange; label: string; ms: number }> = [
 
 const EMPTY: {
   timeline: RequestLogsResponse["timeline"]
+  histogram: RequestLogsResponse["histogram"]
   summary: RequestLogsResponse["summary"]
 } = {
   timeline: [],
+  histogram: [],
   summary: {
     requests: 0,
     errors: 0,
@@ -75,7 +77,11 @@ export function SettingsPage({
       .getRequestLogs({ range, page: 1, limit: 1 })
       .then((result) => {
         if (cancelled) return
-        setData({ timeline: result.timeline, summary: result.summary })
+        setData({
+          timeline: result.timeline,
+          histogram: result.histogram,
+          summary: result.summary,
+        })
         setTo(Date.now())
       })
       .catch((error) => {
@@ -133,7 +139,7 @@ export function SettingsPage({
 
   return (
     <div className="flex flex-col gap-4">
-      <header className="flex flex-wrap items-start justify-between gap-4">
+      <header className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">
             {t("运行状态")}
@@ -153,9 +159,9 @@ export function SettingsPage({
           service={service}
           reload={reload}
           onShowAccounts={onShowAccounts}
-          timeline={shown.timeline}
+          summary={shown.summary}
+          histogram={shown.histogram}
           from={from}
-          to={to}
           rangeLabel={t(selected.label)}
           uptimeLabel={formatDuration(snapshot.stats.uptimeSeconds)}
         />

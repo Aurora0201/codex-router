@@ -3,6 +3,7 @@ import type Database from "better-sqlite3";
 import type { IdentityMode } from "../../types.js";
 
 type SqliteDatabase = Database.Database;
+const HISTOGRAM_BUCKETS = 96;
 export type ConnectionOutcome =
   "connected" | "rejected" | "failed" | "retired" | "closed";
 
@@ -144,6 +145,43 @@ export class WebSocketConnectionLogRepository {
       failures: number;
       retired: number;
     };
+    const windowStart = filters.since;
+    const windowEnd = filters.until ?? Date.now();
+    const bucketMs = Math.max(
+      1,
+      Math.ceil((windowEnd - windowStart) / HISTOGRAM_BUCKETS),
+    );
+    const histogramRows = this.db
+      .prepare(
+        `SELECT MIN(?, CAST((websocket_connection_log.started_at - ?) / ? AS INTEGER)) bucket,
+      COUNT(*) connections,
+      COUNT(CASE WHEN outcome IN ('failed','rejected') THEN 1 END) failures,
+      COUNT(CASE WHEN outcome='retired' THEN 1 END) retired
+      FROM ${joined} WHERE ${base} GROUP BY bucket`,
+      )
+      .all(HISTOGRAM_BUCKETS - 1, windowStart, bucketMs, ...values) as Array<{
+      bucket: number;
+      connections: number;
+      failures: number;
+      retired: number;
+    }>;
+    const histogram = Array.from(
+      { length: HISTOGRAM_BUCKETS },
+      (_unused, index) => ({
+        startedAt: windowStart + index * bucketMs,
+        endedAt: windowStart + (index + 1) * bucketMs,
+        connections: 0,
+        failures: 0,
+        retired: 0,
+      }),
+    );
+    for (const row of histogramRows) {
+      const slot = histogram[row.bucket];
+      if (!slot) continue;
+      slot.connections = row.connections ?? 0;
+      slot.failures = row.failures ?? 0;
+      slot.retired = row.retired ?? 0;
+    }
     const total = summary.connections;
     const totalPages = Math.ceil(total / filters.limit);
     const page = totalPages === 0 ? 1 : Math.min(filters.page ?? 1, totalPages);
@@ -191,6 +229,7 @@ export class WebSocketConnectionLogRepository {
     return {
       items,
       summary,
+      histogram,
       nextCursor,
       pagination: {
         page,
