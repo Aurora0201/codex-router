@@ -139,16 +139,22 @@ The same happens to `正在运行`, `已开启`, `0 小时 2 分钟`. A fact gri
 paths, counts, timestamps and Chinese words in the same column, so the column
 cannot answer the question for all of them.
 
-Use `isMachineText(value)` from `@/lib/format`: ASCII end to end takes the mono
-face, anything else stays in the body face. It is already applied inside
-`Fact`, `Tally`, the takeover hero's figures and the request detail sheet.
+Two shapes, one rule:
 
-Set `font-mono` unconditionally only where the value's shape is fixed by
-construction: a diagnostic code, a route, a raw payload block, a filesystem
-path, an axis tick that is always `MM-DD`.
+- `<MachineValue value={…} />` where the value is the whole contents of its own
+  element.
+- `cn(…, isMachineText(value) && "font-mono")` where the element already exists
+  for other reasons — it carries a title, a truncation, a flex role.
+
+**Never write a bare `font-mono`.** No value's shape is so fixed that the rule
+cannot answer for it, and a filesystem path is the example that proves it:
+`C:\Users\张三\.codex` is a perfectly ordinary path. `design-rules.test.ts`
+asserts that every `font-mono` in `web/src` sits on a line that also names
+`isMachineText`.
 
 Names people read — model names, project paths shown as names, emails used as
-labels — stay in the body face regardless.
+labels — stay in the body face regardless, and do so naturally: they are
+usually not machine text, and where they are, monospace does them no harm.
 
 ### Scale
 
@@ -236,6 +242,7 @@ label-above-a-number, you are writing `Figure` again.
 | `app/figure` — `Fact` | A value you look up rather than compare — one line, label left. |
 | `app/figure` — `Tally` | A counted thing marked with an icon. |
 | `app/search-field` — `SearchField` | The one search field. |
+| `app/machine-value` — `MachineValue` | A value in the face that can render it whole. |
 | `request/request-outcome` — `OutcomeBadge` | A request's result. |
 | `request/log-filter-controls` | The log toolbar's select, field group and account combobox. |
 
@@ -340,6 +347,11 @@ decorate, and never to make a fast thing feel slow.
   block, the pinned ranking heights, the panel header band, the meter
   thresholds, `isMachineText`, `histogramBucketMs`, `paginationTokens` — so the
   next redesign has to argue with it rather than quietly undo it.
+- `web/src/design-rules.test.ts` reads the source through `import.meta.glob`
+  and enforces the rules that are about *how the code is written* rather than
+  what it renders: no bare `font-mono`, no `text-[10px]`/`text-[11px]`, no
+  `--palette-*` outside `index.css`, and `--font-logo` only in the wordmark.
+  Add to it when you find a rule a reviewer would otherwise have to remember.
 
 ## Exceptions
 

@@ -57,6 +57,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { useSlowLoad } from "@/hooks/use-slow-load"
+import { MachineValue } from "@/components/app/machine-value"
 import { cn } from "@/lib/utils"
 import type {
   CodexUsageDashboard,
@@ -590,9 +591,7 @@ export function UsagePage({
                                   ?.label
                               }
                             </span>
-                            <span className="font-mono tabular-nums">
-                              {fullTokens(Number(value))}
-                            </span>
+                            <MachineValue value={fullTokens(Number(value))} />
                           </div>
                         )}
                       />
@@ -629,9 +628,7 @@ export function UsagePage({
                 </ComposedChart>
               </ChartContainer>
               <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-emphasis-muted">
-                <span className="font-mono tabular-nums">
-                  {data.daily[0]?.date.slice(5)}
-                </span>
+                <MachineValue value={data.daily[0]?.date.slice(5) ?? ""} />
                 <ul className="flex flex-wrap items-center gap-3">
                   {[
                     { name: t("缓存输入"), className: "bg-chart-1" },
@@ -650,9 +647,9 @@ export function UsagePage({
                     {t("7 日均线")}
                   </li>
                 </ul>
-                <span className="font-mono tabular-nums">
-                  {data.daily[data.daily.length - 1]?.date.slice(5)}
-                </span>
+                <MachineValue
+                  value={data.daily[data.daily.length - 1]?.date.slice(5) ?? ""}
+                />
               </div>
             </div>
           </section>
@@ -778,9 +775,10 @@ export function UsagePage({
                 >
                   {heatRows.map((row) => (
                     <div className="flex items-center gap-1" key={row.date}>
-                      <span className="w-10 shrink-0 font-mono text-xs text-muted-foreground-subtle">
-                        {row.date.slice(5)}
-                      </span>
+                      <MachineValue
+                        className="w-10 shrink-0 text-xs text-muted-foreground-subtle"
+                        value={row.date.slice(5)}
+                      />
                       <div className="grid flex-1 grid-cols-24 gap-1">
                         {row.hours.map((totalTokens, hour) => {
                           const level = heatMax ? totalTokens / heatMax : 0

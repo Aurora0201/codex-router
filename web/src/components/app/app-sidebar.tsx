@@ -37,7 +37,7 @@ import {
   remainingPercent,
   tightestRemaining,
 } from "@/lib/account-state"
-import { formatCountdown, formatUsageWindow } from "@/lib/format"
+import { formatCountdown, formatUsageWindow, isMachineText } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { AccountView } from "@/services/contracts"
 
@@ -96,7 +96,10 @@ function NavRow({
         {count ? null : (
           <span
             aria-hidden="true"
-            className="ml-auto font-mono text-xs tracking-wider text-sidebar-foreground/50 uppercase opacity-0 transition-opacity group-hover/menu-button:opacity-100 group-focus-visible/menu-button:opacity-100 group-data-[collapsible=icon]:hidden"
+            className={cn(
+              "ml-auto text-xs tracking-wider text-sidebar-foreground/50 uppercase opacity-0 transition-opacity group-hover/menu-button:opacity-100 group-focus-visible/menu-button:opacity-100 group-data-[collapsible=icon]:hidden",
+              isMachineText(`${NAV_CHORD_PREFIX} ${item.chord}`) && "font-mono"
+            )}
           >
             {NAV_CHORD_PREFIX} {item.chord}
           </span>

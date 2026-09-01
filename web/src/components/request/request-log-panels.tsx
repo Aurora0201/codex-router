@@ -7,7 +7,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { formatLatency } from "@/lib/format"
+import { formatLatency, isMachineText } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { FailureSource, RequestLogsResponse } from "@/services/contracts"
 
@@ -260,7 +260,14 @@ export function FailureBreakdownPanel({
                 className="flex w-full items-baseline justify-between gap-3 rounded-sm text-left text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
                 onClick={() => onSelectCode(item.code)}
               >
-                <span className="truncate font-mono">{item.code}</span>
+                <span
+                  className={cn(
+                    "truncate",
+                    isMachineText(item.code) && "font-mono"
+                  )}
+                >
+                  {item.code}
+                </span>
                 <span className="shrink-0 text-muted-foreground tabular-nums">
                   {item.count}
                 </span>

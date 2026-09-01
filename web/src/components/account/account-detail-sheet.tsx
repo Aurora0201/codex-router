@@ -10,6 +10,7 @@ import {
 import { useTranslation } from "react-i18next"
 
 import { QuotaMeter } from "./account-usage"
+import { MachineValue } from "@/components/app/machine-value"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
@@ -181,11 +182,11 @@ export function AccountDetailSheet({
                             <span className="text-muted-foreground">
                               {t("个人月度限制剩余")}
                             </span>
-                            <span className="font-mono tabular-nums">
-                              {t("{{value}}%", {
+                            <MachineValue
+                              value={t("{{value}}%", {
                                 value: bucket.individualLimit.remainingPercent,
                               })}
-                            </span>
+                            />
                           </div>
                           <Progress
                             value={bucket.individualLimit.remainingPercent}

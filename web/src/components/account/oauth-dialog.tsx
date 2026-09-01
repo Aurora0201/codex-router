@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dialog"
 import { Spinner } from "@/components/ui/spinner"
 import { toast } from "@/components/ui/toast"
+import { isMachineText } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { GatewayService, LoginSessionView } from "@/services/contracts"
 
@@ -196,7 +197,12 @@ export function OAuthDialog({
                     ? t("新账号已安全写入 Codex Router 账号池。")
                     : (session.error ?? t("登录流程未完成。"))}
               </p>
-              <div className="rounded-xl bg-muted p-3 font-mono text-xs break-all">
+              <div
+                className={cn(
+                  "rounded-xl bg-muted p-3 text-xs break-all",
+                  isMachineText(session.authUrl) && "font-mono"
+                )}
+              >
                 {session.authUrl}
               </div>
             </div>
