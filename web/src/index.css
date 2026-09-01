@@ -222,10 +222,9 @@
     --chart-3: oklch(0.62 0.18 256);
     --chart-4: oklch(0.72 0.17 254);
     --chart-5: oklch(0.82 0.12 252);
-    /* On a dark page the hero cannot stand out by going darker: at 0.16 it sat
-       between --background and --card and read as a hole. Emphasis goes up
-       instead, so it stays the most elevated block in either theme. */
-    /* Lightness alone cannot carry the hero in this theme. Against a neutral
+    /* Lightness alone cannot carry the hero in this theme. Going darker is out
+       — at 0.16 it sat between --background and --card and read as a hole in
+       the page. Going lighter is capped: against a neutral
        --card it could only reach 1.15:1 before --emphasis-muted started
        failing AA on it, so the separation is carried by hue instead: one
        saturated block among neutral grey ones. Measured distance from --card
