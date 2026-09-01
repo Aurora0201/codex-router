@@ -530,7 +530,7 @@ export function RequestLogsPage({
             aria-busy={refiltering}
           >
             <RequestVolumeHero
-              className="col-span-12 xl:col-span-8 xl:min-h-72"
+              className="col-span-12 xl:col-span-8 xl:h-80"
               summary={result.summary}
               histogram={result.histogram}
               rangeLabel={t(
@@ -540,7 +540,10 @@ export function RequestLogsPage({
               onSelectWindow={(from, to) => update({ from, to })}
             />
             <FailureBreakdownPanel
-              className="col-span-12 xl:col-span-4 xl:min-h-72"
+              // Fixed, and tall enough for everything the panel can be asked
+              // to hold: five failure sources and three codes come to 255px,
+              // and this leaves 268 for them.
+              className="col-span-12 xl:col-span-4 xl:h-80"
               summary={result.summary}
               failureSources={result.failureSources}
               diagnosticCodes={result.diagnosticCodes}

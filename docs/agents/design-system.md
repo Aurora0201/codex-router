@@ -296,18 +296,24 @@ outline.
 - In a label/value pair on one line, the **label** keeps its width and the
   value truncates, with the full value on hover. A column of facts is scanned
   down the left.
-- **A panel does not scroll inside a pinned height.** Two blocks sharing a row
-  take `min-h-*`, not `h-*`, so the row grows to whichever has more to say and
-  the pair stays matched. A scrollbar inside a summary card hides the very
-  thing the card exists to show, and it appears exactly when there is most to
-  see. The one place a fixed height and an inner scroll are right is a list
-  that is unbounded by nature — the log table, the account list — where the
-  page has already decided how much room it gets.
-- Design the block for the most its data can hold. The failure panel's content
-  is capped by the server at five sources and five codes, so it can be laid
-  out to fit them: the proportion moved behind the row instead of onto a rule
-  under it, and the codes became chips, which is what a one-click filter
-  should look like anyway.
+- **A summary panel keeps a fixed height and never scrolls inside it.** A
+  scrollbar in a summary card hides the thing the card exists to show, and it
+  appears exactly when there is most to see. Letting the card grow instead is
+  no better on a page whose height is already spoken for.
+- So **budget the contents against the most the data can be**, and take the
+  height from that measurement rather than from what today's data happens to
+  need. 故障分布 holds at most five failure sources — a closed set — and its
+  diagnostic codes are capped in the component at three, because that is what
+  the space holds and 最常见 is what the heading promises. Five sources and
+  three codes measure 255px; the card gives them 268.
+- Two things make a budget possible: rows whose height does not depend on
+  their content, and a known ceiling on how many there are. The failure
+  proportion moved behind its row rather than onto a rule under it, and the
+  codes are chips capped at `max-w-28`, so a long error code cannot turn one
+  line into three.
+- A fixed height with an inner scroll is right for a list that is unbounded by
+  nature — the log table, the account list — where the page has already
+  decided how much room it gets.
 
 ## Shared components
 

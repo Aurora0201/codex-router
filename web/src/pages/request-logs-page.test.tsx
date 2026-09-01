@@ -299,16 +299,15 @@ describe("RequestLogsPage", () => {
     ).toHaveClass("[&_th]:bg-muted")
     expect(screen.getByText("POST")).toHaveClass("text-primary")
     expect(screen.getByTitle("POST /responses")).toBeInTheDocument()
-    // A floor, not a ceiling: pinned to a height, the failure panel scrolled
-    // its own contents away as soon as there were a few sources to show.
+    // Fixed, and tall enough for the most the panel can be asked to hold:
+    // five failure sources and three codes measure 255px against 268 of body.
+    // At h-72 they had 236 and the panel scrolled its own contents away.
     const failurePanel = screen
       .getByRole("heading", { name: "故障分布" })
       .closest("section")
     const volumeHero = screen.getByText("最近 24 小时的请求").closest("section")
-    expect(failurePanel).toHaveClass("xl:min-h-72")
-    expect(failurePanel).not.toHaveClass("xl:h-72")
-    expect(volumeHero).toHaveClass("xl:min-h-72")
-    expect(volumeHero).not.toHaveClass("xl:h-72")
+    expect(failurePanel).toHaveClass("xl:h-80")
+    expect(volumeHero).toHaveClass("xl:h-80")
     await userEvent.click(
       screen.getByRole("button", { name: "查看请求 req-1" })
     )

@@ -14,6 +14,14 @@ import type { FailureSource, RequestLogsResponse } from "@/services/contracts"
 type Summary = RequestLogsResponse["summary"]
 type Bucket = RequestLogsResponse["histogram"][number]
 
+/**
+ * The panel has a fixed height, so its contents are budgeted against the most
+ * the server can send. Failure sources are a closed set of five; diagnostic
+ * codes are not, and the server's top five would not fit beside them. Three is
+ * what the space holds, and "最常见" is already what the heading promises.
+ */
+const MAX_CODES = 3
+
 const SOURCE_LABELS: Record<FailureSource, string> = {
   gateway: "网关",
   upstream_http: "上游 HTTP",
@@ -211,7 +219,7 @@ export function FailureBreakdownPanel({
       icon={ServerCrashIcon}
       hint={t("共 {{count}} 次", { count: summary.errors })}
       className={className}
-      bodyClassName="xl:flex-1"
+      bodyClassName="xl:min-h-0 xl:flex-1 xl:overflow-hidden"
     >
       {failureSources.length === 0 ? (
         <p className="py-6 text-center text-xs text-muted-foreground">
@@ -226,7 +234,7 @@ export function FailureBreakdownPanel({
             <li key={item.source}>
               <button
                 type="button"
-                className="relative flex w-full items-baseline justify-between gap-3 overflow-hidden rounded-md px-2 py-1 text-left text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                className="relative flex w-full items-baseline justify-between gap-3 overflow-hidden rounded-md px-2 py-0.5 text-left text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
                 onClick={() => onSelectSource(item.source)}
               >
                 {comparable ? (
@@ -255,15 +263,16 @@ export function FailureBreakdownPanel({
           <p className="text-xs text-muted-foreground-subtle">
             {t("最常见诊断码")}
           </p>
-          {/* Each of these is one click away from being a filter, which is
-              what a chip is for. As full-width rows they cost as much as the
-              sources above them and said less. */}
+          {/* Each of these is one click from being a filter, which is what a
+              chip is for. Capped at three and at 7rem apiece so the row count
+              is knowable: a card with a fixed height cannot afford a list
+              whose height depends on how long an error code happens to be. */}
           <div className="mt-2 flex flex-wrap gap-1.5">
-            {diagnosticCodes.map((item) => (
+            {diagnosticCodes.slice(0, MAX_CODES).map((item) => (
               <button
                 key={item.code}
                 type="button"
-                className="flex max-w-full items-baseline gap-1.5 rounded-full bg-card px-2 py-0.5 text-xs outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                className="flex max-w-28 items-baseline gap-1.5 rounded-full bg-card px-2 py-0.5 text-xs outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
                 onClick={() => onSelectCode(item.code)}
                 title={item.code}
               >
