@@ -530,7 +530,7 @@ export function RequestLogsPage({
             aria-busy={refiltering}
           >
             <RequestVolumeHero
-              className="col-span-12 xl:col-span-8 xl:h-72"
+              className="col-span-12 xl:col-span-8 xl:min-h-72"
               summary={result.summary}
               histogram={result.histogram}
               rangeLabel={t(
@@ -540,7 +540,7 @@ export function RequestLogsPage({
               onSelectWindow={(from, to) => update({ from, to })}
             />
             <FailureBreakdownPanel
-              className="col-span-12 xl:col-span-4 xl:h-72"
+              className="col-span-12 xl:col-span-4 xl:min-h-72"
               summary={result.summary}
               failureSources={result.failureSources}
               diagnosticCodes={result.diagnosticCodes}

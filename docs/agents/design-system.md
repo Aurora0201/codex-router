@@ -296,6 +296,18 @@ outline.
 - In a label/value pair on one line, the **label** keeps its width and the
   value truncates, with the full value on hover. A column of facts is scanned
   down the left.
+- **A panel does not scroll inside a pinned height.** Two blocks sharing a row
+  take `min-h-*`, not `h-*`, so the row grows to whichever has more to say and
+  the pair stays matched. A scrollbar inside a summary card hides the very
+  thing the card exists to show, and it appears exactly when there is most to
+  see. The one place a fixed height and an inner scroll are right is a list
+  that is unbounded by nature — the log table, the account list — where the
+  page has already decided how much room it gets.
+- Design the block for the most its data can hold. The failure panel's content
+  is capped by the server at five sources and five codes, so it can be laid
+  out to fit them: the proportion moved behind the row instead of onto a rule
+  under it, and the codes became chips, which is what a one-click filter
+  should look like anyway.
 
 ## Shared components
 
