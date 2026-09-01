@@ -211,7 +211,11 @@ export function AccountList({
       </section>
 
       <section
-        className={cn("flex min-h-0 flex-1 flex-col overflow-hidden", PANEL)}
+        // Sized by its contents, capped by the viewport. Filling the height
+        // unconditionally left three accounts sitting at the top of an 812px
+        // card with 495px of nothing under them; shrinking instead means the
+        // scroll only appears when there is something to scroll.
+        className={cn("flex min-h-0 flex-col overflow-hidden", PANEL)}
       >
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-4 p-2">
           <label className="flex h-9 w-full items-center gap-2 rounded-xl bg-muted px-3 text-muted-foreground sm:w-80">

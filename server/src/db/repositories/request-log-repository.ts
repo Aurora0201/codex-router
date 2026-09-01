@@ -12,7 +12,34 @@ import type { RequestEvidence } from "../../proxy/request-classification.js";
 import type { SettingsRepository } from "./settings-repository.js";
 
 /** Matches the 96 cells the runtime and log pages both draw. */
-const HISTOGRAM_BUCKETS = 96;
+/**
+ * A histogram cell should cover a span someone would name — a minute, a
+ * quarter hour, two hours — rather than whatever a fixed cell count divides
+ * the window into. Splitting one hour ninety-six ways gave 37-second cells,
+ * finer than anything a gateway does, so the strip was mostly empty by
+ * construction rather than by what happened.
+ */
+const HISTOGRAM_STEPS_MS = [
+  60_000,
+  5 * 60_000,
+  15 * 60_000,
+  30 * 60_000,
+  60 * 60_000,
+  2 * 60 * 60_000,
+  6 * 60 * 60_000,
+  12 * 60 * 60_000,
+  24 * 60 * 60_000,
+];
+/** As many cells as still read as a row rather than a smear. */
+const HISTOGRAM_MAX_BUCKETS = 96;
+
+export function histogramBucketMs(spanMs: number): number {
+  const span = Math.max(1, spanMs);
+  return (
+    HISTOGRAM_STEPS_MS.find((step) => span / step <= HISTOGRAM_MAX_BUCKETS) ??
+    Math.ceil(span / HISTOGRAM_MAX_BUCKETS)
+  );
+}
 
 type SqliteDatabase = Database.Database;
 
@@ -332,9 +359,10 @@ export class RequestLogRepository {
     // has to be aggregated here, where the filter already lives.
     const windowStart = filters.since;
     const windowEnd = filters.until ?? Date.now();
-    const bucketMs = Math.max(
+    const bucketMs = histogramBucketMs(windowEnd - windowStart);
+    const bucketCount = Math.max(
       1,
-      Math.ceil((windowEnd - windowStart) / HISTOGRAM_BUCKETS),
+      Math.ceil((windowEnd - windowStart) / bucketMs),
     );
     const histogramRows = this.db
       .prepare(
@@ -353,17 +381,14 @@ export class RequestLogRepository {
       rejected: number;
       cancelled: number;
     }>;
-    const histogram = Array.from(
-      { length: HISTOGRAM_BUCKETS },
-      (_unused, index) => ({
-        startedAt: windowStart + index * bucketMs,
-        endedAt: windowStart + (index + 1) * bucketMs,
-        requests: 0,
-        errors: 0,
-        rejected: 0,
-        cancelled: 0,
-      }),
-    );
+    const histogram = Array.from({ length: bucketCount }, (_unused, index) => ({
+      startedAt: windowStart + index * bucketMs,
+      endedAt: windowStart + (index + 1) * bucketMs,
+      requests: 0,
+      errors: 0,
+      rejected: 0,
+      cancelled: 0,
+    }));
     for (const row of histogramRows) {
       const slot = histogram[row.bucket];
       if (!slot) continue;

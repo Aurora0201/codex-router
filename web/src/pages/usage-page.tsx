@@ -263,7 +263,9 @@ export function UsagePage({
   // to what was asked" — and leaves the background refreshes alone, since they
   // arrive under the same filters. Held back until the load is slow enough to
   // need explaining; a switch that lands in 200ms just updates the numbers.
-  const busy = useSlowLoad(loadedFilters !== filterKey)
+  const busy = useSlowLoad(
+    loadedFilters !== null && loadedFilters !== filterKey
+  )
 
   // During local HMR the page can briefly talk to an older running gateway.
   // Ignore its former weekday/hour cells instead of taking down the page.

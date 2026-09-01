@@ -29,7 +29,6 @@ import type {
 } from "@/services/contracts"
 
 type Summary = RequestLogsResponse["summary"]
-type TimelinePoint = RequestLogsResponse["timeline"][number]
 type Translate = (key: string, values?: Record<string, unknown>) => string
 
 /**
@@ -51,8 +50,6 @@ function connectionAge(ms: number, t: Translate): string {
     minutes: minutes % 60,
   })
 }
-
-const AVAILABILITY_BUCKETS = 96
 
 /** Cached and uncached alike: one hue, darkest for the largest share. */
 const OUTCOMES = [
@@ -107,28 +104,19 @@ export function RequestOutcomePanel({
         </p>
       ) : (
         <>
-          {/* Reads top down: the two totals, the proportion they make, then the
-              parts each one breaks into. */}
-          <dl className="grid grid-cols-2 gap-4">
-            {[
-              {
-                label: t("有效请求"),
-                value: summary.availabilityRequests,
-                percent: share(summary.availabilityRequests),
-              },
-              {
-                label: t("成功请求"),
-                value: successful,
-                percent: successRate,
-              },
-            ].map((item) => (
-              <Figure
-                key={item.label}
-                label={item.label}
-                value={item.value.toLocaleString()}
-                note={`${item.percent.toFixed(1)}%`}
-              />
-            ))}
+          {/* One number with its denominator. Two figures reading "2,257
+              99.7%" and "2,255 99.9%" side by side were the same fact twice
+              over two different denominators, and the reader had to work out
+              which was which before either meant anything. */}
+          <dl>
+            <Figure
+              label={t("成功请求")}
+              value={successful.toLocaleString()}
+              note={t("/ {{total}} · {{percent}}%", {
+                total: summary.availabilityRequests.toLocaleString(),
+                percent: successRate.toFixed(1),
+              })}
+            />
           </dl>
 
           <div className="my-3.5 flex h-2 overflow-hidden rounded-full bg-foreground/10">
@@ -164,37 +152,27 @@ export function RequestOutcomePanel({
 }
 
 export function AvailabilityPanel({
-  timeline,
+  histogram,
   summary,
   enabled,
-  from,
-  to,
   action,
   className,
   busy,
 }: {
-  timeline: TimelinePoint[]
+  /**
+   * The server's aggregate over the whole window, not the timeline. The
+   * timeline is capped at 500 rows, so bucketing it here reported on a sample
+   * and quietly under-counted every window busier than that.
+   */
+  histogram: RequestLogsResponse["histogram"]
   summary: Summary
   enabled: boolean
-  from: number
-  to: number
   action?: React.ReactNode
   className?: string
   busy?: boolean
 }) {
   const { t, i18n } = useTranslation()
   const locale = i18n.resolvedLanguage ?? "zh-CN"
-  const size = Math.max(1, (to - from) / AVAILABILITY_BUCKETS)
-  const buckets = Array.from({ length: AVAILABILITY_BUCKETS }, (_, index) => ({
-    start: from + index * size,
-    end: from + (index + 1) * size,
-    points: [] as TimelinePoint[],
-  }))
-  for (const point of timeline) {
-    const index = Math.floor((point.createdAt - from) / size)
-    if (index >= 0 && index < buckets.length) buckets[index].points.push(point)
-  }
-
   const successful = Math.max(
     0,
     summary.availabilityRequests - summary.availabilityErrors
@@ -228,38 +206,24 @@ export function AvailabilityPanel({
               measurement blue rather than a badge of health; ninety-six cells
               of "all clear" would shout down the ones asking for attention. */}
           <div
-            className="grid grid-cols-[repeat(96,minmax(0,1fr))] gap-0.5"
+            className="grid gap-0.5"
+            style={{
+              gridTemplateColumns: `repeat(${Math.max(1, histogram.length)}, minmax(0, 1fr))`,
+            }}
             role="group"
             aria-label={t("API 请求可用性阵列") as string}
           >
-            {buckets.map((bucket) => {
-              const errors = bucket.points.filter(
-                (point) =>
-                  point.outcome === "upstream_error" ||
-                  point.outcome === "gateway_error"
-              ).length
-              const rejected = bucket.points.filter(
-                (point) => point.outcome === "rejected"
-              ).length
-              const cancelled = bucket.points.filter(
-                (point) => point.outcome === "client_cancelled"
-              ).length
-              const average = bucket.points.length
-                ? bucket.points.reduce(
-                    (sum, point) => sum + point.durationMs,
-                    0
-                  ) / bucket.points.length
-                : null
+            {histogram.map((bucket) => {
               // Rejections are the gateway refusing, not the upstream
               // failing, and the panel already excludes them from the
               // percentage — colouring cells with them turned a day of
               // ordinary traffic into a wall of amber.
               const state =
-                bucket.points.length === 0 || cancelled === bucket.points.length
+                bucket.requests === 0 || bucket.cancelled === bucket.requests
                   ? "empty"
-                  : errors >= bucket.points.length / 2
+                  : bucket.errors >= bucket.requests / 2
                     ? "error"
-                    : errors > 0
+                    : bucket.errors > 0
                       ? "mixed"
                       : "success"
               const cell = (
@@ -278,19 +242,18 @@ export function AvailabilityPanel({
               // An empty bucket has nothing to report, so only buckets with
               // traffic carry a tooltip.
               return state === "empty" ? (
-                <span key={bucket.start}>{cell}</span>
+                <span key={bucket.startedAt}>{cell}</span>
               ) : (
-                <Tooltip key={bucket.start}>
+                <Tooltip key={bucket.startedAt}>
                   <TooltipTrigger render={cell} />
                   <TooltipContent>
                     {t(
-                      "{{time}} · 请求 {{requests}} · 故障 {{errors}} · 拒绝 {{rejected}} · 平均 {{average}}",
+                      "{{time}} · 请求 {{requests}} · 故障 {{errors}} · 拒绝 {{rejected}}",
                       {
-                        time: new Date(bucket.start).toLocaleString(locale),
-                        requests: bucket.points.length,
-                        errors,
-                        rejected,
-                        average: formatLatency(average),
+                        time: new Date(bucket.startedAt).toLocaleString(locale),
+                        requests: bucket.requests,
+                        errors: bucket.errors,
+                        rejected: bucket.rejected,
                       }
                     )}
                   </TooltipContent>
@@ -299,7 +262,11 @@ export function AvailabilityPanel({
             })}
           </div>
           <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground-subtle tabular-nums">
-            <span>{new Date(from).toLocaleString(locale)}</span>
+            <span>
+              {histogram.length
+                ? new Date(histogram[0].startedAt).toLocaleString(locale)
+                : "—"}
+            </span>
             <span>{t("现在")}</span>
           </div>
 

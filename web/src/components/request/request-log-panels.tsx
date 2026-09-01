@@ -198,6 +198,12 @@ export function FailureBreakdownPanel({
 }) {
   const { t } = useTranslation()
   const worst = Math.max(1, ...failureSources.map((item) => item.count))
+  // A bar is a comparison. With one source — or with every source on the same
+  // count — it can only draw a full row, which says nothing the number beside
+  // it has not already said.
+  const comparable =
+    failureSources.length > 1 &&
+    failureSources.some((item) => item.count !== worst)
 
   return (
     <Panel
@@ -217,7 +223,7 @@ export function FailureBreakdownPanel({
             <li className="grid gap-1.5" key={item.source}>
               <button
                 type="button"
-                className="flex items-baseline justify-between gap-3 rounded-sm text-left text-xs outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                className="flex items-baseline justify-between gap-3 rounded-sm text-left text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
                 onClick={() => onSelectSource(item.source)}
               >
                 <span className="truncate font-medium">
@@ -227,12 +233,14 @@ export function FailureBreakdownPanel({
                   {item.count}
                 </span>
               </button>
-              <div className="h-1.5 overflow-hidden rounded-full bg-foreground/10">
-                <div
-                  className="h-full rounded-full bg-chart-4"
-                  style={{ width: `${(item.count / worst) * 100}%` }}
-                />
-              </div>
+              {comparable ? (
+                <div className="h-1.5 overflow-hidden rounded-full bg-foreground/10">
+                  <div
+                    className="h-full rounded-full bg-chart-4 transition-[width] duration-500 ease-out motion-reduce:transition-none"
+                    style={{ width: `${(item.count / worst) * 100}%` }}
+                  />
+                </div>
+              ) : null}
             </li>
           ))}
         </ul>
@@ -249,7 +257,7 @@ export function FailureBreakdownPanel({
             <dd key={item.code}>
               <button
                 type="button"
-                className="flex w-full items-baseline justify-between gap-3 rounded-sm text-left text-xs outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                className="flex w-full items-baseline justify-between gap-3 rounded-sm text-left text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
                 onClick={() => onSelectCode(item.code)}
               >
                 <span className="truncate font-mono">{item.code}</span>

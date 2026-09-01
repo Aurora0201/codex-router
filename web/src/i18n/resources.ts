@@ -240,6 +240,7 @@ export const en = {
   工作负载与覆盖: "Workload and coverage",
   同一筛选范围: "Same filters",
   "按本机时区，星期 × 小时": "Local time zone, weekday x hour",
+  "/ {{total}} · {{percent}}%": "/ {{total}} · {{percent}}%",
   用量结构: "Usage composition",
   "缓存属于输入，推理属于输出，均不额外计入总量。":
     "Cache is part of input and reasoning is part of output; neither is added again.",

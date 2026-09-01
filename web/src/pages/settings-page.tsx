@@ -122,7 +122,9 @@ export function SettingsPage({
   // that was asked for" — and stays out of the way of the background refreshes
   // that arrive with live traffic, which keep the same range. Held back until
   // the load is slow enough to need explaining.
-  const busy = useSlowLoad(enabled && loadedRange !== range)
+  const busy = useSlowLoad(
+    enabled && loadedRange !== null && loadedRange !== range
+  )
   // Only the three panels that read the window dim while it reloads. The
   // connection list and the environment strip come from the snapshot and have
   // nothing to do with the range; fading them made them look like they had
@@ -201,11 +203,9 @@ export function SettingsPage({
         <AvailabilityPanel
           busy={busy}
           className={cn("col-span-12", stale)}
-          timeline={shown.timeline}
+          histogram={shown.histogram}
           summary={shown.summary}
           enabled={enabled}
-          from={from}
-          to={to}
         />
 
         <WebSocketActivityCard
