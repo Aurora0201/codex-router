@@ -26,7 +26,7 @@ import {
   runtimeTone,
   type RuntimeState,
 } from "@/lib/codex-runtime"
-import { shortAccountId } from "@/lib/format"
+import { isMachineText, shortAccountId } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type {
   AccountView,
@@ -231,7 +231,10 @@ export function TakeoverHero({
             <li className="min-w-0" key={figure.label}>
               <p className="text-xs text-emphasis-muted">{figure.label}</p>
               <p
-                className="mt-0.5 max-w-52 truncate font-mono text-xs font-semibold"
+                className={cn(
+                  "mt-0.5 max-w-52 truncate text-xs font-semibold",
+                  isMachineText(figure.value) && "font-mono"
+                )}
                 title={figure.value}
               >
                 {figure.value}

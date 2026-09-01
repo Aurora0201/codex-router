@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react"
 
+import { isMachineText } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
 /**
@@ -45,10 +46,18 @@ export function Figure({
  */
 export function Fact({ label, value }: { label: string; value: string }) {
   return (
+    // The label keeps its width and the value gives way. A column of these is
+    // scanned down the left, so squeezing "Router 入口" to "Router …" to make
+    // room for a path it can no longer see the end of anyway loses both.
     <div className="flex min-w-0 items-baseline justify-between gap-3">
-      <dt className="truncate text-xs text-muted-foreground-subtle">{label}</dt>
+      <dt className="shrink-0 text-xs whitespace-nowrap text-muted-foreground-subtle">
+        {label}
+      </dt>
       <dd
-        className="min-w-0 shrink truncate font-mono text-sm tabular-nums"
+        className={cn(
+          "min-w-0 flex-1 truncate text-right text-sm tabular-nums",
+          isMachineText(value) && "font-mono"
+        )}
         title={value}
       >
         {value}
@@ -79,7 +88,12 @@ export function Tally({
         </span>
         <span className="truncate text-muted-foreground">{label}：</span>
       </dt>
-      <dd className="ml-auto shrink-0 font-mono font-semibold tabular-nums">
+      <dd
+        className={cn(
+          "ml-auto shrink-0 font-semibold tabular-nums",
+          isMachineText(value) && "font-mono"
+        )}
+      >
         {value}
       </dd>
     </div>

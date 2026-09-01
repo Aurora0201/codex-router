@@ -167,7 +167,7 @@ function Ranking({
                     {row.label}
                   </TooltipContent>
                 </Tooltip>
-                <span className="shrink-0 font-mono text-muted-foreground tabular-nums">
+                <span className="shrink-0 text-muted-foreground tabular-nums">
                   {formatTokens(row.totalTokens)}
                 </span>
               </div>
@@ -715,7 +715,7 @@ export function UsagePage({
                     )}
                   />
                   <span className="truncate font-medium">{item.label}</span>
-                  <span className="ml-auto shrink-0 font-mono text-muted-foreground tabular-nums">
+                  <span className="ml-auto shrink-0 text-muted-foreground tabular-nums">
                     {formatTokens(item.value)}
                   </span>
                   <span className="w-9 shrink-0 text-right font-medium tabular-nums">
