@@ -40,6 +40,22 @@ describe("design system", () => {
     expect(linesMatching(/var\(--palette-/)).toEqual([])
   })
 
+  it("stays on the three weights", () => {
+    // 400 / 500 / 600. At 12-14px a fourth step is not separable, and anything
+    // that needs to be louder than 600 needs to be bigger, not heavier.
+    expect(
+      linesMatching(/font-(thin|extralight|light|bold|extrabold|black)\b/)
+    ).toEqual([])
+  })
+
+  it("never moves a weight on hover", () => {
+    // A variable-font weight change moves glyph widths with it, which would
+    // shuffle text under the reader's cursor.
+    expect(linesMatching(/hover[^ "]*:font-(medium|semibold|normal)/)).toEqual(
+      []
+    )
+  })
+
   it("reserves the wordmark face for the wordmark", () => {
     const users = sources
       .filter(([, source]) => source.includes("font-logo"))

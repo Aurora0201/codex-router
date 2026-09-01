@@ -179,24 +179,67 @@ steps doing three different jobs, and they made 运行状态 and 用量分析 se
 
 ### Weight
 
-Size says how dense the block is. **Weight says whether this is the thing the
+Size says how dense a block is. **Weight says whether this is the thing the
 reader came for.**
 
-| Weight | Use |
-| --- | --- |
-| `400` (default) | Running text, descriptions, labels |
-| `font-medium` | A value — the number or string the row exists to report |
-| `font-semibold` | Structure: page, card and panel titles, and headline numbers |
+Inter Variable carries 100–900. The console uses three of them, and adding a
+fourth is a change to argue for, not a convenience:
 
-The two axes are independent, and using size where weight is meant is the
-mistake to watch for. A reference grid is dense *and* its values matter, so it
-runs at 12px throughout with the label at 400 and the value at 500 — not at
-12px against 14px, which makes the value shout, and not at regular weight,
-which makes it shout thinly. Both were true of 运行环境 and 数据覆盖 for a
-while, and both were visible.
+| Weight | Class | Use |
+| --- | --- | --- |
+| 400 | *(default)* | Running text, descriptions, and the label half of a label/value pair |
+| 500 | `font-medium` | A value — the number or string the row exists to report |
+| 600 | `font-semibold` | Structure: page, card and panel titles, and headline numbers |
 
-Anything that reads as data and is not `font-medium` is usually a value that
-used to borrow its weight from a monospace face.
+At 12–14px, where most of this console lives, 400/500/600 are already three
+clearly separable steps and a fourth would not be. **There is no bold.** If
+something needs to be louder than 600 it needs to be bigger, or it needs to be
+the page's one headline number — not heavier. There is no light either; below
+400 the CJK face thins out badly at these sizes.
+
+#### Weight against tone
+
+Weight and tone are the two emphasis levers and they answer different
+questions. Tone says how much of the reader's attention a line deserves
+(`foreground` → `muted-foreground` → `muted-foreground-subtle`). Weight says
+which half of a pair is the answer.
+
+They compose, and the composition is the rule:
+
+- A label is 400 and subtle. A value is 500 and `foreground`, or 500 and
+  `muted-foreground` when the row itself is secondary.
+- Never both at once for both halves. A label/value pair set 400-subtle on
+  both sides has no answer in it; set 600-foreground on both it is all answer
+  and no question.
+- Do not reach for size when weight is meant. A value two steps larger than
+  its own label shouts, and at 400 it shouts thinly — which is exactly what
+  运行环境 and 数据覆盖 did for a while.
+
+#### On the emphasis surface, go down rather than up
+
+Light text on a dark ground reads optically heavier than the same weight on a
+card. Values on `bg-emphasis` take the same 500 as anywhere else and never
+600 — semibold on that surface comes out reading as bold. The headline number
+keeps 600 because it is structure, and at 30px the optical gain is
+proportionally small.
+
+#### Weight as a state
+
+One sanctioned case: the sidebar's current page goes 400 → 500
+(`data-active:font-medium`, from the sidebar primitive). It is the only place
+in the console where a weight responds to interaction, because a variable-font
+weight change also changes glyph widths. Inside a fixed-width row with a
+truncating label that is invisible; on a table cell or an inline value it would
+shuffle text under the reader's cursor.
+
+**Never put a weight change on hover.**
+
+#### `font-normal` is a reset, not a choice
+
+Every one of its eight uses is undoing a component default — a Button standing
+in as a form field, a Field description, the unselected sibling of a heavier
+selected item. Reading `font-normal` as "I want regular here" and copying it
+into new markup spreads a reset into places that never had anything to reset.
 
 ### Numbers
 

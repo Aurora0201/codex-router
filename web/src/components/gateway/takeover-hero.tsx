@@ -230,8 +230,11 @@ export function TakeoverHero({
           {figures.map((figure) => (
             <li className="min-w-0" key={figure.label}>
               <p className="text-xs text-emphasis-muted">{figure.label}</p>
+              {/* A value, so 500 — and on this ground it does not want more.
+                  Light text on a dark surface reads optically heavier than the
+                  same weight on a card, so semibold here came out bold. */}
               <p
-                className="mt-0.5 max-w-52 truncate text-xs font-semibold"
+                className="mt-0.5 max-w-52 truncate text-xs font-medium"
                 title={figure.value}
               >
                 {figure.value}

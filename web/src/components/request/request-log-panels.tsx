@@ -96,7 +96,7 @@ export function RequestVolumeHero({
           {figures.map((figure) => (
             <li key={figure.label}>
               <p className="text-xs text-emphasis-muted">{figure.label}</p>
-              <p className="mt-0.5 text-sm font-semibold tabular-nums">
+              <p className="mt-0.5 text-sm font-medium tabular-nums">
                 {figure.value}
               </p>
             </li>
