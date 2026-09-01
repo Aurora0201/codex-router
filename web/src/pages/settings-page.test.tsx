@@ -61,14 +61,18 @@ describe("SettingsPage", () => {
     expect(screen.getByText("尚未接管 Codex 的请求")).toBeInTheDocument()
     // Requests do not reach us before the rewrite, so the hero reports zero
     // rather than borrowing the gateway's own totals.
-    const hero = screen.getByText("尚未接管 Codex 的请求").closest(".bg-emphasis")
+    const hero = screen
+      .getByText("尚未接管 Codex 的请求")
+      .closest(".bg-emphasis")
     expect(hero).not.toBeNull()
     expect(within(hero as HTMLElement).getByText("0")).toBeInTheDocument()
     expect(
       screen.getByText("Codex 仍在直接访问上游，没有请求经过 Router")
     ).toBeInTheDocument()
     expect(
-      within(hero as HTMLElement).getByText("https://chatgpt.com/backend-api/codex")
+      within(hero as HTMLElement).getByText(
+        "https://chatgpt.com/backend-api/codex"
+      )
     ).toBeInTheDocument()
   })
 
@@ -78,7 +82,9 @@ describe("SettingsPage", () => {
       snapshot.accounts.activeAccountId = null
       snapshot.stats.accountsReady = 0
     })
-    expect(screen.getByText("已接管，按 Codex 默认账号透传")).toBeInTheDocument()
+    expect(
+      screen.getByText("已接管，按 Codex 默认账号透传")
+    ).toBeInTheDocument()
     expect(screen.getByText("Codex 默认账号")).toBeInTheDocument()
   })
 
@@ -141,7 +147,9 @@ describe("SettingsPage", () => {
     async ({ mutate }) => {
       const user = userEvent.setup()
       const { onShowAccounts } = await renderPage(mutate)
-      expect(screen.getByText("已接管出口，但换不到可用身份")).toBeInTheDocument()
+      expect(
+        screen.getByText("已接管出口，但换不到可用身份")
+      ).toBeInTheDocument()
       expect(screen.getByText("无可用账号")).toBeInTheDocument()
       expect(screen.queryByRole("alert")).not.toBeInTheDocument()
       await user.click(screen.getByRole("button", { name: "前往账号路由" }))
@@ -188,7 +196,9 @@ describe("SettingsPage", () => {
     // than dragging the summary beside it taller.
     const list = screen.getByLabelText("WebSocket 实时传输")
     expect(list.parentElement).toHaveClass("h-72")
-    expect(list.querySelector('[data-slot="scroll-area-viewport"]')).not.toBeNull()
+    expect(
+      list.querySelector('[data-slot="scroll-area-viewport"]')
+    ).not.toBeNull()
     for (const header of within(list).getAllByRole("columnheader")) {
       expect(header).toHaveClass("sticky", "top-0", "bg-muted")
     }
@@ -208,8 +218,6 @@ describe("SettingsPage", () => {
     for (const label of ["监听地址", "配置文件", "数据库", "日志级别"]) {
       expect(within(environment).getByText(label)).toBeInTheDocument()
     }
-    expect(
-      environment.querySelector('[data-slot="scroll-area"]')
-    ).toBeNull()
+    expect(environment.querySelector('[data-slot="scroll-area"]')).toBeNull()
   })
 })

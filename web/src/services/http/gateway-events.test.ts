@@ -26,18 +26,29 @@ describe("Gateway SSE subscription", () => {
     vi.stubGlobal("EventSource", EventSourceStub)
     const invalidate = vi.fn()
     const connection = vi.fn()
-    const unsubscribe = createHttpGatewayService().subscribe(invalidate, connection)
+    const unsubscribe = createHttpGatewayService().subscribe(
+      invalidate,
+      connection
+    )
     const source = EventSourceStub.instance!
 
     expect(source.url).toBe("/api/events")
     source.onopen?.()
-    source.listeners.get("invalidate")?.(new MessageEvent("invalidate", {
-      data: JSON.stringify({ resources: ["accounts", "stats", "websocketConnections"] }),
-    }))
+    source.listeners.get("invalidate")?.(
+      new MessageEvent("invalidate", {
+        data: JSON.stringify({
+          resources: ["accounts", "stats", "websocketConnections"],
+        }),
+      })
+    )
     source.onerror?.()
 
     expect(connection.mock.calls).toEqual([[true], [false]])
-    expect(invalidate).toHaveBeenCalledWith(["accounts", "stats", "websocketConnections"])
+    expect(invalidate).toHaveBeenCalledWith([
+      "accounts",
+      "stats",
+      "websocketConnections",
+    ])
     unsubscribe()
     expect(source.close).toHaveBeenCalledOnce()
   })

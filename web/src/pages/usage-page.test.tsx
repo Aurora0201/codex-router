@@ -124,9 +124,9 @@ describe("UsagePage", () => {
     ).not.toHaveClass("font-mono")
     const modelFilter = screen.getByRole("combobox", { name: "模型筛选" })
     await userEvent.click(modelFilter)
-    expect(await screen.findByRole("option", { name: "gpt-test" })).not.toHaveClass(
-      "font-mono"
-    )
+    expect(
+      await screen.findByRole("option", { name: "gpt-test" })
+    ).not.toHaveClass("font-mono")
     expect(screen.queryByLabelText("账号筛选")).not.toBeInTheDocument()
     await waitFor(() =>
       expect(getCodexUsage).toHaveBeenCalledWith({
@@ -195,7 +195,9 @@ describe("UsagePage", () => {
     // Project names are readable labels, so both real projects and synthetic
     // buckets inherit the body face instead of the technical-data face.
     expect(label).not.toHaveClass("font-mono")
-    expect(within(ranking).getByText("非项目类对话")).not.toHaveClass("font-mono")
+    expect(within(ranking).getByText("非项目类对话")).not.toHaveClass(
+      "font-mono"
+    )
 
     const projectFilter = screen.getByRole("combobox", { name: "项目筛选" })
     const modelFilter = screen.getByRole("combobox", { name: "模型筛选" })
@@ -292,9 +294,7 @@ describe("UsagePage", () => {
       expect(
         region.parentElement?.querySelector(".bg-linear-to-t")
       ).not.toBeNull()
-      expect(region).toHaveClass(
-        "[&_[data-slot=scroll-area-scrollbar]]:hidden"
-      )
+      expect(region).toHaveClass("[&_[data-slot=scroll-area-scrollbar]]:hidden")
     }
 
     const projectRanking = screen.getByLabelText("项目分布排名")
@@ -348,6 +348,8 @@ describe("UsagePage", () => {
     await screen.findByText("区间总 Token")
     // Exactly one emphasis block: the hero. Anything more and it stops being one.
     expect(document.querySelectorAll(".bg-emphasis")).toHaveLength(1)
-    expect(screen.getByText("区间总 Token").closest(".bg-emphasis")).not.toBeNull()
+    expect(
+      screen.getByText("区间总 Token").closest(".bg-emphasis")
+    ).not.toBeNull()
   })
 })

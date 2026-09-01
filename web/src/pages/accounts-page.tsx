@@ -312,7 +312,10 @@ export function AccountsPage({
             void run(
               account.id,
               () =>
-                service.updateAccount(account.id, { billingAnchorAt, billingCadence }),
+                service.updateAccount(account.id, {
+                  billingAnchorAt,
+                  billingCadence,
+                }),
               t("自动续订设置已更新")
             ).then(() => setEditingSubscription(null))
           }}

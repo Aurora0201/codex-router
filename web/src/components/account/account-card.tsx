@@ -200,7 +200,10 @@ export function AccountCard({
               nextBilling !== null ? "text-primary" : "text-muted-foreground"
             )}
           >
-            <CircleDollarSignIcon aria-hidden="true" className="size-3.5 shrink-0" />
+            <CircleDollarSignIcon
+              aria-hidden="true"
+              className="size-3.5 shrink-0"
+            />
             <span className="truncate">
               {nextBilling === null
                 ? t("未设置自动续订时间")

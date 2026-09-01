@@ -74,8 +74,7 @@ describe("RequestLogsPage", () => {
       </Toaster>
     )
     const rows = () => document.querySelectorAll("tbody tr").length
-    const marked = () =>
-      document.querySelectorAll("tbody tr.animate-in").length
+    const marked = () => document.querySelectorAll("tbody tr.animate-in").length
 
     // The first page to arrive is not an arrival, it is the answer.
     await waitFor(() => expect(rows()).toBe(2))

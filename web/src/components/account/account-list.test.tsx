@@ -266,7 +266,9 @@ describe("AccountList", () => {
       expect(meters(item)).toHaveLength(2)
       expect(item.querySelectorAll("[data-slot=metric-mark]")).toHaveLength(1)
     }
-    expect(screen.getByText(/^\d{4}\/\d{2}\/\d{2} 自动续订 ·/)).toBeInTheDocument()
+    expect(
+      screen.getByText(/^\d{4}\/\d{2}\/\d{2} 自动续订 ·/)
+    ).toBeInTheDocument()
     expect(screen.getByText("未设置自动续订时间")).toBeInTheDocument()
 
     // Both slots stay named even with nothing to report, and never claim 无限制.
@@ -278,9 +280,7 @@ describe("AccountList", () => {
   })
 
   it("keeps missing billing metadata out of the attention state", () => {
-    renderList([
-      account(),
-    ])
+    renderList([account()])
     expect(screen.getByRole("tab", { name: "需处理（0）" })).toBeInTheDocument()
   })
 

@@ -11,7 +11,7 @@ export function MetricIconMedia({
     <ItemMedia
       variant="icon"
       className={cn(
-        "size-11 self-center! translate-y-0! rounded-md bg-background [&_svg]:size-[1.375rem]! [&_[data-slot=metric-mark]]:size-[1.375rem]",
+        "size-11 translate-y-0! self-center! rounded-md bg-background [&_[data-slot=metric-mark]]:size-[1.375rem] [&_svg]:size-[1.375rem]!",
         className
       )}
       {...props}

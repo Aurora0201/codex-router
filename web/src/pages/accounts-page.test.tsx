@@ -32,9 +32,7 @@ describe("AccountsPage", () => {
     )
     await userEvent.click(await screen.findByText("设置自动续订周期"))
 
-    expect(screen.getByRole("dialog")).toHaveTextContent(
-      "下次自动续订："
-    )
+    expect(screen.getByRole("dialog")).toHaveTextContent("下次自动续订：")
     expect(
       screen.getByRole("button", { name: /2026-08-24/ })
     ).toBeInTheDocument()

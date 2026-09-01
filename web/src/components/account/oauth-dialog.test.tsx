@@ -8,7 +8,14 @@ import { createGatewayServiceFixture } from "@/test/gateway-service-fixture"
 describe("OAuthDialog", () => {
   it("keeps the initial footer at the dialog composition root", async () => {
     const service = createGatewayServiceFixture()
-    render(<OAuthDialog open onOpenChange={vi.fn()} service={service} onComplete={vi.fn()} />)
+    render(
+      <OAuthDialog
+        open
+        onOpenChange={vi.fn()}
+        service={service}
+        onComplete={vi.fn()}
+      />
+    )
     const dialog = screen.getByRole("dialog")
     const footer = dialog.querySelector('[data-slot="dialog-footer"]')
 
@@ -20,9 +27,20 @@ describe("OAuthDialog", () => {
   it("uses a semantic authorization link and a wrapping root footer", async () => {
     const service = createGatewayServiceFixture()
     const replace = vi.fn()
-    const authWindow = { location: { replace }, close: vi.fn(), opener: window } as unknown as Window
+    const authWindow = {
+      location: { replace },
+      close: vi.fn(),
+      opener: window,
+    } as unknown as Window
     const open = vi.spyOn(window, "open").mockReturnValue(authWindow)
-    render(<OAuthDialog open onOpenChange={vi.fn()} service={service} onComplete={vi.fn()} />)
+    render(
+      <OAuthDialog
+        open
+        onOpenChange={vi.fn()}
+        service={service}
+        onComplete={vi.fn()}
+      />
+    )
     await userEvent.click(screen.getByRole("button", { name: "启动登录" }))
 
     const dialog = screen.getByRole("dialog")
@@ -44,13 +62,36 @@ describe("OAuthDialog", () => {
     const setIntervalSpy = vi.spyOn(window, "setInterval")
     const clearIntervalSpy = vi.spyOn(window, "clearInterval")
     const open = vi.spyOn(window, "open").mockReturnValue(null)
-    const { rerender } = render(<OAuthDialog open onOpenChange={vi.fn()} service={service} onComplete={vi.fn()} />)
+    const { rerender } = render(
+      <OAuthDialog
+        open
+        onOpenChange={vi.fn()}
+        service={service}
+        onComplete={vi.fn()}
+      />
+    )
 
     await userEvent.click(screen.getByRole("button", { name: "启动登录" }))
-    await waitFor(() => expect(setIntervalSpy.mock.calls.filter((call) => call[1] === 900)).toHaveLength(1))
-    const pollingTimer = setIntervalSpy.mock.results[setIntervalSpy.mock.calls.findIndex((call) => call[1] === 900)]?.value
-    rerender(<OAuthDialog open={false} onOpenChange={vi.fn()} service={service} onComplete={vi.fn()} />)
-    await waitFor(() => expect(clearIntervalSpy).toHaveBeenCalledWith(pollingTimer))
+    await waitFor(() =>
+      expect(
+        setIntervalSpy.mock.calls.filter((call) => call[1] === 900)
+      ).toHaveLength(1)
+    )
+    const pollingTimer =
+      setIntervalSpy.mock.results[
+        setIntervalSpy.mock.calls.findIndex((call) => call[1] === 900)
+      ]?.value
+    rerender(
+      <OAuthDialog
+        open={false}
+        onOpenChange={vi.fn()}
+        service={service}
+        onComplete={vi.fn()}
+      />
+    )
+    await waitFor(() =>
+      expect(clearIntervalSpy).toHaveBeenCalledWith(pollingTimer)
+    )
 
     setIntervalSpy.mockRestore()
     clearIntervalSpy.mockRestore()

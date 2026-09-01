@@ -233,7 +233,7 @@ export function App({
             data-slot="page-content"
             className={cn(
               "mx-auto w-full max-w-[88rem] px-4 py-6 sm:px-6 lg:px-8 lg:py-4",
-              "motion-safe:animate-in motion-safe:slide-in-from-bottom-1 motion-safe:duration-300 motion-safe:ease-out",
+              "motion-safe:animate-in motion-safe:duration-300 motion-safe:ease-out motion-safe:slide-in-from-bottom-1",
               fixedLogsLayout && "lg:h-full",
               accountsLayout && "lg:h-full"
             )}
