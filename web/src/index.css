@@ -114,6 +114,7 @@
     --palette-green-600: oklch(0.566 0.13 164);
     --palette-amber-400: oklch(0.68 0.15 82);
     --palette-amber-600: oklch(0.56 0.15 75);
+    --palette-red-300: oklch(0.82 0.17 22.2);
     --palette-red-400: oklch(0.704 0.191 22.216);
     --palette-red-600: oklch(0.577 0.245 27.325);
 
@@ -164,17 +165,17 @@
     --chart-5: oklch(0.46 0.22 264);
     /* High-emphasis analytics surface. The name describes its role instead of
        baking the current dark-blue appearance into component code. */
-    --emphasis: oklch(0.21 0.02 265);
-    --emphasis-surface: oklch(0.27 0.02 265);
+    --emphasis: oklch(0.21 0.06 265);
+    --emphasis-surface: oklch(0.28 0.055 265);
     --emphasis-foreground: var(--palette-neutral-50);
-    --emphasis-muted: oklch(0.70 0.02 265);
+    --emphasis-muted: oklch(0.74 0.04 265);
     /* Status on the emphasis panel needs its own weights: the card tones are
        tuned against a light ground and turn to smudges on this one. The dark
        theme's variants are already the right lightness for both, because the
        panel stays dark in either theme. */
     --emphasis-success: var(--palette-green-400);
     --emphasis-warning: var(--palette-amber-400);
-    --emphasis-destructive: var(--palette-red-400);
+    --emphasis-destructive: var(--palette-red-300);
     --radius: 0.625rem;
     --sidebar: var(--palette-neutral-50);
     --sidebar-foreground: var(--palette-neutral-950);
@@ -224,13 +225,18 @@
     /* On a dark page the hero cannot stand out by going darker: at 0.16 it sat
        between --background and --card and read as a hole. Emphasis goes up
        instead, so it stays the most elevated block in either theme. */
-    --emphasis: oklch(0.26 0.035 264);
-    --emphasis-surface: oklch(0.31 0.03 264);
+    /* Lightness alone cannot carry the hero in this theme. Against a neutral
+       --card it could only reach 1.15:1 before --emphasis-muted started
+       failing AA on it, so the separation is carried by hue instead: one
+       saturated block among neutral grey ones. Measured distance from --card
+       goes from 33 to 85 in RGB, where the luminance ratio moves 1.15 -> 1.45. */
+    --emphasis: oklch(0.33 0.10 264);
+    --emphasis-surface: oklch(0.39 0.09 264);
     --emphasis-foreground: var(--palette-neutral-50);
-    --emphasis-muted: oklch(0.72 0.03 264);
+    --emphasis-muted: oklch(0.80 0.05 264);
     --emphasis-success: var(--palette-green-400);
     --emphasis-warning: var(--palette-amber-400);
-    --emphasis-destructive: var(--palette-red-400);
+    --emphasis-destructive: var(--palette-red-300);
     --sidebar: var(--palette-neutral-900);
     --sidebar-foreground: var(--palette-neutral-50);
     --sidebar-primary: var(--palette-blue-400);
