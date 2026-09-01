@@ -7,6 +7,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { formatLatency } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { FailureSource, RequestLogsResponse } from "@/services/contracts"
 
@@ -58,13 +59,7 @@ export function RequestVolumeHero({
     { label: t("故障"), value: summary.errors.toLocaleString(locale) },
     { label: t("拒绝"), value: summary.rejected.toLocaleString(locale) },
     { label: t("取消"), value: summary.cancelled.toLocaleString(locale) },
-    {
-      label: t("平均耗时"),
-      value:
-        summary.averageDurationMs === null
-          ? "—"
-          : `${Math.round(summary.averageDurationMs).toLocaleString(locale)} ms`,
-    },
+    { label: t("平均耗时"), value: formatLatency(summary.averageDurationMs) },
   ]
 
   return (
@@ -171,7 +166,7 @@ export function RequestVolumeHero({
             )
           })}
         </div>
-        <p className="mt-2 flex items-center justify-between gap-3 text-[11px] text-emphasis-muted tabular-nums">
+        <p className="mt-2 flex items-center justify-between gap-3 text-xs text-emphasis-muted tabular-nums">
           <span>
             {first ? new Date(first.startedAt).toLocaleString(locale) : "—"}
           </span>
@@ -247,7 +242,7 @@ export function FailureBreakdownPanel({
           the search box next, so it is the one worth naming. */}
       {diagnosticCodes.length ? (
         <dl className="mt-4 grid gap-2 border-t border-border pt-3">
-          <dt className="text-[11px] text-muted-foreground/70">
+          <dt className="text-xs text-muted-foreground-subtle">
             {t("最常见诊断码")}
           </dt>
           {diagnosticCodes.map((item) => (

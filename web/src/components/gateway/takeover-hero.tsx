@@ -270,7 +270,7 @@ export function TakeoverHero({
               : t("Codex 仍在直接访问上游，没有请求经过 Router")}
           </p>
         )}
-        <div className="mt-1.5 flex justify-between text-[11px] text-emphasis-muted tabular-nums">
+        <div className="mt-1.5 flex justify-between text-xs text-emphasis-muted tabular-nums">
           <span>{new Date(from).toLocaleString(locale)}</span>
           <span>{t("现在")}</span>
         </div>
@@ -278,7 +278,7 @@ export function TakeoverHero({
         {/* Facts and actions share the foot of the panel: the buttons act on
             what the panel shows, so they sit on the same surface as it. */}
         <div className="mt-auto flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-t border-emphasis-muted/25 pt-3">
-          <dl className="flex flex-wrap items-center gap-x-5 gap-y-1 text-[11px]">
+          <dl className="flex flex-wrap items-center gap-x-5 gap-y-1 text-xs">
             <div className="flex items-center gap-1.5">
               <span
                 aria-hidden="true"

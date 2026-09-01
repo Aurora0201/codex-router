@@ -47,7 +47,7 @@ export function Panel({
         </h2>
         {action ??
           (hint ? (
-            <span className="truncate text-xs text-muted-foreground/70">
+            <span className="truncate text-xs text-muted-foreground-subtle">
               {hint}
             </span>
           ) : null)}

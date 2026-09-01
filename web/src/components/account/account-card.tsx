@@ -150,7 +150,7 @@ export function AccountCard({
               </TooltipContent>
             </Tooltip>
             {account.isActive ? (
-              <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
+              <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
                 {t("当前路由")}
               </span>
             ) : null}
@@ -169,7 +169,7 @@ export function AccountCard({
           <span
             className={cn(
               "flex shrink-0 items-center gap-1.5 text-xs whitespace-nowrap",
-              stale ? "text-warning" : "text-muted-foreground/70"
+              stale ? "text-warning" : "text-muted-foreground-subtle"
             )}
           >
             <RefreshCwIcon aria-hidden="true" className="size-3.5" />

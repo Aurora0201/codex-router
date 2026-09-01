@@ -408,7 +408,7 @@ export function WebSocketConnectionLogsPanel({
             <span className="truncate">{t("WebSocket 连接诊断")}</span>
           </h2>
           <span
-            className="truncate text-xs text-muted-foreground/70"
+            className="truncate text-xs text-muted-foreground-subtle"
             title={t("握手与关闭证据独立于请求结果，不参与请求成功率。")}
           >
             {t("按时间倒序 · 共 {{total}} 条", {
@@ -420,7 +420,7 @@ export function WebSocketConnectionLogsPanel({
           <label className="flex h-9 w-full min-w-0 items-center gap-2 rounded-xl bg-muted px-3 text-muted-foreground sm:w-72">
             <SearchIcon aria-hidden="true" className="size-4 shrink-0" />
             <input
-              className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/70"
+              className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground-subtle"
               type="search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}

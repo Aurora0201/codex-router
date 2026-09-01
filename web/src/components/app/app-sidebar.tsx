@@ -96,7 +96,7 @@ function NavRow({
         {count ? null : (
           <span
             aria-hidden="true"
-            className="ml-auto font-mono text-[10px] tracking-wider text-sidebar-foreground/50 uppercase opacity-0 transition-opacity group-hover/menu-button:opacity-100 group-focus-visible/menu-button:opacity-100 group-data-[collapsible=icon]:hidden"
+            className="ml-auto font-mono text-xs tracking-wider text-sidebar-foreground/50 uppercase opacity-0 transition-opacity group-hover/menu-button:opacity-100 group-focus-visible/menu-button:opacity-100 group-data-[collapsible=icon]:hidden"
           >
             {NAV_CHORD_PREFIX} {item.chord}
           </span>
@@ -258,14 +258,14 @@ export function AppSidebar({
               <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
                 {identity}
                 {plan ? (
-                  <span className="text-muted-foreground/70">
+                  <span className="text-muted-foreground-subtle">
                     {" · "}
                     {plan}
                   </span>
                 ) : null}
               </span>
               <ChevronRightIcon
-                className="size-3.5 shrink-0 text-muted-foreground/70 group-data-[collapsible=icon]:hidden"
+                className="size-3.5 shrink-0 text-muted-foreground-subtle group-data-[collapsible=icon]:hidden"
                 aria-hidden="true"
               />
             </span>
@@ -302,7 +302,7 @@ export function AppSidebar({
                           className={cn(
                             "shrink-0 text-xs font-medium tabular-nums",
                             remaining === null
-                              ? "text-muted-foreground/70"
+                              ? "text-muted-foreground-subtle"
                               : quotaTone(remaining, "text")
                           )}
                         >
@@ -324,7 +324,7 @@ export function AppSidebar({
                           style={{ width: `${remaining ?? 0}%` }}
                         />
                       </span>
-                      <span className="truncate text-[11px] text-muted-foreground/70">
+                      <span className="truncate text-xs text-muted-foreground-subtle">
                         {window?.resetsAt
                           ? t("{{time}}重置", {
                               time: formatCountdown(window.resetsAt),

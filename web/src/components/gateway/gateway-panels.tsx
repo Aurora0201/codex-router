@@ -13,8 +13,13 @@ import {
 import { useTranslation } from "react-i18next"
 
 import { Panel } from "@/components/app/panel"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { formatDuration } from "@/lib/format"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import { formatDuration, formatLatency } from "@/lib/format"
+import { Fact, Figure, Tally } from "@/components/app/figure"
 import { cn } from "@/lib/utils"
 import type {
   CodexStatusView,
@@ -117,19 +122,12 @@ export function RequestOutcomePanel({
                 percent: successRate,
               },
             ].map((item) => (
-              <div key={item.label}>
-                <dt className="text-[11px] text-muted-foreground/70">
-                  {item.label}
-                </dt>
-                <dd className="mt-0.5 flex items-baseline gap-1.5">
-                  <span className="text-lg leading-none font-semibold tabular-nums">
-                    {item.value.toLocaleString()}
-                  </span>
-                  <span className="text-[11px] text-muted-foreground tabular-nums">
-                    {item.percent.toFixed(1)}%
-                  </span>
-                </dd>
-              </div>
+              <Figure
+                key={item.label}
+                label={item.label}
+                value={item.value.toLocaleString()}
+                note={`${item.percent.toFixed(1)}%`}
+              />
             ))}
           </dl>
 
@@ -145,7 +143,7 @@ export function RequestOutcomePanel({
 
           <ul className="grid gap-3">
             {parts.map((part) => (
-              <li className="flex items-center gap-2 text-xs" key={part.key}>
+              <li className="flex items-center gap-2 text-sm" key={part.key}>
                 <span
                   className={cn("size-2 shrink-0 rounded-full", part.className)}
                 />
@@ -153,7 +151,7 @@ export function RequestOutcomePanel({
                 <span className="ml-auto shrink-0 text-muted-foreground tabular-nums">
                   {part.value.toLocaleString()}
                 </span>
-                <span className="w-12 shrink-0 text-right text-muted-foreground/70 tabular-nums">
+                <span className="w-12 shrink-0 text-right font-medium tabular-nums">
                   {share(part.value).toFixed(1)}%
                 </span>
               </li>
@@ -247,20 +245,17 @@ export function AvailabilityPanel({
                 (point) => point.outcome === "client_cancelled"
               ).length
               const average = bucket.points.length
-                ? Math.round(
-                    bucket.points.reduce(
-                      (sum, point) => sum + point.durationMs,
-                      0
-                    ) / bucket.points.length
-                  )
+                ? bucket.points.reduce(
+                    (sum, point) => sum + point.durationMs,
+                    0
+                  ) / bucket.points.length
                 : null
               // Rejections are the gateway refusing, not the upstream
               // failing, and the panel already excludes them from the
               // percentage — colouring cells with them turned a day of
               // ordinary traffic into a wall of amber.
               const state =
-                bucket.points.length === 0 ||
-                cancelled === bucket.points.length
+                bucket.points.length === 0 || cancelled === bucket.points.length
                   ? "empty"
                   : errors >= bucket.points.length / 2
                     ? "error"
@@ -295,7 +290,7 @@ export function AvailabilityPanel({
                         requests: bucket.points.length,
                         errors,
                         rejected,
-                        average: average === null ? "—" : `${average} ms`,
+                        average: formatLatency(average),
                       }
                     )}
                   </TooltipContent>
@@ -303,7 +298,7 @@ export function AvailabilityPanel({
               )
             })}
           </div>
-          <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground/70 tabular-nums">
+          <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground-subtle tabular-nums">
             <span>{new Date(from).toLocaleString(locale)}</span>
             <span>{t("现在")}</span>
           </div>
@@ -315,21 +310,9 @@ export function AvailabilityPanel({
               [t("故障"), summary.availabilityErrors.toLocaleString()],
               [t("拒绝"), summary.rejected.toLocaleString()],
               [t("取消"), summary.cancelled.toLocaleString()],
-              [
-                t("平均耗时"),
-                summary.averageDurationMs === null
-                  ? "—"
-                  : `${summary.averageDurationMs} ms`,
-              ],
+              [t("平均耗时"), formatLatency(summary.averageDurationMs)],
             ].map(([label, value]) => (
-              <div key={label}>
-                <dt className="text-[11px] text-muted-foreground/70">
-                  {label}
-                </dt>
-                <dd className="mt-0.5 text-sm font-semibold tabular-nums">
-                  {value}
-                </dd>
-              </div>
+              <Figure key={label} label={label} value={value} />
             ))}
           </dl>
         </>
@@ -359,10 +342,26 @@ export function ConnectionSummaryPanel({
   const longest = ages.length ? Math.max(...ages) : null
 
   const rows = [
-    { icon: RadioIcon, label: t("连接总数"), value: String(connections.length) },
-    { icon: ZapIcon, label: t("正在传输"), value: String(count("transmitting")) },
-    { icon: HourglassIcon, label: t("连接中"), value: String(count("connecting")) },
-    { icon: CircleOffIcon, label: t("正在退役"), value: String(count("retiring")) },
+    {
+      icon: RadioIcon,
+      label: t("连接总数"),
+      value: String(connections.length),
+    },
+    {
+      icon: ZapIcon,
+      label: t("正在传输"),
+      value: String(count("transmitting")),
+    },
+    {
+      icon: HourglassIcon,
+      label: t("连接中"),
+      value: String(count("connecting")),
+    },
+    {
+      icon: CircleOffIcon,
+      label: t("正在退役"),
+      value: String(count("retiring")),
+    },
     {
       icon: TimerIcon,
       label: t("平均连接时长"),
@@ -387,19 +386,12 @@ export function ConnectionSummaryPanel({
           two-column grid of six numbers left more air than it did work. */}
       <dl className="grid flex-1 content-between">
         {rows.map((row) => (
-          <div className="flex items-center gap-2 text-xs" key={row.label}>
-            <dt className="flex min-w-0 items-center gap-2">
-              <span className="grid size-6 shrink-0 place-items-center rounded-md bg-card text-muted-foreground">
-                <row.icon aria-hidden="true" className="size-3.5" />
-              </span>
-              <span className="truncate text-muted-foreground">
-                {row.label}：
-              </span>
-            </dt>
-            <dd className="ml-auto shrink-0 font-mono text-sm font-semibold tabular-nums">
-              {row.value}
-            </dd>
-          </div>
+          <Tally
+            key={row.label}
+            icon={row.icon}
+            label={row.label}
+            value={row.value}
+          />
         ))}
       </dl>
     </Panel>
@@ -431,10 +423,7 @@ export function RuntimeEnvironmentPanel({
     [t("今日请求"), stats.requestsToday.toLocaleString()],
     [t("今日错误"), stats.errorsToday.toLocaleString()],
     [t("就绪账号"), `${stats.accountsReady} / ${health.accounts}`],
-    [
-      t("元数据记录"),
-      t(settings.requestMetadataLogging ? "已开启" : "已关闭"),
-    ],
+    [t("元数据记录"), t(settings.requestMetadataLogging ? "已开启" : "已关闭")],
     [t("日志级别"), settings.logLevel],
     [t("数据目录"), health.dataDir],
     [t("数据库"), health.databasePath],
@@ -450,19 +439,9 @@ export function RuntimeEnvironmentPanel({
     >
       {/* Reference material, not a comparison: one short wide strip reads
           better than a tall column, and every field fits without a scroll. */}
-      <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3 xl:grid-cols-4">
+      <dl className="grid gap-x-8 gap-y-2.5 sm:grid-cols-2 xl:grid-cols-3">
         {facts.map(([label, value]) => (
-          <div className="min-w-0" key={label}>
-            <dt className="truncate text-[11px] text-muted-foreground/70">
-              {label}
-            </dt>
-            <dd
-              className="mt-0.5 truncate font-mono text-xs font-medium tabular-nums"
-              title={value}
-            >
-              {value}
-            </dd>
-          </div>
+          <Fact key={label} label={label} value={value} />
         ))}
       </dl>
     </Panel>
