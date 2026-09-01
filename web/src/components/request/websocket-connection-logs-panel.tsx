@@ -4,7 +4,6 @@ import {
   CheckCircle2Icon,
   CircleMinusIcon,
   RadioIcon,
-  SearchIcon,
   SlidersHorizontalIcon,
   TriangleAlertIcon,
 } from "lucide-react"
@@ -82,6 +81,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { toast } from "@/components/ui/toast"
+import { SearchField } from "@/components/app/search-field"
 import { cn } from "@/lib/utils"
 import type {
   AccountView,
@@ -417,17 +417,12 @@ export function WebSocketConnectionLogsPanel({
           </span>
         </header>
         <div className="mx-3 mt-1 mb-3 flex flex-wrap items-center gap-2">
-          <label className="flex h-9 w-full min-w-0 items-center gap-2 rounded-xl bg-muted px-3 text-muted-foreground sm:w-72">
-            <SearchIcon aria-hidden="true" className="size-4 shrink-0" />
-            <input
-              className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground-subtle"
-              type="search"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              aria-label={t("搜索连接")}
-              placeholder={t("搜索连接 ID、关闭原因或账号")}
-            />
-          </label>
+          <SearchField
+            value={query}
+            onChange={setQuery}
+            label={t("搜索连接")}
+            placeholder={t("搜索连接 ID、关闭原因或账号")}
+          />
           <Choice
             label={t("时间范围")}
             value={filters.from !== undefined ? "custom" : filters.range}

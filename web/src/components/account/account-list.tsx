@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import { RouteIcon, RouteOffIcon, SearchIcon, SearchXIcon } from "lucide-react"
+import { RouteIcon, RouteOffIcon, SearchXIcon } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
 import { AccountCard } from "./account-card"
@@ -38,6 +38,7 @@ import {
   tightestRemaining,
 } from "@/lib/account-state"
 import { shortAccountId } from "@/lib/format"
+import { SearchField } from "@/components/app/search-field"
 import { cn } from "@/lib/utils"
 import type {
   AccountView,
@@ -218,17 +219,13 @@ export function AccountList({
         className={cn("flex min-h-0 flex-col overflow-hidden", PANEL)}
       >
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-4 p-2">
-          <label className="flex h-9 w-full items-center gap-2 rounded-xl bg-muted px-3 text-muted-foreground sm:w-80">
-            <SearchIcon aria-hidden="true" className="size-4 shrink-0" />
-            <input
-              className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground-subtle"
-              type="search"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              aria-label={t("搜索授权账号")}
-              placeholder={t("搜索 Account ID 或邮箱")}
-            />
-          </label>
+          <SearchField
+            className="sm:w-80"
+            value={query}
+            onChange={setQuery}
+            label={t("搜索授权账号")}
+            placeholder={t("搜索 Account ID 或邮箱")}
+          />
 
           <Tabs
             value={filter}
