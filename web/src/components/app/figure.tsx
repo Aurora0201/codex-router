@@ -39,9 +39,11 @@ export function Figure({
 
 /**
  * Reference material rather than a reading: a value you look up, not one you
- * compare against its neighbours. Label and value share a line so a column of
- * them is scanned down the left, and the value keeps the monospace it is
- * stored in.
+ * compare against its neighbours. A grid of sixteen of these is dense by
+ * nature, so it runs at the furniture size throughout and separates the value
+ * from its label by weight and tone rather than by size — a value set two
+ * steps larger than its own label shouts, and at regular weight it shouts
+ * thinly.
  */
 export function Fact({ label, value }: { label: string; value: string }) {
   return (
@@ -53,7 +55,7 @@ export function Fact({ label, value }: { label: string; value: string }) {
         {label}
       </dt>
       <dd
-        className="min-w-0 flex-1 truncate text-right text-sm tabular-nums"
+        className="min-w-0 flex-1 truncate text-right text-xs font-medium tabular-nums"
         title={value}
       >
         {value}

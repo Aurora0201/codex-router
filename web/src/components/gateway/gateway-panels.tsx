@@ -136,7 +136,7 @@ export function RequestOutcomePanel({
                   className={cn("size-2 shrink-0 rounded-full", part.className)}
                 />
                 <span className="truncate font-medium">{t(part.label)}</span>
-                <span className="ml-auto shrink-0 text-muted-foreground tabular-nums">
+                <span className="ml-auto shrink-0 font-medium text-muted-foreground tabular-nums">
                   {part.value.toLocaleString()}
                 </span>
                 <span className="w-12 shrink-0 text-right font-medium tabular-nums">

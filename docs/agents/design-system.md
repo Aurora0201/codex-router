@@ -157,24 +157,46 @@ a diff, a stack trace, a config file rendered as a file — that block can
 declare a face locally and argue for it in review. Nothing in the console
 needs it today.
 
-### Scale
+### Size
 
-Four sizes. Nothing between them, and nothing below.
+Four sizes for content. Nothing between them, and nothing below.
 
 | Class | Size | Use |
 | --- | --- | --- |
-| `text-xs` | 12px | Furniture: hints, captions, axis ticks, column labels |
-| `text-sm` | 14px | Body, table cells, list rows, panel titles |
+| `text-xs` | 12px | Furniture, and dense reference data — a grid of sixteen facts |
+| `text-sm` | 14px | Body, table cells, list rows |
 | `text-lg` | 18px | A panel's own reading — the number that panel exists to report |
 | `text-3xl` | 30px | The page's single headline number, inside the emphasis block |
+
+Plus three structural sizes that belong to their components, not to the
+content scale: page `h1` at `text-2xl`, `CardTitle` at `text-base`, `Panel`
+title at `text-sm`.
 
 `text-[10px]` and `text-[11px]` are gone. They were three indistinguishable
 steps doing three different jobs, and they made 运行状态 and 用量分析 set 85 and
 109 of their text nodes at 12px or below while 请求日志 set its equivalents at
 14px — the same product at two reading distances.
 
-Page `h1` is `text-2xl font-semibold tracking-tight`. Panel titles are
-`text-sm font-semibold`.
+### Weight
+
+Size says how dense the block is. **Weight says whether this is the thing the
+reader came for.**
+
+| Weight | Use |
+| --- | --- |
+| `400` (default) | Running text, descriptions, labels |
+| `font-medium` | A value — the number or string the row exists to report |
+| `font-semibold` | Structure: page, card and panel titles, and headline numbers |
+
+The two axes are independent, and using size where weight is meant is the
+mistake to watch for. A reference grid is dense *and* its values matter, so it
+runs at 12px throughout with the label at 400 and the value at 500 — not at
+12px against 14px, which makes the value shout, and not at regular weight,
+which makes it shout thinly. Both were true of 运行环境 and 数据覆盖 for a
+while, and both were visible.
+
+Anything that reads as data and is not `font-medium` is usually a value that
+used to borrow its weight from a monospace face.
 
 ### Numbers
 
