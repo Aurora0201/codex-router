@@ -13,8 +13,6 @@ import {
 } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
-import { cn } from "@/lib/utils"
-import { isMachineText } from "@/lib/format"
 import { useTheme, type Theme } from "@/components/theme-provider"
 import {
   Card,
@@ -134,12 +132,7 @@ function EnvironmentItem({
       </ItemMedia>
       <ItemContent className="min-w-0">
         <ItemTitle>{title}</ItemTitle>
-        <ItemDescription
-          className={cn(
-            "truncate text-xs",
-            isMachineText(description) && "font-mono"
-          )}
-        >
+        <ItemDescription className="truncate text-xs">
           {description}
         </ItemDescription>
       </ItemContent>

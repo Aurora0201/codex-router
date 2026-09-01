@@ -1,6 +1,5 @@
 import type { LucideIcon } from "lucide-react"
 
-import { isMachineText } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
 /**
@@ -54,10 +53,7 @@ export function Fact({ label, value }: { label: string; value: string }) {
         {label}
       </dt>
       <dd
-        className={cn(
-          "min-w-0 flex-1 truncate text-right text-sm tabular-nums",
-          isMachineText(value) && "font-mono"
-        )}
+        className="min-w-0 flex-1 truncate text-right text-sm tabular-nums"
         title={value}
       >
         {value}
@@ -88,14 +84,7 @@ export function Tally({
         </span>
         <span className="truncate text-muted-foreground">{label}：</span>
       </dt>
-      <dd
-        className={cn(
-          "ml-auto shrink-0 font-semibold tabular-nums",
-          isMachineText(value) && "font-mono"
-        )}
-      >
-        {value}
-      </dd>
+      <dd className="ml-auto shrink-0 font-semibold tabular-nums">{value}</dd>
     </div>
   )
 }

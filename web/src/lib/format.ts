@@ -140,21 +140,6 @@ export function formatBytes(value: number | null | undefined): string {
   return `${unit === 0 ? size : size.toFixed(1)} ${units[unit]}`
 }
 
-/**
- * Whether a rendered value is machine text end to end, and so can take the
- * monospace face.
- *
- * Roboto Mono carries no CJK, so a mono span holding "2.9亿" or "正在运行"
- * renders the ASCII in Roboto and falls back to Noto Sans SC for the rest —
- * two faces inside one string. Deciding by the value rather than by the slot
- * it sits in is what keeps that from happening: a fact grid holds paths,
- * counts, timestamps and Chinese words in the same column, so the column
- * cannot answer the question for all of them.
- */
-export function isMachineText(value: string): boolean {
-  return /^[ -~—–]+$/.test(value)
-}
-
 export function formatDuration(seconds: number): string {
   const hours = Math.floor(seconds / 3600)
   const minutes = Math.floor((seconds % 3600) / 60)

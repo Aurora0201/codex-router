@@ -13,8 +13,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { toast } from "@/components/ui/toast"
-import { formatBytes, formatLatency, isMachineText } from "@/lib/format"
-import { cn } from "@/lib/utils"
+import { formatBytes, formatLatency } from "@/lib/format"
 import {
   OUTCOME_LABELS,
   STATE_LABELS,
@@ -127,13 +126,7 @@ export function RequestDetailSheet({
                     <span className="text-sm text-muted-foreground">
                       {label}
                     </span>
-                    <span
-                      className={cn(
-                        "min-w-0 text-sm break-all",
-                        "tabular-nums",
-                        isMachineText(String(value)) && "font-mono"
-                      )}
-                    >
+                    <span className="min-w-0 text-sm break-all tabular-nums">
                       {value}
                     </span>
                   </div>

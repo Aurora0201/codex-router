@@ -4,7 +4,6 @@ import * as React from "react"
 import * as RechartsPrimitive from "recharts"
 import type { TooltipValueType } from "recharts"
 
-import { MachineValue } from "@/components/app/machine-value"
 import { cn } from "@/lib/utils"
 
 // Format: { THEME_NAME: CSS_SELECTOR }
@@ -254,14 +253,11 @@ function ChartTooltipContent({
                         </span>
                       </div>
                       {item.value != null && (
-                        <MachineValue
-                          className="font-medium text-foreground"
-                          value={
-                            typeof item.value === "number"
-                              ? item.value.toLocaleString()
-                              : String(item.value)
-                          }
-                        />
+                        <span className="font-medium text-foreground tabular-nums">
+                          {typeof item.value === "number"
+                            ? item.value.toLocaleString()
+                            : String(item.value)}
+                        </span>
                       )}
                     </div>
                   </>

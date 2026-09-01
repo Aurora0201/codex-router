@@ -121,40 +121,41 @@ control. Nothing else tints a surface.
 
 | Token | Stack | Use |
 | --- | --- | --- |
-| `--font-sans` | Inter Variable → Noto Sans SC Variable | Everything on a page |
-| `--font-mono` | Roboto Mono Variable → Noto Sans SC Variable | Machine text only, see below |
+| `--font-sans` | Inter Variable → Noto Sans SC Variable | All text |
 | `--font-logo` | Google Sans Variable | The wordmark, and nothing else |
 
 `--font-heading` is wired into the shadcn title slots (Card, Dialog, Sheet,
 AlertDialog, Empty) and currently resolves to `--font-sans`; apply it by hand
 only for section titles inside those surfaces.
 
-### The monospace rule
+### One family for text
 
-**Choose the face from the value, not from the slot it sits in.**
+There is no monospace face. `--font-mono` and the Roboto Mono package are
+gone, and `font-mono` must not come back — `design-rules.test.ts` fails if it
+does.
 
-Roboto Mono carries no CJK. A mono span holding `2.9亿` renders the digits in
-Roboto and falls back to Noto Sans SC for `亿` — two faces inside one string.
-The same happens to `正在运行`, `已开启`, `0 小时 2 分钟`. A fact grid holds
-paths, counts, timestamps and Chinese words in the same column, so the column
-cannot answer the question for all of them.
+The two things a second family is usually reached for are both already
+answered:
 
-Two shapes, one rule:
+- **Aligning numbers** is what `tabular-nums` does, and every number in the
+  console carries it. A monospace face was never needed for that.
+- **Reading an identifier character by character** — a path, a request ID, an
+  error code — is a real need, but a narrow one, and it does not pay for a
+  second family across the whole product. Anything that must be exact is
+  copyable or shown in full on hover.
 
-- `<MachineValue value={…} />` where the value is the whole contents of its own
-  element.
-- `cn(…, isMachineText(value) && "font-mono")` where the element already exists
-  for other reasons — it carries a title, a truncation, a flex role.
+Against that, the cost was constant and visible. Roboto Mono carries no CJK,
+so a mono span holding `2.9亿` rendered the digits in Roboto and fell back to
+Noto Sans SC for `亿` — two faces inside one string, and the same for
+`正在运行`, `已开启`, `0 小时 2 分钟`. Even with that fixed, a fact grid still
+put Inter labels against Roboto values in a 240px card, which reads as an
+accident rather than a decision. Roboto Mono and Inter are a poor pairing:
+different skeletons, different x-height, different colour on the page.
 
-**Never write a bare `font-mono`.** No value's shape is so fixed that the rule
-cannot answer for it, and a filesystem path is the example that proves it:
-`C:\Users\张三\.codex` is a perfectly ordinary path. `design-rules.test.ts`
-asserts that every `font-mono` in `web/src` sits on a line that also names
-`isMachineText`.
-
-Names people read — model names, project paths shown as names, emails used as
-labels — stay in the body face regardless, and do so naturally: they are
-usually not machine text, and where they are, monospace does them no harm.
+If a future block genuinely needs the shape of the string to be the content —
+a diff, a stack trace, a config file rendered as a file — that block can
+declare a face locally and argue for it in review. Nothing in the console
+needs it today.
 
 ### Scale
 
@@ -177,8 +178,9 @@ Page `h1` is `text-2xl font-semibold tracking-tight`. Panel titles are
 
 ### Numbers
 
-Every number carries `tabular-nums`, so a value that updates in place does not
-shift its neighbours.
+Every number carries `tabular-nums`. It is what keeps a value that updates in
+place from shifting its neighbours, and what aligns a column of figures — the
+job a monospace face is usually hired for and does not need to be.
 
 Format numbers through `@/lib/format` rather than at the call site:
 `formatLatency` (ms under a second, seconds past it — never a raw float),
@@ -242,7 +244,6 @@ label-above-a-number, you are writing `Figure` again.
 | `app/figure` — `Fact` | A value you look up rather than compare — one line, label left. |
 | `app/figure` — `Tally` | A counted thing marked with an icon. |
 | `app/search-field` — `SearchField` | The one search field. |
-| `app/machine-value` — `MachineValue` | A value in the face that can render it whole. |
 | `request/request-outcome` — `OutcomeBadge` | A request's result. |
 | `request/log-filter-controls` | The log toolbar's select, field group and account combobox. |
 
@@ -349,14 +350,14 @@ decorate, and never to make a fast thing feel slow.
   next redesign has to argue with it rather than quietly undo it.
 - `web/src/design-rules.test.ts` reads the source through `import.meta.glob`
   and enforces the rules that are about *how the code is written* rather than
-  what it renders: no bare `font-mono`, no `text-[10px]`/`text-[11px]`, no
+  what it renders: no `font-mono`, no `text-[10px]`/`text-[11px]`, no
   `--palette-*` outside `index.css`, and `--font-logo` only in the wordmark.
   Add to it when you find a rule a reviewer would otherwise have to remember.
 
 ## Exceptions
 
-- All faces are bundled locally through `@fontsource-variable` and a Latin-only
-  `@font-face` for the wordmark; nothing is fetched from a font service at
-  runtime. System fonts remain the fallback.
+- Both faces are bundled locally through `@fontsource-variable`, with a
+  Latin-only `@font-face` for the wordmark; nothing is fetched from a font
+  service at runtime. System fonts remain the fallback.
 - Prompt logging remains visibly locked off and must not be exposed as an
   enabled control.

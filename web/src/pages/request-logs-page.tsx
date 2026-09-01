@@ -81,7 +81,6 @@ import {
   requestProtocol,
   type SelectedRequest,
 } from "@/lib/request-log"
-import { MachineValue } from "@/components/app/machine-value"
 import { cn } from "@/lib/utils"
 import type {
   AccountView,
@@ -189,11 +188,10 @@ function RequestDataTable({
               className="flex min-w-0 items-center gap-2 text-xs"
               title={`${protocol} ${row.original.route}`}
             >
-              <MachineValue
-                className="w-9 shrink-0 font-semibold text-primary"
-                value={protocol}
-              />
-              <MachineValue className="truncate" value={row.original.route} />
+              <span className="w-9 shrink-0 font-semibold text-primary">
+                {protocol}
+              </span>
+              <span className="truncate">{row.original.route}</span>
             </span>
           )
         },

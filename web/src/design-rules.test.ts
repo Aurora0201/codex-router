@@ -10,38 +10,34 @@ const sources = Object.entries(
   })
 ).filter(([file]) => !/\.test\.tsx?$/.test(file))
 
+function linesMatching(pattern: RegExp): string[] {
+  return sources.flatMap(([file, source]) =>
+    source
+      .split("\n")
+      .flatMap((line, index) =>
+        pattern.test(line) ? [`${file}:${index + 1}`] : []
+      )
+  )
+}
+
 /** Every rule here cost the console something once; see docs/agents/design-system.md. */
 describe("design system", () => {
-  it("only sets the monospace face behind isMachineText", () => {
-    // Roboto Mono has no CJK, so a slot that hardcodes font-mono splits any
-    // Chinese word or CJK-suffixed number across two faces. The face is a
-    // question about the value, and only the value can answer it.
-    const offenders = sources.flatMap(([file, source]) =>
-      source
-        .split("\n")
-        .flatMap((line, index) =>
-          line.includes("font-mono") && !line.includes("isMachineText")
-            ? [`${file}:${index + 1}`]
-            : []
-        )
-    )
-    expect(offenders).toEqual([])
+  it("sets text in one family", () => {
+    // The console carried a second family for a while and it bought nothing:
+    // tabular-nums is what aligns the numbers, and Roboto Mono has no CJK, so
+    // every Chinese word and every 亿 suffix inside a mono span fell back to a
+    // third face mid-string. A `font-mono` here would bring that seam back.
+    expect(linesMatching(/font-mono/)).toEqual([])
   })
 
   it("has no text sizes below the scale's floor", () => {
     // 10px and 11px were three indistinguishable steps doing three jobs.
-    const offenders = sources
-      .filter(([, source]) => /text-\[1[01]px\]/.test(source))
-      .map(([file]) => file)
-    expect(offenders).toEqual([])
+    expect(linesMatching(/text-\[1[01]px\]/)).toEqual([])
   })
 
   it("keeps components off the raw palette", () => {
     // Components consume semantic tokens; only index.css names palette steps.
-    const offenders = sources
-      .filter(([, source]) => source.includes("var(--palette-"))
-      .map(([file]) => file)
-    expect(offenders).toEqual([])
+    expect(linesMatching(/var\(--palette-/)).toEqual([])
   })
 
   it("reserves the wordmark face for the wordmark", () => {
