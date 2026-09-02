@@ -14,7 +14,7 @@ const METER = "grid gap-1.5"
 const HEAD = "flex items-center justify-between gap-4 text-xs font-medium"
 const TRACK =
   "[&>[data-slot=progress-track]]:h-1.5 [&>[data-slot=progress-track]]:bg-foreground/15"
-const CAPTION = "text-[11px] text-muted-foreground/70"
+const CAPTION = "text-xs text-muted-foreground-subtle"
 
 /**
  * One quota window inside an account card: name and remaining percentage on the

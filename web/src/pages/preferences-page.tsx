@@ -132,7 +132,7 @@ function EnvironmentItem({
       </ItemMedia>
       <ItemContent className="min-w-0">
         <ItemTitle>{title}</ItemTitle>
-        <ItemDescription className="truncate font-mono text-xs">
+        <ItemDescription className="truncate text-xs">
           {description}
         </ItemDescription>
       </ItemContent>

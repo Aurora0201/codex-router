@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import { RouteIcon, RouteOffIcon, SearchIcon, SearchXIcon } from "lucide-react"
+import { RouteIcon, RouteOffIcon, SearchXIcon } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
 import { AccountCard } from "./account-card"
@@ -38,6 +38,7 @@ import {
   tightestRemaining,
 } from "@/lib/account-state"
 import { shortAccountId } from "@/lib/format"
+import { SearchField } from "@/components/app/search-field"
 import { cn } from "@/lib/utils"
 import type {
   AccountView,
@@ -165,7 +166,7 @@ export function AccountList({
               <RouteIcon aria-hidden="true" className="size-[18px]" />
             </span>
             <div className="min-w-0">
-              <p className="text-xs text-muted-foreground/70">
+              <p className="text-xs text-muted-foreground-subtle">
                 {t("当前请求路由")}
               </p>
               <p
@@ -183,13 +184,13 @@ export function AccountList({
           {active ? (
             <div className="flex items-center gap-5 text-right text-xs">
               <div>
-                <p className="text-muted-foreground/70">{t("认证状态")}</p>
+                <p className="text-muted-foreground-subtle">{t("认证状态")}</p>
                 <div className="mt-0.5 flex justify-end">
                   <AccountStatus account={active} />
                 </div>
               </div>
               <div>
-                <p className="text-muted-foreground/70">{t("紧要额度")}</p>
+                <p className="text-muted-foreground-subtle">{t("紧要额度")}</p>
                 <p className="mt-0.5 font-medium tabular-nums">
                   {activeRemaining === null
                     ? t("未报告")
@@ -211,20 +212,20 @@ export function AccountList({
       </section>
 
       <section
-        className={cn("flex min-h-0 flex-1 flex-col overflow-hidden", PANEL)}
+        // Sized by its contents, capped by the viewport. Filling the height
+        // unconditionally left three accounts sitting at the top of an 812px
+        // card with 495px of nothing under them; shrinking instead means the
+        // scroll only appears when there is something to scroll.
+        className={cn("flex min-h-0 flex-col overflow-hidden", PANEL)}
       >
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-4 p-2">
-          <label className="flex h-9 w-full items-center gap-2 rounded-xl bg-muted px-3 text-muted-foreground sm:w-80">
-            <SearchIcon aria-hidden="true" className="size-4 shrink-0" />
-            <input
-              className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/70"
-              type="search"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              aria-label={t("搜索授权账号")}
-              placeholder={t("搜索 Account ID 或邮箱")}
-            />
-          </label>
+          <SearchField
+            className="sm:w-80"
+            value={query}
+            onChange={setQuery}
+            label={t("搜索授权账号")}
+            placeholder={t("搜索 Account ID 或邮箱")}
+          />
 
           <Tabs
             value={filter}

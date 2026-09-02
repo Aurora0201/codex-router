@@ -8,7 +8,15 @@ beforeEach(async () => {
   await i18n.changeLanguage("zh-CN")
 })
 
-afterEach(cleanup)
+// i18n is a module singleton shared by every file in the run, and
+// changeLanguage is async. A test that switches to English and ends before its
+// promise settles used to hand the next test an English console: two
+// unrelated tests failed roughly one full run in three. Draining it here means
+// the reset happens while the test that asked for it is still the current one.
+afterEach(async () => {
+  cleanup()
+  await i18n.changeLanguage("zh-CN")
+})
 
 Object.defineProperty(window, "matchMedia", {
   writable: true,

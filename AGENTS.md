@@ -6,7 +6,7 @@ one-off decisions belong in commit messages or ADRs, not here.
 ## Source of truth
 
 - `docs/adr/0001-transparent-identity-proxy.md` is the authoritative reference for proxy and data-plane routing, including the account/routing hard rules (no automatic routing, manual active-account selection only, no session binding, opaque data plane); treat it as current truth.
-- Frontend: follow `docs/agents/frontend.md`.
+- Frontend: follow `docs/agents/design-system.md`.
 - Consult `docs/` before changing routing or transport behavior; update the relevant ADR when rules evolve.
 
 ## Coding principles

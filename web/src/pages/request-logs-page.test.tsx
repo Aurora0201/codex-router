@@ -74,8 +74,7 @@ describe("RequestLogsPage", () => {
       </Toaster>
     )
     const rows = () => document.querySelectorAll("tbody tr").length
-    const marked = () =>
-      document.querySelectorAll("tbody tr.animate-in").length
+    const marked = () => document.querySelectorAll("tbody tr.animate-in").length
 
     // The first page to arrive is not an arrival, it is the answer.
     await waitFor(() => expect(rows()).toBe(2))
@@ -300,12 +299,15 @@ describe("RequestLogsPage", () => {
     ).toHaveClass("[&_th]:bg-muted")
     expect(screen.getByText("POST")).toHaveClass("text-primary")
     expect(screen.getByTitle("POST /responses")).toBeInTheDocument()
-    expect(
-      screen.getByRole("heading", { name: "故障分布" }).closest("section")
-    ).toHaveClass("xl:h-72")
-    expect(
-      screen.getByText("最近 24 小时的请求").closest("section")
-    ).toHaveClass("xl:h-72")
+    // Fixed, and tall enough for the most the panel can be asked to hold:
+    // five failure sources and three codes measure 255px against 268 of body.
+    // At h-72 they had 236 and the panel scrolled its own contents away.
+    const failurePanel = screen
+      .getByRole("heading", { name: "故障分布" })
+      .closest("section")
+    const volumeHero = screen.getByText("最近 24 小时的请求").closest("section")
+    expect(failurePanel).toHaveClass("xl:h-80")
+    expect(volumeHero).toHaveClass("xl:h-80")
     await userEvent.click(
       screen.getByRole("button", { name: "查看请求 req-1" })
     )

@@ -7,11 +7,20 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { formatLatency } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { FailureSource, RequestLogsResponse } from "@/services/contracts"
 
 type Summary = RequestLogsResponse["summary"]
 type Bucket = RequestLogsResponse["histogram"][number]
+
+/**
+ * The panel has a fixed height, so its contents are budgeted against the most
+ * the server can send. Failure sources are a closed set of five; diagnostic
+ * codes are not, and the server's top five would not fit beside them. Three is
+ * what the space holds, and "最常见" is already what the heading promises.
+ */
+const MAX_CODES = 3
 
 const SOURCE_LABELS: Record<FailureSource, string> = {
   gateway: "网关",
@@ -58,13 +67,7 @@ export function RequestVolumeHero({
     { label: t("故障"), value: summary.errors.toLocaleString(locale) },
     { label: t("拒绝"), value: summary.rejected.toLocaleString(locale) },
     { label: t("取消"), value: summary.cancelled.toLocaleString(locale) },
-    {
-      label: t("平均耗时"),
-      value:
-        summary.averageDurationMs === null
-          ? "—"
-          : `${Math.round(summary.averageDurationMs).toLocaleString(locale)} ms`,
-    },
+    { label: t("平均耗时"), value: formatLatency(summary.averageDurationMs) },
   ]
 
   return (
@@ -101,7 +104,7 @@ export function RequestVolumeHero({
           {figures.map((figure) => (
             <li key={figure.label}>
               <p className="text-xs text-emphasis-muted">{figure.label}</p>
-              <p className="mt-0.5 text-sm font-semibold tabular-nums">
+              <p className="mt-0.5 text-sm font-medium tabular-nums">
                 {figure.value}
               </p>
             </li>
@@ -171,7 +174,7 @@ export function RequestVolumeHero({
             )
           })}
         </div>
-        <p className="mt-2 flex items-center justify-between gap-3 text-[11px] text-emphasis-muted tabular-nums">
+        <p className="mt-2 flex items-center justify-between gap-3 text-xs text-emphasis-muted tabular-nums">
           <span>
             {first ? new Date(first.startedAt).toLocaleString(locale) : "—"}
           </span>
@@ -203,6 +206,12 @@ export function FailureBreakdownPanel({
 }) {
   const { t } = useTranslation()
   const worst = Math.max(1, ...failureSources.map((item) => item.count))
+  // A bar is a comparison. With one source — or with every source on the same
+  // count — it can only draw a full row, which says nothing the number beside
+  // it has not already said.
+  const comparable =
+    failureSources.length > 1 &&
+    failureSources.some((item) => item.count !== worst)
 
   return (
     <Panel
@@ -210,34 +219,38 @@ export function FailureBreakdownPanel({
       icon={ServerCrashIcon}
       hint={t("共 {{count}} 次", { count: summary.errors })}
       className={className}
-      bodyClassName="xl:min-h-0 xl:flex-1 xl:overflow-y-auto"
+      bodyClassName="xl:min-h-0 xl:flex-1 xl:overflow-hidden"
     >
       {failureSources.length === 0 ? (
         <p className="py-6 text-center text-xs text-muted-foreground">
           {t("这段范围内没有故障")}
         </p>
       ) : (
-        <ul className="grid gap-3">
+        // The proportion sits behind the row rather than on a rule under it.
+        // Stacked, five sources cost 208px in a panel with 236 to give, and
+        // the codes below them had nowhere to go.
+        <ul className="grid gap-1">
           {failureSources.map((item) => (
-            <li className="grid gap-1.5" key={item.source}>
+            <li key={item.source}>
               <button
                 type="button"
-                className="flex items-baseline justify-between gap-3 rounded-sm text-left text-xs outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                className="relative flex w-full items-baseline justify-between gap-3 overflow-hidden rounded-md px-2 py-0.5 text-left text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
                 onClick={() => onSelectSource(item.source)}
               >
-                <span className="truncate font-medium">
+                {comparable ? (
+                  <span
+                    aria-hidden="true"
+                    className="absolute inset-y-0 left-0 bg-chart-4/20 transition-[width] duration-500 ease-out motion-reduce:transition-none"
+                    style={{ width: `${(item.count / worst) * 100}%` }}
+                  />
+                ) : null}
+                <span className="relative truncate font-medium">
                   {t(SOURCE_LABELS[item.source] ?? item.source)}
                 </span>
-                <span className="shrink-0 text-muted-foreground tabular-nums">
+                <span className="relative shrink-0 font-medium text-muted-foreground tabular-nums">
                   {item.count}
                 </span>
               </button>
-              <div className="h-1.5 overflow-hidden rounded-full bg-foreground/10">
-                <div
-                  className="h-full rounded-full bg-chart-4"
-                  style={{ width: `${(item.count / worst) * 100}%` }}
-                />
-              </div>
             </li>
           ))}
         </ul>
@@ -246,25 +259,31 @@ export function FailureBreakdownPanel({
       {/* The source says which layer broke; the code is what you would put in
           the search box next, so it is the one worth naming. */}
       {diagnosticCodes.length ? (
-        <dl className="mt-4 grid gap-2 border-t border-border pt-3">
-          <dt className="text-[11px] text-muted-foreground/70">
+        <div className="mt-3 border-t border-border pt-3">
+          <p className="text-xs text-muted-foreground-subtle">
             {t("最常见诊断码")}
-          </dt>
-          {diagnosticCodes.map((item) => (
-            <dd key={item.code}>
+          </p>
+          {/* Each of these is one click from being a filter, which is what a
+              chip is for. Capped at three and at 7rem apiece so the row count
+              is knowable: a card with a fixed height cannot afford a list
+              whose height depends on how long an error code happens to be. */}
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {diagnosticCodes.slice(0, MAX_CODES).map((item) => (
               <button
+                key={item.code}
                 type="button"
-                className="flex w-full items-baseline justify-between gap-3 rounded-sm text-left text-xs outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                className="flex max-w-28 items-baseline gap-1.5 rounded-full bg-card px-2 py-0.5 text-xs outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
                 onClick={() => onSelectCode(item.code)}
+                title={item.code}
               >
-                <span className="truncate font-mono">{item.code}</span>
-                <span className="shrink-0 text-muted-foreground tabular-nums">
+                <span className="truncate">{item.code}</span>
+                <span className="shrink-0 font-medium text-muted-foreground tabular-nums">
                   {item.count}
                 </span>
               </button>
-            </dd>
-          ))}
-        </dl>
+            ))}
+          </div>
+        </div>
       ) : null}
     </Panel>
   )

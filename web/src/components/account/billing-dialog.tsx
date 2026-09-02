@@ -6,11 +6,25 @@ import { useTranslation } from "react-i18next"
 import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
 import {
-  Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter,
-  DialogHeader, DialogTitle,
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
 } from "@/components/ui/dialog"
-import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import {
+  Field,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { nextBillingAt } from "@/lib/billing-cycle"
 import { formatBillingCountdown, formatDateOnly } from "@/lib/format"
@@ -26,31 +40,57 @@ function toTimestamp(value: Date): number {
   return Date.UTC(value.getFullYear(), value.getMonth(), value.getDate())
 }
 
-export function BillingDialog({ account, busy, onOpenChange, onSave }: {
+export function BillingDialog({
+  account,
+  busy,
+  onOpenChange,
+  onSave,
+}: {
   account: AccountView
   busy: boolean
   onOpenChange(open: boolean): void
-  onSave(value: { billingAnchorAt: number | null; billingCadence: BillingCadence | null }): void
+  onSave(value: {
+    billingAnchorAt: number | null
+    billingCadence: BillingCadence | null
+  }): void
 }) {
   const { t } = useTranslation()
-  const [date, setDate] = useState<Date | undefined>(() => fromTimestamp(account.billing.anchorAt))
-  const [cadence, setCadence] = useState<BillingCadence>(account.billing.cadence ?? "monthly")
+  const [date, setDate] = useState<Date | undefined>(() =>
+    fromTimestamp(account.billing.anchorAt)
+  )
+  const [cadence, setCadence] = useState<BillingCadence>(
+    account.billing.cadence ?? "monthly"
+  )
   const [pickerOpen, setPickerOpen] = useState(false)
   const [now] = useState(Date.now)
-  const nextBilling = nextBillingAt(date ? toTimestamp(date) : null, cadence, now)
+  const nextBilling = nextBillingAt(
+    date ? toTimestamp(date) : null,
+    cadence,
+    now
+  )
 
   return (
     <Dialog open onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{t("设置自动续订周期")}</DialogTitle>
-          <DialogDescription>{t("填写最近一次实际付款日期，系统会自动推算下一次续订时间。")}</DialogDescription>
+          <DialogDescription>
+            {t("填写最近一次实际付款日期，系统会自动推算下一次续订时间。")}
+          </DialogDescription>
         </DialogHeader>
         <FieldGroup>
           <Field>
             <FieldLabel>{t("最近付款日")}</FieldLabel>
             <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
-              <PopoverTrigger render={<Button variant="outline" data-empty={!date} className="justify-start text-left font-normal data-[empty=true]:text-muted-foreground" />}>
+              <PopoverTrigger
+                render={
+                  <Button
+                    variant="outline"
+                    data-empty={!date}
+                    className="justify-start text-left font-normal data-[empty=true]:text-muted-foreground"
+                  />
+                }
+              >
                 <CalendarDaysIcon />
                 {date ? format(date, "yyyy-MM-dd") : t("选择日期")}
               </PopoverTrigger>
@@ -59,12 +99,17 @@ export function BillingDialog({ account, busy, onOpenChange, onSave }: {
                   mode="single"
                   selected={date}
                   disabled={{ after: new Date() }}
-                  onSelect={(value) => { setDate(value); if (value) setPickerOpen(false) }}
+                  onSelect={(value) => {
+                    setDate(value)
+                    if (value) setPickerOpen(false)
+                  }}
                   captionLayout="dropdown"
                 />
               </PopoverContent>
             </Popover>
-            <FieldDescription>{t("只能选择今天或过去的实际付款日期。")}</FieldDescription>
+            <FieldDescription>
+              {t("只能选择今天或过去的实际付款日期。")}
+            </FieldDescription>
           </Field>
           <Field>
             <FieldLabel>{t("付款周期")}</FieldLabel>
@@ -77,8 +122,12 @@ export function BillingDialog({ account, busy, onOpenChange, onSave }: {
                 if (value === "monthly" || value === "annual") setCadence(value)
               }}
             >
-              <ToggleGroupItem className="flex-1" value="monthly">{t("每月")}</ToggleGroupItem>
-              <ToggleGroupItem className="flex-1" value="annual">{t("每年")}</ToggleGroupItem>
+              <ToggleGroupItem className="flex-1" value="monthly">
+                {t("每月")}
+              </ToggleGroupItem>
+              <ToggleGroupItem className="flex-1" value="annual">
+                {t("每年")}
+              </ToggleGroupItem>
             </ToggleGroup>
             <FieldDescription>
               {nextBilling === null
@@ -92,12 +141,29 @@ export function BillingDialog({ account, busy, onOpenChange, onSave }: {
         </FieldGroup>
         <DialogFooter>
           {account.billing.anchorAt !== null ? (
-            <Button variant="ghost" disabled={busy} onClick={() => onSave({ billingAnchorAt: null, billingCadence: null })}>
+            <Button
+              variant="ghost"
+              disabled={busy}
+              onClick={() =>
+                onSave({ billingAnchorAt: null, billingCadence: null })
+              }
+            >
               {t("清除付款设置")}
             </Button>
           ) : null}
-          <DialogClose render={<Button variant="outline" disabled={busy} />}>{t("取消")}</DialogClose>
-          <Button disabled={!date || busy} onClick={() => date && onSave({ billingAnchorAt: toTimestamp(date), billingCadence: cadence })}>
+          <DialogClose render={<Button variant="outline" disabled={busy} />}>
+            {t("取消")}
+          </DialogClose>
+          <Button
+            disabled={!date || busy}
+            onClick={() =>
+              date &&
+              onSave({
+                billingAnchorAt: toTimestamp(date),
+                billingCadence: cadence,
+              })
+            }
+          >
             {t("保存")}
           </Button>
         </DialogFooter>

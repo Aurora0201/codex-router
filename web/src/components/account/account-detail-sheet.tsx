@@ -105,18 +105,22 @@ export function AccountDetailSheet({
                   <Fact
                     icon={CircleDollarSignIcon}
                     label={t("下次自动续订")}
-                    value={nextBilling === null
-                      ? t("未设置")
-                      : `${formatDateOnly(nextBilling)} · ${formatBillingCountdown(nextBilling, now)}`}
+                    value={
+                      nextBilling === null
+                        ? t("未设置")
+                        : `${formatDateOnly(nextBilling)} · ${formatBillingCountdown(nextBilling, now)}`
+                    }
                   />
                   <Fact
                     icon={CalendarClockIcon}
                     label={t("付款周期")}
-                    value={account.billing.cadence === "monthly"
-                      ? t("每月")
-                      : account.billing.cadence === "annual"
-                        ? t("每年")
-                        : t("未设置")}
+                    value={
+                      account.billing.cadence === "monthly"
+                        ? t("每月")
+                        : account.billing.cadence === "annual"
+                          ? t("每年")
+                          : t("未设置")
+                    }
                   />
                   <Fact
                     icon={BadgeCheckIcon}
@@ -128,9 +132,7 @@ export function AccountDetailSheet({
 
               <section className="flex flex-col gap-3">
                 <div className="flex items-baseline justify-between gap-3">
-                  <h3 className={SECTION_TITLE}>
-                    {t("全部额度窗口")}
-                  </h3>
+                  <h3 className={SECTION_TITLE}>{t("全部额度窗口")}</h3>
                   <span className="text-xs text-muted-foreground">
                     {t("读数 {{time}}", {
                       time: formatRelativeTime(account.limits.checkedAt),
@@ -179,7 +181,7 @@ export function AccountDetailSheet({
                             <span className="text-muted-foreground">
                               {t("个人月度限制剩余")}
                             </span>
-                            <span className="font-mono tabular-nums">
+                            <span className="tabular-nums">
                               {t("{{value}}%", {
                                 value: bucket.individualLimit.remainingPercent,
                               })}
@@ -210,7 +212,10 @@ export function AccountDetailSheet({
                         (b.expiresAt ?? Number.MAX_SAFE_INTEGER)
                     )
                     .map((credit) => (
-                      <div key={credit.id} className="rounded-xl bg-muted/60 p-3">
+                      <div
+                        key={credit.id}
+                        className="rounded-xl bg-muted/60 p-3"
+                      >
                         <div className="flex justify-between gap-3">
                           <div className="min-w-0">
                             <p className="truncate text-sm font-medium">

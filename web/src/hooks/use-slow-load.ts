@@ -19,6 +19,10 @@ const MIN_VISIBLE_MS = 400
 /**
  * Reports whether a load has gone on long enough to be worth showing. Fast
  * loads never register, so the content simply updates in place.
+ *
+ * Callers should pass `false` for a first load: the treatment says "what you
+ * are looking at is the previous answer", and on a first load there is no
+ * previous answer to say it about — only a skeleton, which says it already.
  */
 export function useSlowLoad(pending: boolean) {
   const [slow, setSlow] = useState(false)

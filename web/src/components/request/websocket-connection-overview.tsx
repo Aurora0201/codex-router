@@ -84,7 +84,7 @@ export function ConnectionVolumeHero({
           {figures.map((figure) => (
             <li key={figure.label}>
               <p className="text-xs text-emphasis-muted">{figure.label}</p>
-              <p className="mt-0.5 text-sm font-semibold tabular-nums">
+              <p className="mt-0.5 text-sm font-medium tabular-nums">
                 {figure.value.toLocaleString(locale)}
               </p>
             </li>
@@ -150,7 +150,7 @@ export function ConnectionVolumeHero({
             )
           })}
         </div>
-        <p className="mt-2 flex items-center justify-between gap-3 text-[11px] text-emphasis-muted tabular-nums">
+        <p className="mt-2 flex items-center justify-between gap-3 text-xs text-emphasis-muted tabular-nums">
           <span>
             {histogram[0]
               ? new Date(histogram[0].startedAt).toLocaleString(locale)

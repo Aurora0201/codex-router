@@ -23,6 +23,7 @@ import {
   TabsList,
   TabsTab,
 } from "@/components/animate-ui/components/base/tabs"
+import { Fact, Figure, Tally } from "@/components/app/figure"
 import { Panel } from "@/components/app/panel"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
@@ -150,7 +151,7 @@ function Ranking({
         <ul className="grid gap-3 pb-5" aria-label={listLabel}>
           {rows.map((row) => (
             <li className="grid gap-1.5" key={row.key}>
-              <div className="flex items-baseline justify-between gap-4 text-xs">
+              <div className="flex items-baseline justify-between gap-4 text-sm">
                 <Tooltip>
                   <TooltipTrigger
                     render={
@@ -166,7 +167,7 @@ function Ranking({
                     {row.label}
                   </TooltipContent>
                 </Tooltip>
-                <span className="shrink-0 font-mono text-muted-foreground tabular-nums">
+                <span className="shrink-0 font-medium text-muted-foreground tabular-nums">
                   {formatTokens(row.totalTokens)}
                 </span>
               </div>
@@ -262,7 +263,9 @@ export function UsagePage({
   // to what was asked" — and leaves the background refreshes alone, since they
   // arrive under the same filters. Held back until the load is slow enough to
   // need explaining; a switch that lands in 200ms just updates the numbers.
-  const busy = useSlowLoad(loadedFilters !== filterKey)
+  const busy = useSlowLoad(
+    loadedFilters !== null && loadedFilters !== filterKey
+  )
 
   // During local HMR the page can briefly talk to an older running gateway.
   // Ignore its former weekday/hour cells instead of taking down the page.
@@ -300,7 +303,10 @@ export function UsagePage({
     if (!viewport) return
 
     const updateFade = () => {
-      const maxScrollTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight)
+      const maxScrollTop = Math.max(
+        0,
+        viewport.scrollHeight - viewport.clientHeight
+      )
       setHeatmapFade({
         top: viewport.scrollTop > 1,
         bottom: viewport.scrollTop < maxScrollTop - 1,
@@ -317,8 +323,7 @@ export function UsagePage({
   const rhythm = useMemo(() => {
     const total = heatRows.reduce((sum, row) => sum + row.totalTokens, 0)
     const peak = heatRows.reduce<(typeof heatRows)[number] | null>(
-      (best, row) =>
-        best && best.totalTokens >= row.totalTokens ? best : row,
+      (best, row) => (best && best.totalTokens >= row.totalTokens ? best : row),
       null
     )
     const within = (predicate: (row: (typeof heatRows)[number]) => boolean) =>
@@ -394,9 +399,7 @@ export function UsagePage({
           className="h-9 w-44 rounded-md"
           aria-label={t("模型筛选")}
         >
-          <SelectValue>
-            {model === "all" ? t("全部模型") : model}
-          </SelectValue>
+          <SelectValue>{model === "all" ? t("全部模型") : model}</SelectValue>
         </SelectTrigger>
         <SelectContent>
           <SelectGroup>
@@ -527,7 +530,9 @@ export function UsagePage({
           <section className="col-span-12 rounded-2xl bg-emphasis p-2 text-emphasis-foreground xl:col-span-8">
             <div className="flex flex-wrap items-start justify-between gap-4 px-3 py-2.5">
               <div>
-                <p className="text-xs text-emphasis-muted">{t("区间总 Token")}</p>
+                <p className="text-xs text-emphasis-muted">
+                  {t("区间总 Token")}
+                </p>
                 <p
                   className="mt-1 text-3xl leading-none font-semibold tabular-nums"
                   title={fullTokens(summary.totalTokens)}
@@ -585,7 +590,7 @@ export function UsagePage({
                                   ?.label
                               }
                             </span>
-                            <span className="font-mono tabular-nums">
+                            <span className="tabular-nums">
                               {fullTokens(Number(value))}
                             </span>
                           </div>
@@ -623,8 +628,8 @@ export function UsagePage({
                   />
                 </ComposedChart>
               </ChartContainer>
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-[11px] text-emphasis-muted">
-                <span className="font-mono tabular-nums">
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-emphasis-muted">
+                <span className="tabular-nums">
                   {data.daily[0]?.date.slice(5)}
                 </span>
                 <ul className="flex flex-wrap items-center gap-3">
@@ -645,7 +650,7 @@ export function UsagePage({
                     {t("7 日均线")}
                   </li>
                 </ul>
-                <span className="font-mono tabular-nums">
+                <span className="tabular-nums">
                   {data.daily[data.daily.length - 1]?.date.slice(5)}
                 </span>
               </div>
@@ -673,19 +678,12 @@ export function UsagePage({
                   percent: share(summary.outputTokens, summary.totalTokens),
                 },
               ].map((item) => (
-                <div key={item.label}>
-                  <dt className="text-[11px] text-muted-foreground/70">
-                    {item.label}
-                  </dt>
-                  <dd className="mt-0.5 flex items-baseline gap-1.5">
-                    <span className="text-lg leading-none font-semibold tabular-nums">
-                      {formatTokens(item.value)}
-                    </span>
-                    <span className="text-[11px] text-muted-foreground tabular-nums">
-                      {item.percent.toFixed(0)}%
-                    </span>
-                  </dd>
-                </div>
+                <Figure
+                  key={item.label}
+                  label={item.label}
+                  value={formatTokens(item.value)}
+                  note={`${item.percent.toFixed(0)}%`}
+                />
               ))}
             </dl>
 
@@ -707,7 +705,7 @@ export function UsagePage({
             <ul className="grid gap-3">
               {composition.map((item) => (
                 <li
-                  className="flex items-center gap-2 text-xs"
+                  className="flex items-center gap-2 text-sm"
                   key={item.label}
                 >
                   <span
@@ -717,10 +715,10 @@ export function UsagePage({
                     )}
                   />
                   <span className="truncate font-medium">{item.label}</span>
-                  <span className="ml-auto shrink-0 font-mono text-muted-foreground tabular-nums">
+                  <span className="ml-auto shrink-0 font-medium text-muted-foreground tabular-nums">
                     {formatTokens(item.value)}
                   </span>
-                  <span className="w-9 shrink-0 text-right text-muted-foreground/70 tabular-nums">
+                  <span className="w-9 shrink-0 text-right font-medium tabular-nums">
                     {share(item.value, summary.totalTokens).toFixed(0)}%
                   </span>
                 </li>
@@ -779,45 +777,51 @@ export function UsagePage({
                   aria-label={t("日期和小时 Token 热力图") as string}
                 >
                   {heatRows.map((row) => (
-                  <div className="flex items-center gap-1" key={row.date}>
-                    <span className="w-10 shrink-0 font-mono text-[10px] text-muted-foreground/70">
-                      {row.date.slice(5)}
-                    </span>
-                    <div className="grid flex-1 grid-cols-24 gap-1">
-                      {row.hours.map((totalTokens, hour) => {
-                        const level = heatMax ? totalTokens / heatMax : 0
-                        const label = t(
-                          "{{date}} {{hour}}:00 · {{tokens}} Token",
-                          {
-                            date: formatHeatmapDate(row.date),
-                            hour: String(hour).padStart(2, "0"),
-                            tokens: fullTokens(totalTokens),
-                          }
-                        )
-                        return (
-                          <Tooltip key={hour}>
-                            <TooltipTrigger
-                              aria-label={label}
-                              render={
-                                <span
-                                  className={cn(
-                                    "h-3.5 rounded-[3px]",
-                                    level === 0 && "bg-foreground/[0.06]",
-                                    level > 0 && level <= 0.25 && "bg-chart-1",
-                                    level > 0.25 && level <= 0.5 && "bg-chart-2",
-                                    level > 0.5 && level <= 0.75 && "bg-chart-3",
-                                    level > 0.75 && "bg-chart-5"
-                                  )}
-                                />
-                              }
-                            />
-                            <TooltipContent>{label}</TooltipContent>
-                          </Tooltip>
-                        )
-                      })}
+                    <div className="flex items-center gap-1" key={row.date}>
+                      <span className="w-10 shrink-0 text-xs text-muted-foreground-subtle tabular-nums">
+                        {row.date.slice(5)}
+                      </span>
+                      <div className="grid flex-1 grid-cols-24 gap-1">
+                        {row.hours.map((totalTokens, hour) => {
+                          const level = heatMax ? totalTokens / heatMax : 0
+                          const label = t(
+                            "{{date}} {{hour}}:00 · {{tokens}} Token",
+                            {
+                              date: formatHeatmapDate(row.date),
+                              hour: String(hour).padStart(2, "0"),
+                              tokens: fullTokens(totalTokens),
+                            }
+                          )
+                          return (
+                            <Tooltip key={hour}>
+                              <TooltipTrigger
+                                aria-label={label}
+                                render={
+                                  <span
+                                    className={cn(
+                                      "h-3.5 rounded-[3px]",
+                                      level === 0 && "bg-foreground/[0.06]",
+                                      level > 0 &&
+                                        level <= 0.25 &&
+                                        "bg-chart-1",
+                                      level > 0.25 &&
+                                        level <= 0.5 &&
+                                        "bg-chart-2",
+                                      level > 0.5 &&
+                                        level <= 0.75 &&
+                                        "bg-chart-3",
+                                      level > 0.75 && "bg-chart-5"
+                                    )}
+                                  />
+                                }
+                              />
+                              <TooltipContent>{label}</TooltipContent>
+                            </Tooltip>
+                          )
+                        })}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
                 </div>
               </ScrollArea>
               <div
@@ -835,7 +839,7 @@ export function UsagePage({
                 )}
               />
             </div>
-            <div className="mt-2 flex items-center justify-between pl-11 text-[11px] text-muted-foreground/70">
+            <div className="mt-2 flex items-center justify-between pl-11 text-xs text-muted-foreground-subtle">
               <span>0:00</span>
               <span>12:00</span>
               <span>23:00</span>
@@ -859,14 +863,11 @@ export function UsagePage({
                   value: `${rhythm.weekendPercent.toFixed(0)}%`,
                 },
               ].map((item) => (
-                <div key={item.label}>
-                  <dt className="text-[11px] text-muted-foreground/70">
-                    {item.label}
-                  </dt>
-                  <dd className="mt-0.5 text-sm font-semibold tabular-nums">
-                    {item.value}
-                  </dd>
-                </div>
+                <Figure
+                  key={item.label}
+                  label={item.label}
+                  value={item.value}
+                />
               ))}
             </dl>
           </Panel>
@@ -913,22 +914,12 @@ export function UsagePage({
                   value: String(summary.compactions),
                 },
               ].map((item) => (
-                <div
-                  className="flex items-center gap-2 text-xs"
+                <Tally
                   key={item.label}
-                >
-                  <dt className="flex min-w-0 items-center gap-2">
-                    <span className="grid size-6 shrink-0 place-items-center rounded-md bg-card text-muted-foreground">
-                      <item.icon aria-hidden="true" className="size-3.5" />
-                    </span>
-                    <span className="truncate text-muted-foreground">
-                      {item.label}：
-                    </span>
-                  </dt>
-                  <dd className="ml-auto shrink-0 font-mono text-sm font-semibold tabular-nums">
-                    {item.value}
-                  </dd>
-                </div>
+                  icon={item.icon}
+                  label={item.label}
+                  value={item.value}
+                />
               ))}
             </dl>
           </Panel>
@@ -942,7 +933,7 @@ export function UsagePage({
             hint={t("白名单派生历史永久保留")}
             className="col-span-12"
           >
-            <dl className="grid grid-cols-2 gap-x-6 gap-y-2.5 sm:grid-cols-3 xl:grid-cols-4">
+            <dl className="grid gap-x-8 gap-y-2.5 sm:grid-cols-2 xl:grid-cols-3">
               {(
                 [
                   [t("统计会话"), String(data.coverage.rollouts)],
@@ -984,23 +975,12 @@ export function UsagePage({
                   ],
                 ] as Array<[string, string]>
               ).map(([label, value]) => (
-                <div
-                  className="flex items-baseline justify-between gap-3 text-xs"
-                  key={label}
-                >
-                  <dt className="truncate text-muted-foreground">{label}</dt>
-                  <dd
-                    className="shrink-0 truncate font-mono font-medium tabular-nums"
-                    title={value}
-                  >
-                    {value}
-                  </dd>
-                </div>
+                <Fact key={label} label={label} value={value} />
               ))}
             </dl>
           </Panel>
 
-          <p className="col-span-12 flex items-center gap-1.5 px-1 text-xs text-muted-foreground/70">
+          <p className="col-span-12 flex items-center gap-1.5 px-1 text-xs text-muted-foreground-subtle">
             <InfoIcon aria-hidden="true" className="size-3.5 shrink-0" />
             {data.coverage.firstEventAt
               ? t("本机数据始于 {{date}}；更早的本地记录不可恢复。", {

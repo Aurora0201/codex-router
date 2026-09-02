@@ -2,233 +2,255 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/noto-sans-sc";
-@import "@fontsource-variable/roboto-mono";
 
 /* The product wordmark is Latin-only, so keep Google Sans out of page text and
    avoid bundling its unrelated script subsets. */
 @font-face {
-    font-family: 'Google Sans Variable';
-    font-style: normal;
-    font-display: swap;
-    font-weight: 400 700;
-    src: url('@fontsource-variable/google-sans/files/google-sans-latin-wght-normal.woff2') format('woff2-variations');
-    unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+  font-family: "Google Sans Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400 700;
+  src: url("@fontsource-variable/google-sans/files/google-sans-latin-wght-normal.woff2")
+    format("woff2-variations");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212,
+    U+2215, U+FEFF, U+FFFD;
 }
 
 /* Inter owns Latin page text; characters outside this range fall through to
    Noto Sans SC, which keeps mixed Chinese/English copy typographically stable. */
 @font-face {
-    font-family: 'Inter Variable';
-    font-style: normal;
-    font-display: swap;
-    font-weight: 100 900;
-    src: url('@fontsource-variable/inter/files/inter-latin-wght-normal.woff2') format('woff2-variations');
-    unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+  font-family: "Inter Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("@fontsource-variable/inter/files/inter-latin-wght-normal.woff2")
+    format("woff2-variations");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212,
+    U+2215, U+FEFF, U+FFFD;
 }
 
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-    --animate-route-spin: route-spin 8s linear infinite;
-    --font-heading: var(--font-sans);
-    /* Inter owns its Latin Unicode ranges; Noto Sans SC supplies CJK glyphs. */
-    --font-sans: 'Inter Variable', 'Noto Sans SC Variable', system-ui, sans-serif;
-    /* Reserved for the product wordmark; page content must use --font-sans. */
-    --font-logo: 'Google Sans Variable', 'Noto Sans SC Variable', system-ui, sans-serif;
-    --font-mono: 'Roboto Mono Variable', 'Noto Sans SC Variable', ui-monospace, monospace;
-    --color-sidebar-ring: var(--sidebar-ring);
-    --color-sidebar-border: var(--sidebar-border);
-    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-    --color-sidebar-accent: var(--sidebar-accent);
-    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-    --color-sidebar-primary: var(--sidebar-primary);
-    --color-sidebar-foreground: var(--sidebar-foreground);
-    --color-sidebar: var(--sidebar);
-    --color-chart-5: var(--chart-5);
-    --color-chart-4: var(--chart-4);
-    --color-chart-3: var(--chart-3);
-    --color-chart-2: var(--chart-2);
-    --color-chart-1: var(--chart-1);
-    --color-ring: var(--ring);
-    --color-input: var(--input);
-    --color-border: var(--border);
-    --color-destructive-foreground: var(--destructive-foreground);
-    --color-destructive: var(--destructive);
-    --color-info-foreground: var(--info-foreground);
-    --color-info: var(--info);
-    --color-success-foreground: var(--success-foreground);
-    --color-success: var(--success);
-    --color-warning-foreground: var(--warning-foreground);
-    --color-warning: var(--warning);
-    --color-emphasis: var(--emphasis);
-    --color-emphasis-surface: var(--emphasis-surface);
-    --color-emphasis-foreground: var(--emphasis-foreground);
-    --color-emphasis-muted: var(--emphasis-muted);
-    --color-emphasis-success: var(--emphasis-success);
-    --color-emphasis-warning: var(--emphasis-warning);
-    --color-emphasis-destructive: var(--emphasis-destructive);
-    --color-accent-foreground: var(--accent-foreground);
-    --color-accent: var(--accent);
-    --color-muted-foreground: var(--muted-foreground);
-    --color-muted: var(--muted);
-    --color-secondary-foreground: var(--secondary-foreground);
-    --color-secondary: var(--secondary);
-    --color-primary-foreground: var(--primary-foreground);
-    --color-primary: var(--primary);
-    --color-popover-foreground: var(--popover-foreground);
-    --color-popover: var(--popover);
-    --color-card-foreground: var(--card-foreground);
-    --color-card: var(--card);
-    --color-foreground: var(--foreground);
-    --color-background: var(--background);
-    --radius-sm: calc(var(--radius) * 0.6);
-    --radius-md: calc(var(--radius) * 0.8);
-    --radius-lg: var(--radius);
-    --radius-xl: calc(var(--radius) * 1.4);
-    --radius-2xl: calc(var(--radius) * 1.8);
-    --radius-3xl: calc(var(--radius) * 2.2);
-    --radius-4xl: calc(var(--radius) * 2.6);
+  --animate-route-spin: route-spin 8s linear infinite;
+  --font-heading: var(--font-sans);
+  /* Inter owns its Latin Unicode ranges; Noto Sans SC supplies CJK glyphs. */
+  --font-sans: "Inter Variable", "Noto Sans SC Variable", system-ui, sans-serif;
+  /* Reserved for the product wordmark; page content must use --font-sans. */
+  --font-logo:
+    "Google Sans Variable", "Noto Sans SC Variable", system-ui, sans-serif;
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive: var(--destructive);
+  --color-info-foreground: var(--info-foreground);
+  --color-info: var(--info);
+  --color-success-foreground: var(--success-foreground);
+  --color-success: var(--success);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-warning: var(--warning);
+  --color-emphasis: var(--emphasis);
+  --color-emphasis-surface: var(--emphasis-surface);
+  --color-emphasis-foreground: var(--emphasis-foreground);
+  --color-emphasis-muted: var(--emphasis-muted);
+  --color-emphasis-success: var(--emphasis-success);
+  --color-emphasis-warning: var(--emphasis-warning);
+  --color-emphasis-destructive: var(--emphasis-destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted-foreground-subtle: var(--muted-foreground-subtle);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
 }
 
 :root {
-    /* Foundation palette. Components must consume the semantic aliases below,
+  /* Foundation palette. Components must consume the semantic aliases below,
        never these raw white, neutral and brand-blue steps directly. */
-    --palette-white: oklch(1 0 0);
-    --palette-neutral-50: oklch(0.985 0 0);
-    --palette-neutral-100: oklch(0.97 0 0);
-    --palette-neutral-200: oklch(0.922 0 0);
-    --palette-neutral-400: oklch(0.708 0 0);
-    --palette-neutral-500: oklch(0.556 0 0);
-    --palette-neutral-800: oklch(0.269 0 0);
-    --palette-neutral-900: oklch(0.205 0 0);
-    --palette-neutral-950: oklch(0.145 0 0);
-    --palette-white-a10: oklch(1 0 0 / 10%);
-    --palette-white-a15: oklch(1 0 0 / 15%);
-    --palette-blue-400: oklch(0.707 0.165 254.624);
-    --palette-blue-500: oklch(0.623 0.214 259.815);
-    --palette-blue-600: oklch(0.546 0.245 262.881);
-    --palette-green-400: oklch(0.76 0.145 164);
-    --palette-green-600: oklch(0.566 0.13 164);
-    --palette-amber-400: oklch(0.68 0.15 82);
-    --palette-amber-600: oklch(0.56 0.15 75);
-    --palette-red-400: oklch(0.704 0.191 22.216);
-    --palette-red-600: oklch(0.577 0.245 27.325);
+  --palette-white: oklch(1 0 0);
+  --palette-neutral-50: oklch(0.985 0 0);
+  --palette-neutral-100: oklch(0.97 0 0);
+  --palette-neutral-200: oklch(0.922 0 0);
+  --palette-neutral-300: oklch(0.78 0 0);
+  --palette-neutral-400: oklch(0.708 0 0);
+  --palette-neutral-500: oklch(0.54 0 0);
+  --palette-neutral-600: oklch(0.46 0 0);
+  --palette-neutral-800: oklch(0.269 0 0);
+  --palette-neutral-900: oklch(0.205 0 0);
+  --palette-neutral-950: oklch(0.145 0 0);
+  --palette-white-a10: oklch(1 0 0 / 10%);
+  --palette-white-a15: oklch(1 0 0 / 15%);
+  --palette-blue-400: oklch(0.707 0.165 254.624);
+  --palette-blue-500: oklch(0.623 0.214 259.815);
+  --palette-blue-600: oklch(0.546 0.245 262.881);
+  --palette-green-400: oklch(0.76 0.145 164);
+  --palette-green-600: oklch(0.566 0.13 164);
+  --palette-amber-400: oklch(0.68 0.15 82);
+  --palette-amber-600: oklch(0.56 0.15 75);
+  --palette-red-300: oklch(0.82 0.17 22.2);
+  --palette-red-400: oklch(0.704 0.191 22.216);
+  --palette-red-600: oklch(0.577 0.245 27.325);
 
-    /* Core surfaces and interactions: white/gray foundations with brand blue
+  /* Core surfaces and interactions: white/gray foundations with brand blue
        reserved for selection, focus and primary actions. */
-    --background: var(--palette-white);
-    --foreground: var(--palette-neutral-950);
-    --card: var(--palette-white);
-    --card-foreground: var(--palette-neutral-950);
-    --popover: var(--palette-white);
-    --popover-foreground: var(--palette-neutral-950);
-    --primary: var(--palette-blue-600);
-    --primary-foreground: var(--palette-neutral-50);
-    --secondary: var(--palette-neutral-100);
-    --secondary-foreground: var(--palette-neutral-900);
-    --muted: var(--palette-neutral-100);
-    --muted-foreground: var(--palette-neutral-500);
-    --accent: var(--palette-neutral-100);
-    --accent-foreground: var(--palette-neutral-900);
-    --border: var(--palette-neutral-200);
-    --input: var(--palette-neutral-200);
-    --ring: var(--palette-blue-500);
+  --background: var(--palette-white);
+  --foreground: var(--palette-neutral-950);
+  --card: var(--palette-white);
+  --card-foreground: var(--palette-neutral-950);
+  --popover: var(--palette-white);
+  --popover-foreground: var(--palette-neutral-950);
+  --primary: var(--palette-blue-600);
+  --primary-foreground: var(--palette-neutral-50);
+  --secondary: var(--palette-neutral-100);
+  --secondary-foreground: var(--palette-neutral-900);
+  --muted: var(--palette-neutral-100);
+  /* Two readable steps below --foreground rather than one marginal step and
+       an alpha of it. The old pair was 4.74:1 for secondary text and 2.7:1 for
+       furniture, so anything set in the furniture tone — every percentage, axis
+       tick and column label — was below WCAG AA. Measured on --card and on the
+       --muted inset, which is the worse ground of the two. */
+  --muted-foreground: var(--palette-neutral-600);
+  --muted-foreground-subtle: var(--palette-neutral-500);
+  --accent: var(--palette-neutral-100);
+  --accent-foreground: var(--palette-neutral-900);
+  --border: var(--palette-neutral-200);
+  --input: var(--palette-neutral-200);
+  --ring: var(--palette-blue-500);
 
-    /* Status colors always include a foreground partner so solid treatments do
+  /* Status colors always include a foreground partner so solid treatments do
        not guess at contrast. Info intentionally shares the brand-blue family. */
-    --info: var(--palette-blue-600);
-    --info-foreground: var(--palette-neutral-50);
-    --success: var(--palette-green-600);
-    --success-foreground: var(--palette-white);
-    --warning: var(--palette-amber-600);
-    --warning-foreground: var(--palette-white);
-    --destructive: var(--palette-red-600);
-    --destructive-foreground: var(--palette-white);
-    /* One hue, five steps. Every series on the usage page measures the same
+  --info: var(--palette-blue-600);
+  --info-foreground: var(--palette-neutral-50);
+  --success: var(--palette-green-600);
+  --success-foreground: var(--palette-white);
+  --warning: var(--palette-amber-600);
+  --warning-foreground: var(--palette-white);
+  --destructive: var(--palette-red-600);
+  --destructive-foreground: var(--palette-white);
+  /* One hue, five steps. Every series on the usage page measures the same
        thing, so they belong on a lightness ramp rather than separate hues.
        Step 1 is the least prominent against this theme's ground, step 5 the
        most, and every step stays legible on the emphasis panel too. */
-    --chart-1: oklch(0.80 0.10 252);
-    --chart-2: oklch(0.71 0.15 254);
-    --chart-3: oklch(0.62 0.21 259);
-    --chart-4: oklch(0.54 0.23 262);
-    --chart-5: oklch(0.46 0.22 264);
-    /* High-emphasis analytics surface. The name describes its role instead of
+  --chart-1: oklch(0.8 0.1 252);
+  --chart-2: oklch(0.71 0.15 254);
+  --chart-3: oklch(0.62 0.21 259);
+  --chart-4: oklch(0.54 0.23 262);
+  --chart-5: oklch(0.46 0.22 264);
+  /* High-emphasis analytics surface. The name describes its role instead of
        baking the current dark-blue appearance into component code. */
-    --emphasis: oklch(0.21 0.02 265);
-    --emphasis-surface: oklch(0.27 0.02 265);
-    --emphasis-foreground: var(--palette-neutral-50);
-    --emphasis-muted: oklch(0.70 0.02 265);
-    /* Status on the emphasis panel needs its own weights: the card tones are
+  --emphasis: oklch(0.21 0.06 265);
+  --emphasis-surface: oklch(0.28 0.055 265);
+  --emphasis-foreground: var(--palette-neutral-50);
+  --emphasis-muted: oklch(0.74 0.04 265);
+  /* Status on the emphasis panel needs its own weights: the card tones are
        tuned against a light ground and turn to smudges on this one. The dark
        theme's variants are already the right lightness for both, because the
        panel stays dark in either theme. */
-    --emphasis-success: var(--palette-green-400);
-    --emphasis-warning: var(--palette-amber-400);
-    --emphasis-destructive: var(--palette-red-400);
-    --radius: 0.625rem;
-    --sidebar: var(--palette-neutral-50);
-    --sidebar-foreground: var(--palette-neutral-950);
-    --sidebar-primary: var(--palette-blue-600);
-    --sidebar-primary-foreground: var(--palette-neutral-50);
-    --sidebar-accent: var(--palette-neutral-100);
-    --sidebar-accent-foreground: var(--palette-neutral-900);
-    --sidebar-border: var(--palette-neutral-200);
-    --sidebar-ring: var(--palette-neutral-400);
+  --emphasis-success: var(--palette-green-400);
+  --emphasis-warning: var(--palette-amber-400);
+  --emphasis-destructive: var(--palette-red-300);
+  --radius: 0.625rem;
+  --sidebar: var(--palette-neutral-50);
+  --sidebar-foreground: var(--palette-neutral-950);
+  --sidebar-primary: var(--palette-blue-600);
+  --sidebar-primary-foreground: var(--palette-neutral-50);
+  --sidebar-accent: var(--palette-neutral-100);
+  --sidebar-accent-foreground: var(--palette-neutral-900);
+  --sidebar-border: var(--palette-neutral-200);
+  --sidebar-ring: var(--palette-neutral-400);
 }
 
 .dark {
-    --background: var(--palette-neutral-950);
-    --foreground: var(--palette-neutral-50);
-    --card: var(--palette-neutral-900);
-    --card-foreground: var(--palette-neutral-50);
-    --popover: var(--palette-neutral-900);
-    --popover-foreground: var(--palette-neutral-50);
-    --primary: var(--palette-blue-400);
-    --primary-foreground: var(--palette-neutral-950);
-    --secondary: var(--palette-neutral-800);
-    --secondary-foreground: var(--palette-neutral-50);
-    --muted: var(--palette-neutral-800);
-    --muted-foreground: var(--palette-neutral-400);
-    --accent: var(--palette-neutral-800);
-    --accent-foreground: var(--palette-neutral-50);
-    --border: var(--palette-white-a10);
-    --input: var(--palette-white-a15);
-    --ring: var(--palette-blue-400);
-    --info: var(--palette-blue-400);
-    --info-foreground: var(--palette-neutral-950);
-    --success: var(--palette-green-400);
-    --success-foreground: var(--palette-neutral-950);
-    --warning: var(--palette-amber-400);
-    --warning-foreground: var(--palette-neutral-950);
-    --destructive: var(--palette-red-400);
-    --destructive-foreground: var(--palette-neutral-950);
-    /* Same rule as the light ramp: step 1 is the least prominent against this
+  --background: var(--palette-neutral-950);
+  --foreground: var(--palette-neutral-50);
+  --card: var(--palette-neutral-900);
+  --card-foreground: var(--palette-neutral-50);
+  --popover: var(--palette-neutral-900);
+  --popover-foreground: var(--palette-neutral-50);
+  --primary: var(--palette-blue-400);
+  --primary-foreground: var(--palette-neutral-950);
+  --secondary: var(--palette-neutral-800);
+  --secondary-foreground: var(--palette-neutral-50);
+  --muted: var(--palette-neutral-800);
+  --muted-foreground: var(--palette-neutral-300);
+  --muted-foreground-subtle: var(--palette-neutral-400);
+  --accent: var(--palette-neutral-800);
+  --accent-foreground: var(--palette-neutral-50);
+  --border: var(--palette-white-a10);
+  --input: var(--palette-white-a15);
+  --ring: var(--palette-blue-400);
+  --info: var(--palette-blue-400);
+  --info-foreground: var(--palette-neutral-950);
+  --success: var(--palette-green-400);
+  --success-foreground: var(--palette-neutral-950);
+  --warning: var(--palette-amber-400);
+  --warning-foreground: var(--palette-neutral-950);
+  --destructive: var(--palette-red-400);
+  --destructive-foreground: var(--palette-neutral-950);
+  /* Same rule as the light ramp: step 1 is the least prominent against this
        theme's ground, step 5 the most. On a dark ground that means the ramp
        runs the other way, or the smallest series would shout the loudest. */
-    --chart-1: oklch(0.42 0.10 259);
-    --chart-2: oklch(0.52 0.14 257);
-    --chart-3: oklch(0.62 0.18 256);
-    --chart-4: oklch(0.72 0.17 254);
-    --chart-5: oklch(0.82 0.12 252);
-    /* On a dark page the hero cannot stand out by going darker: at 0.16 it sat
-       between --background and --card and read as a hole. Emphasis goes up
-       instead, so it stays the most elevated block in either theme. */
-    --emphasis: oklch(0.26 0.035 264);
-    --emphasis-surface: oklch(0.31 0.03 264);
-    --emphasis-foreground: var(--palette-neutral-50);
-    --emphasis-muted: oklch(0.72 0.03 264);
-    --emphasis-success: var(--palette-green-400);
-    --emphasis-warning: var(--palette-amber-400);
-    --emphasis-destructive: var(--palette-red-400);
-    --sidebar: var(--palette-neutral-900);
-    --sidebar-foreground: var(--palette-neutral-50);
-    --sidebar-primary: var(--palette-blue-400);
-    --sidebar-primary-foreground: var(--palette-neutral-950);
-    --sidebar-accent: var(--palette-neutral-800);
-    --sidebar-accent-foreground: var(--palette-neutral-50);
-    --sidebar-border: var(--palette-white-a10);
-    --sidebar-ring: var(--palette-neutral-500);
+  --chart-1: oklch(0.42 0.1 259);
+  --chart-2: oklch(0.52 0.14 257);
+  --chart-3: oklch(0.62 0.18 256);
+  --chart-4: oklch(0.72 0.17 254);
+  --chart-5: oklch(0.82 0.12 252);
+  /* Lightness alone cannot carry the hero in this theme. Going darker is out
+       — at 0.16 it sat between --background and --card and read as a hole in
+       the page. Going lighter is capped: against a neutral
+       --card it could only reach 1.15:1 before --emphasis-muted started
+       failing AA on it, so the separation is carried by hue instead: one
+       saturated block among neutral grey ones. Measured distance from --card
+       goes from 33 to 85 in RGB, where the luminance ratio moves 1.15 -> 1.45. */
+  --emphasis: oklch(0.33 0.1 264);
+  --emphasis-surface: oklch(0.39 0.09 264);
+  --emphasis-foreground: var(--palette-neutral-50);
+  --emphasis-muted: oklch(0.8 0.05 264);
+  --emphasis-success: var(--palette-green-400);
+  --emphasis-warning: var(--palette-amber-400);
+  --emphasis-destructive: var(--palette-red-300);
+  --sidebar: var(--palette-neutral-900);
+  --sidebar-foreground: var(--palette-neutral-50);
+  --sidebar-primary: var(--palette-blue-400);
+  --sidebar-primary-foreground: var(--palette-neutral-950);
+  --sidebar-accent: var(--palette-neutral-800);
+  --sidebar-accent-foreground: var(--palette-neutral-50);
+  --sidebar-border: var(--palette-white-a10);
+  --sidebar-ring: var(--palette-neutral-500);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -248,42 +270,45 @@ button:not(:disabled),
 [role="button"]:not([aria-disabled="true"]),
 [role="radio"]:not([aria-disabled="true"]),
 [role="tab"]:not([aria-disabled="true"]) {
-    cursor: pointer;
+  cursor: pointer;
 }
 
 .subtle-scrollbar {
-    scrollbar-width: thin;
-    scrollbar-color: var(--border) transparent;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
 }
 
 .subtle-scrollbar::-webkit-scrollbar {
-    width: 4px;
+  width: 4px;
 }
 
 .subtle-scrollbar::-webkit-scrollbar-track {
-    background: transparent;
+  background: transparent;
 }
 
 .subtle-scrollbar::-webkit-scrollbar-thumb {
-    border-radius: 999px;
-    background: var(--border);
+  border-radius: 999px;
+  background: var(--border);
 }
 
 @keyframes route-spin {
-    to {
-        transform: rotate(360deg);
-    }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @keyframes route-flow-item-border {
-  0%, 24%, 100% {
+  0%,
+  24%,
+  100% {
     background-position: 180% 0;
     opacity: 0;
   }
   3% {
     opacity: 0.2;
   }
-  10%, 17% {
+  10%,
+  17% {
     opacity: 0.8;
   }
   21% {
@@ -305,12 +330,21 @@ button:not(:disabled),
     border-radius: inherit;
     padding: 1px;
     content: "";
-    background: linear-gradient(90deg, transparent 25%, var(--primary) 50%, transparent 75%);
+    background: linear-gradient(
+      90deg,
+      transparent 25%,
+      var(--primary) 50%,
+      transparent 75%
+    );
     background-size: 250% 100%;
     opacity: 0;
-    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
     -webkit-mask-composite: xor;
-    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
     mask-composite: exclude;
   }
 
@@ -325,7 +359,6 @@ button:not(:disabled),
   .route-flow-item[data-flow-step="2"]::before {
     animation-delay: 2.4s;
   }
-
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -333,19 +366,18 @@ button:not(:disabled),
     animation: none;
     opacity: 0;
   }
-
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
-    }
+  }
   body {
     @apply overflow-hidden bg-background text-foreground;
-    }
+  }
   html {
     @apply font-sans;
-    }
+  }
   html,
   body,
   #root {

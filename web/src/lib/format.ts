@@ -17,7 +17,10 @@ export function formatDateOnly(value: number | null): string {
   return `${year}/${month}/${day}`
 }
 
-export function formatBillingCountdown(timestamp: number, now = Date.now()): string {
+export function formatBillingCountdown(
+  timestamp: number,
+  now = Date.now()
+): string {
   const days = billingDaysRemaining(timestamp, now)
   return days === 0 ? i18n.t("今天") : i18n.t("{{count}} 天后", { count: days })
 }
@@ -100,6 +103,41 @@ export function authStatusLabel(status: AuthStatus): string {
       error: "认证异常",
     }[status]
   )
+}
+
+/**
+ * Latency in the unit a person would say it in: milliseconds up to a second,
+ * seconds past it. The raw figure arrives as a mean and carries a full float
+ * of precision — "5034.614864864865 ms" is not a more accurate reading of a
+ * gateway, only a longer one.
+ */
+export function formatLatency(ms: number | null | undefined): string {
+  if (ms === null || ms === undefined || !Number.isFinite(ms)) return "—"
+  const locale = i18n.resolvedLanguage ?? undefined
+  if (ms < 1000) return `${Math.round(ms).toLocaleString(locale)} ms`
+  const seconds = ms / 1000
+  const digits = seconds < 10 ? 2 : 1
+  return `${seconds.toLocaleString(locale, {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  })} s`
+}
+
+/**
+ * Payload size at the scale it happens to be. The log page's own version
+ * stopped at kilobytes, so a long streamed response read as "4000.0 KB".
+ */
+export function formatBytes(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value))
+    return "—"
+  const units = ["B", "KB", "MB", "GB"]
+  let size = value
+  let unit = 0
+  while (size >= 1024 && unit < units.length - 1) {
+    size /= 1024
+    unit += 1
+  }
+  return `${unit === 0 ? size : size.toFixed(1)} ${units[unit]}`
 }
 
 export function formatDuration(seconds: number): string {

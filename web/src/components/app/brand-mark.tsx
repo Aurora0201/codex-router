@@ -14,7 +14,10 @@ const brandMaskStyle = {
   WebkitMaskSize: "contain",
 }
 
-export function BrandMark({ className, ...props }: { className?: string } & ComponentProps<"span">) {
+export function BrandMark({
+  className,
+  ...props
+}: { className?: string } & ComponentProps<"span">) {
   return (
     <span
       data-slot="brand-mark"
