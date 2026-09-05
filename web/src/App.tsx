@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useState, type CSSProperties } from "react"
 import { TriangleAlertIcon } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
@@ -197,7 +197,10 @@ export function App({
   const accountsLayout = page === "accounts" && Boolean(snapshot) && !error
 
   return (
-    <SidebarProvider className="h-dvh min-h-0 overflow-hidden">
+    <SidebarProvider
+      className="h-dvh min-h-0 overflow-hidden"
+      style={{ "--sidebar-width-icon": "3.5rem" } as CSSProperties}
+    >
       <AppSidebar
         page={page}
         onPageChange={navigate}

@@ -163,7 +163,7 @@ export function AccountCard({
         <AccountActions account={account} disabled={busy} onAction={onAction} />
       </header>
 
-      <div className="mt-1 rounded-xl bg-muted/60 p-3">
+      <div className="mt-1 rounded-xl bg-muted p-3">
         <div className="mb-4 flex items-center justify-between gap-3">
           <AccountStatus account={account} />
           <span

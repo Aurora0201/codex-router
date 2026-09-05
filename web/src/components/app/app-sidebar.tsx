@@ -50,6 +50,59 @@ function quotaTone(remaining: number, kind: "bg" | "text"): string {
   return kind === "bg" ? "bg-primary" : "text-muted-foreground"
 }
 
+function CollapsedQuotaRing({
+  window,
+}: {
+  window: ReturnType<typeof accountWindowSlots>[number]
+}) {
+  const { t } = useTranslation()
+  const remaining = window ? remainingPercent(window) : null
+  const label = formatUsageWindow(window)
+  const radius = 9
+  const circumference = 2 * Math.PI * radius
+
+  return (
+    <span
+      data-slot="collapsed-quota-ring"
+      role={remaining === null ? undefined : "progressbar"}
+      aria-label={t("{{label}}剩余", { label })}
+      aria-valuemin={remaining === null ? undefined : 0}
+      aria-valuemax={remaining === null ? undefined : 100}
+      aria-valuenow={remaining === null ? undefined : Math.round(remaining)}
+      className="hidden size-5 shrink-0 place-items-center group-data-[collapsible=icon]:grid"
+    >
+      <svg aria-hidden="true" viewBox="0 0 24 24" className="size-5 -rotate-90">
+        <circle
+          cx="12"
+          cy="12"
+          r={radius}
+          className="fill-none stroke-foreground/15"
+          strokeWidth="2.5"
+        />
+        {remaining === null ? null : (
+          <circle
+            cx="12"
+            cy="12"
+            r={radius}
+            className={cn(
+              "fill-none transition-[stroke-dashoffset] duration-300 motion-reduce:transition-none",
+              remaining <= QUOTA_CRITICAL_PERCENT
+                ? "stroke-destructive"
+                : remaining <= QUOTA_TIGHT_PERCENT
+                  ? "stroke-warning"
+                  : "stroke-primary"
+            )}
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeDasharray={circumference}
+            strokeDashoffset={circumference * (1 - remaining / 100)}
+          />
+        )}
+      </svg>
+    </span>
+  )
+}
+
 /**
  * The current page is marked, not filled. A solid pill was the loudest block of
  * colour in the window and fought the one dark panel every page is built
@@ -147,6 +200,10 @@ export function AppSidebar({
     ? accountWindowSlots(activeAccount)
     : [null, null]
   const slots = [shortWindow, longWindow] as const
+  const collapsedWindow = shortWindow ?? longWindow
+  const collapsedRemaining = collapsedWindow
+    ? remainingPercent(collapsedWindow)
+    : null
   const tightest = activeAccount ? tightestRemaining(activeAccount) : null
   const tightestTone =
     tightest === null ? undefined : quotaTone(tightest, "text")
@@ -161,6 +218,15 @@ export function AppSidebar({
             : t("{{value}}%", { value: Math.round(tightest) }),
       })
     : t("尚未选择路由")
+  const collapsedFooterLabel = activeAccount
+    ? `${t("{{label}}剩余", {
+        label: formatUsageWindow(collapsedWindow),
+      })} · ${
+        collapsedRemaining === null
+          ? t("未报告")
+          : t("{{value}}%", { value: Math.round(collapsedRemaining) })
+      }`
+    : t("尚未选择路由")
 
   return (
     // The seam is a rule, not a gutter. The inset variant floated the content
@@ -173,7 +239,7 @@ export function AppSidebar({
           below, it sat a pixel lower and the two lines did not meet. */}
       <SidebarHeader className="h-14 border-b border-sidebar-border p-0">
         {state === "collapsed" && !isMobile ? (
-          <div className="flex h-full items-center justify-center">
+          <div className="flex size-14 shrink-0 items-center justify-center">
             <Tooltip>
               <TooltipTrigger
                 render={
@@ -208,7 +274,7 @@ export function AppSidebar({
       <SidebarContent>
         {/* No group label: five items in one group, and "控制台" named nothing
             the header above it had not already said. */}
-        <SidebarGroup>
+        <SidebarGroup className="group-data-[collapsible=icon]:px-3">
           <SidebarGroupContent>
             <SidebarMenu className="gap-1">
               {navigation.map((item) => (
@@ -224,7 +290,7 @@ export function AppSidebar({
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarMenu className="px-2 pb-2">
+      <SidebarMenu className="px-2 pb-2 group-data-[collapsible=icon]:px-3">
         <NavRow
           item={settingsItem}
           page={page}
@@ -234,7 +300,7 @@ export function AppSidebar({
       </SidebarMenu>
       {/* The header carries a rule, so the quota panel needs the matching one
           or it reads as the tail of the nav rather than its own block. */}
-      <SidebarFooter className="border-t border-sidebar-border">
+      <SidebarFooter className="border-t border-sidebar-border group-data-[collapsible=icon]:px-3">
         {/* What the routed account has left, not which one it is: the name is
             on the accounts page, but the headroom decides whether the next
             request goes through. The plan sits in the heading because it is
@@ -244,17 +310,23 @@ export function AppSidebar({
             render={
               <Button
                 variant="ghost"
-                className="h-auto w-full flex-col items-stretch gap-2 px-2 py-2 text-left group-data-[collapsible=icon]:flex-row group-data-[collapsible=icon]:justify-center"
+                className="h-auto w-full flex-col items-stretch gap-2 px-3 py-2 text-left group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:flex-row group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-0 group-data-[collapsible=icon]:p-0!"
                 onClick={() => navigate("accounts")}
-                aria-label={footerLabel}
+                aria-label={
+                  state === "collapsed" ? collapsedFooterLabel : footerLabel
+                }
               />
             }
           >
-            <span className="flex items-center gap-1.5">
+            <span className="flex items-center gap-1.5 group-data-[collapsible=icon]:w-full group-data-[collapsible=icon]:justify-center">
               <RouteIcon
-                className={cn("size-4 shrink-0", tightestTone)}
+                className={cn(
+                  "size-4 shrink-0 group-data-[collapsible=icon]:hidden",
+                  tightestTone
+                )}
                 aria-hidden="true"
               />
+              <CollapsedQuotaRing window={collapsedWindow} />
               <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
                 {identity}
                 {plan ? (
@@ -279,7 +351,7 @@ export function AppSidebar({
               // A transition rather than an enter animation: an animation with
               // fill-mode both can be interrupted mid-toggle and leave the
               // block stuck at opacity 0.
-              <span className="grid gap-3 overflow-hidden transition-[height,opacity] duration-200 group-data-[collapsible=icon]:h-0 group-data-[collapsible=icon]:opacity-0 motion-reduce:transition-none">
+              <span className="grid gap-3 overflow-hidden transition-[height,width,opacity] duration-200 group-data-[collapsible=icon]:h-0 group-data-[collapsible=icon]:w-0 group-data-[collapsible=icon]:opacity-0 motion-reduce:transition-none">
                 {slots.map((window, index) => {
                   const remaining = window ? remainingPercent(window) : null
                   return (
@@ -337,7 +409,9 @@ export function AppSidebar({
               </span>
             ) : null}
           </TooltipTrigger>
-          <TooltipContent side="right">{footerLabel}</TooltipContent>
+          <TooltipContent side="right">
+            {state === "collapsed" ? collapsedFooterLabel : footerLabel}
+          </TooltipContent>
         </Tooltip>
       </SidebarFooter>
     </Sidebar>
