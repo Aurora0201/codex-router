@@ -91,7 +91,7 @@ export function AccountDetailSheet({
             <div className="flex flex-col gap-6 px-4 pb-6">
               <section className="flex flex-col gap-3">
                 <h3 className={SECTION_TITLE}>{t("账号信息")}</h3>
-                <dl className="flex flex-col gap-0.5 rounded-xl bg-muted/60 p-2">
+                <dl className="flex flex-col gap-0.5 rounded-xl bg-muted p-2">
                   <Fact
                     icon={Layers3Icon}
                     label={t("订阅等级")}
@@ -143,7 +143,7 @@ export function AccountDetailSheet({
                   account.limits.buckets.map((bucket) => (
                     <div
                       key={bucket.key}
-                      className="flex flex-col gap-2 rounded-xl bg-muted/60 p-3"
+                      className="flex flex-col gap-2 rounded-xl bg-muted p-3"
                     >
                       <div className="flex items-center justify-between gap-3">
                         <p className="truncate text-sm font-medium">
@@ -212,10 +212,7 @@ export function AccountDetailSheet({
                         (b.expiresAt ?? Number.MAX_SAFE_INTEGER)
                     )
                     .map((credit) => (
-                      <div
-                        key={credit.id}
-                        className="rounded-xl bg-muted/60 p-3"
-                      >
+                      <div key={credit.id} className="rounded-xl bg-muted p-3">
                         <div className="flex justify-between gap-3">
                           <div className="min-w-0">
                             <p className="truncate text-sm font-medium">

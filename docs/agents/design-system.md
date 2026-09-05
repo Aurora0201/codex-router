@@ -439,6 +439,12 @@ decorate, and never to make a fast thing feel slow.
 
 ## Exceptions
 
+- Preferences is a form, not a dashboard: each section pairs an unboxed
+  heading/description with one `bg-muted rounded-xl` settings surface.
+  At `lg`, the heading column is 180px with a 32px gap; below it, the
+  heading stacks above the controls. Do not wrap these sections or directory
+  rows in additional Cards/Panels. Reuse the existing shell and form controls.
+
 - Both faces are bundled locally through `@fontsource-variable`, with a
   Latin-only `@font-face` for the wordmark; nothing is fetched from a font
   service at runtime. System fonts remain the fallback.
