@@ -2,6 +2,7 @@ import { ServerCrashIcon } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
 import { Panel } from "@/components/app/panel"
+import { Separator } from "@/components/ui/separator"
 import {
   Tooltip,
   TooltipContent,
@@ -206,13 +207,6 @@ export function FailureBreakdownPanel({
 }) {
   const { t } = useTranslation()
   const worst = Math.max(1, ...failureSources.map((item) => item.count))
-  // A bar is a comparison. With one source — or with every source on the same
-  // count — it can only draw a full row, which says nothing the number beside
-  // it has not already said.
-  const comparable =
-    failureSources.length > 1 &&
-    failureSources.some((item) => item.count !== worst)
-
   return (
     <Panel
       title={t("故障分布")}
@@ -226,29 +220,31 @@ export function FailureBreakdownPanel({
           {t("这段范围内没有故障")}
         </p>
       ) : (
-        // The proportion sits behind the row rather than on a rule under it.
-        // Stacked, five sources cost 208px in a panel with 236 to give, and
-        // the codes below them had nowhere to go.
-        <ul className="grid gap-1">
+        <ul className="grid gap-3">
           {failureSources.map((item) => (
             <li key={item.source}>
               <button
                 type="button"
-                className="relative flex w-full items-baseline justify-between gap-3 overflow-hidden rounded-md px-2 py-0.5 text-left text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                className="grid w-full gap-1.5 rounded-md text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
                 onClick={() => onSelectSource(item.source)}
               >
-                {comparable ? (
+                <span className="flex items-baseline justify-between gap-3 text-xs">
+                  <span className="truncate font-medium">
+                    {t(SOURCE_LABELS[item.source] ?? item.source)}
+                  </span>
+                  <span className="shrink-0 text-muted-foreground tabular-nums">
+                    {item.count}
+                  </span>
+                </span>
+                <span
+                  data-slot="failure-source-track"
+                  aria-hidden="true"
+                  className="h-1.5 overflow-hidden rounded-full bg-foreground/10"
+                >
                   <span
-                    aria-hidden="true"
-                    className="absolute inset-y-0 left-0 bg-chart-4/20 transition-[width] duration-500 ease-out motion-reduce:transition-none"
+                    className="block h-full rounded-full bg-destructive transition-[width] duration-500 ease-out motion-reduce:transition-none"
                     style={{ width: `${(item.count / worst) * 100}%` }}
                   />
-                ) : null}
-                <span className="relative truncate font-medium">
-                  {t(SOURCE_LABELS[item.source] ?? item.source)}
-                </span>
-                <span className="relative shrink-0 font-medium text-muted-foreground tabular-nums">
-                  {item.count}
                 </span>
               </button>
             </li>
@@ -259,7 +255,8 @@ export function FailureBreakdownPanel({
       {/* The source says which layer broke; the code is what you would put in
           the search box next, so it is the one worth naming. */}
       {diagnosticCodes.length ? (
-        <div className="mt-3 border-t border-border pt-3">
+        <div className="mt-3">
+          <Separator className="mb-3" />
           <p className="text-xs text-muted-foreground-subtle">
             {t("最常见诊断码")}
           </p>

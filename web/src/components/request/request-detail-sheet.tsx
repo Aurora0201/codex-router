@@ -10,6 +10,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
+import { LogDetailGroup } from "@/components/request/log-detail-group"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { toast } from "@/components/ui/toast"
@@ -45,25 +46,44 @@ export function RequestDetailSheet({
         [t("时间"), new Date(selectedTime).toLocaleString(locale)],
         [t("生命周期"), full ? t(STATE_LABELS[selected.state]) : "—"],
         [t("请求结果"), resultLabel],
-        [t("失败来源"), full ? (selected.failureSource ?? "—") : "—"],
-        [t("失败阶段"), full ? (selected.failureStage ?? "—") : "—"],
-        [
-          t("HTTP 状态"),
-          full ? (selected.httpStatus ?? "—") : (selected.statusCode ?? "—"),
-        ],
-        [t("协议错误码"), full ? (selected.protocolErrorCode ?? "—") : "—"],
-        [t("诊断码"), full ? (selected.diagnosticCode ?? "—") : "—"],
-        [
-          t("传输错误链"),
-          full && selected.transportErrorChain?.length
-            ? selected.transportErrorChain
-                .map(({ name, code }) => [name, code].filter(Boolean).join(":"))
-                .join(" → ")
-            : "—",
-        ],
-        [t("上游请求 ID"), full ? (selected.upstreamRequestId ?? "—") : "—"],
       ],
     },
+    ...(selected.outcome !== "success"
+      ? [
+          {
+            title: t("故障细节"),
+            values: [
+              [t("失败来源"), full ? (selected.failureSource ?? "—") : "—"],
+              [t("失败阶段"), full ? (selected.failureStage ?? "—") : "—"],
+              [
+                t("HTTP 状态"),
+                full
+                  ? (selected.httpStatus ?? "—")
+                  : (selected.statusCode ?? "—"),
+              ],
+              [
+                t("协议错误码"),
+                full ? (selected.protocolErrorCode ?? "—") : "—",
+              ],
+              [t("诊断码"), full ? (selected.diagnosticCode ?? "—") : "—"],
+              [
+                t("传输错误链"),
+                full && selected.transportErrorChain?.length
+                  ? selected.transportErrorChain
+                      .map(({ name, code }) =>
+                        [name, code].filter(Boolean).join(":")
+                      )
+                      .join(" → ")
+                  : "—",
+              ],
+              [
+                t("上游请求 ID"),
+                full ? (selected.upstreamRequestId ?? "—") : "—",
+              ],
+            ],
+          },
+        ]
+      : []),
     ...(full
       ? [
           {
@@ -106,36 +126,21 @@ export function RequestDetailSheet({
   ]
   return (
     <Sheet open onOpenChange={(open) => !open && onClose()}>
-      <SheetContent className="sm:max-w-md">
-        <SheetHeader className="border-b">
+      <SheetContent className="gap-0 bg-card data-[side=right]:w-full data-[side=right]:sm:max-w-md">
+        <SheetHeader className="px-5 py-5 pr-12">
           <SheetTitle>{t("请求详情")}</SheetTitle>
           <SheetDescription>
             {t("仅包含允许记录的诊断元数据。")}
           </SheetDescription>
         </SheetHeader>
         <ScrollArea className="min-h-0 flex-1">
-          <div className="flex flex-col gap-6 px-4 pb-4">
+          <div className="flex flex-col gap-4 p-4 pt-1">
             {groups.map((group) => (
-              <section key={group.title} className="flex flex-col gap-3">
-                <h3 className="text-sm font-medium">{group.title}</h3>
-                {group.values.map(([label, value]) => (
-                  <div
-                    key={String(label)}
-                    className="grid grid-cols-[7rem_1fr] gap-3"
-                  >
-                    <span className="text-sm text-muted-foreground">
-                      {label}
-                    </span>
-                    <span className="min-w-0 text-sm break-all tabular-nums">
-                      {value}
-                    </span>
-                  </div>
-                ))}
-              </section>
+              <LogDetailGroup key={group.title} {...group} />
             ))}
           </div>
         </ScrollArea>
-        <SheetFooter className="border-t sm:flex-row sm:justify-end">
+        <SheetFooter className="p-4 sm:flex-row sm:justify-end">
           {requestId && (
             <Button
               variant="outline"
@@ -149,7 +154,7 @@ export function RequestDetailSheet({
               {t("复制请求 ID")}
             </Button>
           )}
-          <SheetClose render={<Button variant="default" />}>
+          <SheetClose render={<Button variant="secondary" />}>
             {t("关闭")}
           </SheetClose>
         </SheetFooter>
