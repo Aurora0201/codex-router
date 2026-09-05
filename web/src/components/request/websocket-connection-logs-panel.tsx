@@ -17,6 +17,8 @@ import { useTranslation } from "react-i18next"
 
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { FilterGroup } from "@/components/request/log-filter-controls"
+import { LogDetailGroup } from "@/components/request/log-detail-group"
 import { LogDateRangePicker } from "@/components/request/log-date-range-picker"
 import {
   ConnectionOutcomePanel,
@@ -38,7 +40,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty"
 import { Input } from "@/components/ui/input"
-import { Field, FieldGroup } from "@/components/ui/field"
+import { Field, FieldLabel } from "@/components/ui/field"
 import {
   Pagination,
   PaginationContent,
@@ -465,7 +467,7 @@ export function WebSocketConnectionLogsPanel({
           />
           <Popover>
             <PopoverTrigger
-              render={<Button variant="outline" size="sm" />}
+              render={<Button variant="secondary" size="lg" />}
               className="ml-auto"
             >
               <SlidersHorizontalIcon data-icon="inline-start" />
@@ -476,79 +478,89 @@ export function WebSocketConnectionLogsPanel({
             </PopoverTrigger>
             <PopoverContent
               align="end"
-              className="w-[min(34rem,calc(100vw-2rem))]"
+              className="w-[min(32rem,calc(100vw-2rem))] gap-0 overflow-hidden rounded-2xl bg-card p-0 text-foreground"
             >
-              <PopoverHeader>
+              <PopoverHeader className="p-4">
                 <PopoverTitle>{t("更多筛选")}</PopoverTitle>
                 <PopoverDescription>
                   {t("摘要和连接列表使用相同筛选范围。")}
                 </PopoverDescription>
               </PopoverHeader>
-              <FieldGroup className="grid gap-3 sm:grid-cols-2">
-                <LogDateRangePicker
-                  from={filters.from}
-                  to={filters.to}
-                  onApply={(from, to) => update({ from, to })}
-                  onClear={() => update({ from: undefined, to: undefined })}
-                />
-              </FieldGroup>
-              <FieldGroup className="grid gap-3 sm:grid-cols-2">
-                <Field>
-                  <AccountFilter
-                    accounts={accounts}
-                    value={filters.accountId}
-                    onChange={(accountId) => update({ accountId })}
-                  />
-                </Field>
-                <Field>
-                  <Choice
-                    className="w-full"
-                    label={t("关闭发起方")}
-                    value={filters.closeInitiator ?? "all"}
-                    onChange={(closeInitiator) =>
-                      update({
-                        closeInitiator:
-                          closeInitiator === "all"
-                            ? undefined
-                            : (closeInitiator as WebSocketConnectionLogFilters["closeInitiator"]),
-                      })
-                    }
-                    items={[
-                      { value: "all", label: t("全部发起方") },
-                      { value: "client", label: "client" },
-                      { value: "upstream", label: "upstream" },
-                      { value: "gateway", label: "gateway" },
-                    ]}
-                  />
-                </Field>
-                {[
-                  ["handshakeHttpStatus", "握手 HTTP"],
-                  ["clientCloseCode", "客户端关闭码"],
-                  ["upstreamCloseCode", "上游关闭码"],
-                ].map(([key, label]) => (
-                  <Field key={key}>
-                    <Input
-                      key={key}
-                      aria-label={t(label)}
-                      className="w-full"
-                      inputMode="numeric"
-                      placeholder={t(label)}
-                      value={
-                        (filters[
-                          key as keyof WebSocketConnectionLogFilters
-                        ] as number) ?? ""
-                      }
-                      onChange={(event) =>
-                        update({
-                          [key]: event.target.value
-                            ? Number(event.target.value)
-                            : undefined,
-                        })
-                      }
+              <ScrollArea className="h-[min(28rem,55dvh)] [&_[data-slot=scroll-area-viewport]]:scroll-fade [&_[data-slot=scroll-area-viewport]]:scroll-fade-6">
+                <div className="grid gap-3 px-3 pb-3">
+                  <FilterGroup title={t("时间窗口")}>
+                    <LogDateRangePicker
+                      from={filters.from}
+                      to={filters.to}
+                      onApply={(from, to) => update({ from, to })}
+                      onClear={() => update({ from: undefined, to: undefined })}
                     />
-                  </Field>
-                ))}
-              </FieldGroup>
+                  </FilterGroup>
+                  <FilterGroup title={t("连接诊断")}>
+                    <Field>
+                      <FieldLabel>{t("账号")}</FieldLabel>
+                      <AccountFilter
+                        accounts={accounts}
+                        value={filters.accountId}
+                        onChange={(accountId) => update({ accountId })}
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel>{t("关闭发起方")}</FieldLabel>
+                      <Choice
+                        className="w-full"
+                        label={t("关闭发起方")}
+                        value={filters.closeInitiator ?? "all"}
+                        onChange={(closeInitiator) =>
+                          update({
+                            closeInitiator:
+                              closeInitiator === "all"
+                                ? undefined
+                                : (closeInitiator as WebSocketConnectionLogFilters["closeInitiator"]),
+                          })
+                        }
+                        items={[
+                          { value: "all", label: t("全部发起方") },
+                          { value: "client", label: "client" },
+                          { value: "upstream", label: "upstream" },
+                          { value: "gateway", label: "gateway" },
+                        ]}
+                      />
+                    </Field>
+                    {[
+                      ["handshakeHttpStatus", "握手 HTTP"],
+                      ["clientCloseCode", "客户端关闭码"],
+                      ["upstreamCloseCode", "上游关闭码"],
+                    ].map(([key, label]) => (
+                      <Field key={key}>
+                        <FieldLabel htmlFor={`connection-filter-${key}`}>
+                          {t(label)}
+                        </FieldLabel>
+                        <Input
+                          id={`connection-filter-${key}`}
+                          key={key}
+                          aria-label={t(label)}
+                          className="w-full"
+                          inputMode="numeric"
+                          placeholder={t(label)}
+                          value={
+                            (filters[
+                              key as keyof WebSocketConnectionLogFilters
+                            ] as number) ?? ""
+                          }
+                          onChange={(event) =>
+                            update({
+                              [key]: event.target.value
+                                ? Number(event.target.value)
+                                : undefined,
+                            })
+                          }
+                        />
+                      </Field>
+                    ))}
+                  </FilterGroup>
+                </div>
+              </ScrollArea>
             </PopoverContent>
           </Popover>
         </div>
@@ -713,29 +725,34 @@ export function WebSocketConnectionLogsPanel({
       </section>
       {selected ? (
         <Sheet open onOpenChange={(open) => !open && setSelected(null)}>
-          <SheetContent>
-            <SheetHeader>
+          <SheetContent className="gap-0 bg-card data-[side=right]:w-full data-[side=right]:sm:max-w-md">
+            <SheetHeader className="px-5 py-5 pr-12">
               <SheetTitle>{t("连接诊断详情")}</SheetTitle>
               <SheetDescription>
                 {t("仅包含握手和关闭元数据。")}
               </SheetDescription>
             </SheetHeader>
-            <div className="grid grid-cols-[8rem_1fr] gap-3 px-4 text-sm">
-              {[
-                [t("连接 ID"), selected.connectionId],
-                [t("结果"), t(LABELS[selected.outcome])],
-                [t("握手 HTTP"), value(selected.handshakeHttpStatus)],
-                [t("客户端关闭码"), value(selected.clientCloseCode)],
-                [t("上游关闭码"), value(selected.upstreamCloseCode)],
-                [t("关闭发起方"), value(selected.closeInitiator)],
-                [t("关闭原因"), value(selected.closeReasonCode)],
-              ].map(([label, entry]) => (
-                <div className="contents" key={String(label)}>
-                  <span className="text-muted-foreground">{label}</span>
-                  <span className="break-all">{entry}</span>
-                </div>
-              ))}
-            </div>
+            <ScrollArea className="min-h-0 flex-1">
+              <div className="flex flex-col gap-4 p-4 pt-1">
+                <LogDetailGroup
+                  title={t("连接诊断")}
+                  values={[
+                    [t("连接 ID"), selected.connectionId],
+                    [t("结果"), t(LABELS[selected.outcome])],
+                    [t("握手 HTTP"), value(selected.handshakeHttpStatus)],
+                  ]}
+                />
+                <LogDetailGroup
+                  title={t("关闭原因")}
+                  values={[
+                    [t("客户端关闭码"), value(selected.clientCloseCode)],
+                    [t("上游关闭码"), value(selected.upstreamCloseCode)],
+                    [t("关闭发起方"), value(selected.closeInitiator)],
+                    [t("关闭原因"), value(selected.closeReasonCode)],
+                  ]}
+                />
+              </div>
+            </ScrollArea>
           </SheetContent>
         </Sheet>
       ) : null}

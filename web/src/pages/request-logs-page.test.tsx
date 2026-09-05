@@ -162,11 +162,21 @@ describe("RequestLogsPage", () => {
 
     // Anything set out of sight does get one, and the chip lives in the
     // toolbar rather than inside the popover that set it.
-    await user.click(screen.getByRole("button", { name: /上游 HTTP/ }))
+    const sourceFilter = screen.getByRole("button", { name: /上游 HTTP/ })
+    expect(
+      sourceFilter.querySelector('[data-slot="failure-source-track"]')
+    ).toHaveClass("h-1.5", "rounded-full")
+    expect(
+      sourceFilter.querySelector('[data-slot="failure-source-track"] > span')
+    ).toHaveClass("bg-destructive")
+    await user.click(sourceFilter)
     const chip = await screen.findByRole("button", {
-      name: "移除筛选 upstream_http",
+      name: "移除筛选 失败来源 · upstream_http",
     })
     expect(chip.closest("[data-slot=popover-content]")).toBeNull()
+    expect(chip).toHaveAttribute("data-slot", "badge")
+    expect(chip.querySelector("button")).toBeNull()
+    expect(chip.querySelector("svg")).toHaveAttribute("data-icon", "inline-end")
     await waitFor(() =>
       expect(getRequestLogs).toHaveBeenLastCalledWith(
         expect.objectContaining({ failureSource: "upstream_http" })
@@ -283,6 +293,18 @@ describe("RequestLogsPage", () => {
     expect(records).toContainElement(
       screen.getByRole("button", { name: "更多筛选" })
     )
+    const toolbar = screen
+      .getByRole("searchbox", { name: "搜索请求" })
+      .closest("div")
+    expect(toolbar).toContainElement(
+      screen.getByRole("tablist", { name: "请求结果筛选" })
+    )
+    expect(toolbar).toContainElement(
+      screen.getByRole("button", { name: "更多筛选" })
+    )
+    expect(toolbar).toContainElement(
+      screen.getByRole("tablist", { name: "时间范围" })
+    )
     expect(records).toContainElement(
       screen.getByRole("button", { name: "查看请求 req-1" })
     )
@@ -312,6 +334,24 @@ describe("RequestLogsPage", () => {
       screen.getByRole("button", { name: "查看请求 req-1" })
     )
     expect(await screen.findByText("请求详情")).toBeInTheDocument()
+    expect(screen.getByRole("heading", { name: "结果" })).toBeInTheDocument()
+    expect(
+      screen.getByRole("heading", { name: "故障细节" })
+    ).toBeInTheDocument()
+    const resultGroup = screen
+      .getByRole("heading", { name: "结果" })
+      .closest("section")
+    expect(resultGroup).toHaveClass("rounded-xl", "bg-muted", "p-4")
+    expect(resultGroup).not.toHaveClass("bg-card", "ring-1")
+    expect(
+      screen
+        .getByRole("heading", { name: "请求详情" })
+        .closest("[data-slot=sheet-content]")
+    ).toHaveClass("data-[side=right]:sm:max-w-md")
+    expect(resultGroup?.querySelector("dl > div")).toHaveClass(
+      "justify-between"
+    )
+    expect(screen.getByText("协议错误码").tagName).toBe("DT")
     expect(screen.getByText("rate_limit_exceeded")).toBeInTheDocument()
     expect(screen.getByText("upstream_protocol")).toBeInTheDocument()
     expect(screen.getByText("upstream-1")).toBeInTheDocument()
@@ -401,6 +441,13 @@ describe("RequestLogsPage", () => {
     expect(await screen.findByTitle("POST /responses")).toBeInTheDocument()
     expect(screen.getByTitle("GET /models")).toBeInTheDocument()
     expect(screen.getAllByTitle("WS /responses")).toHaveLength(2)
+    await userEvent.click(
+      screen.getByRole("button", { name: "查看请求 http-response" })
+    )
+    expect(await screen.findByText("请求详情")).toBeInTheDocument()
+    expect(
+      screen.queryByRole("heading", { name: "故障细节" })
+    ).not.toBeInTheDocument()
   })
 
   it("applies and clears a local whole-day date range", async () => {
@@ -420,6 +467,22 @@ describe("RequestLogsPage", () => {
     )
 
     await user.click(screen.getByRole("button", { name: "更多筛选" }))
+    expect(screen.getByRole("button", { name: "更多筛选" })).toHaveClass("h-9")
+    expect(document.querySelector('[data-slot="popover-content"]')).toHaveClass(
+      "w-[min(32rem,calc(100vw-2rem))]"
+    )
+    expect(screen.getByLabelText("HTTP 状态")).toHaveAttribute(
+      "id",
+      "request-filter-httpStatus"
+    )
+    expect(screen.getByText("HTTP 状态", { selector: "label" })).toBeVisible()
+    expect(screen.getByText("生命周期", { selector: "label" })).toBeVisible()
+    expect(
+      screen.getByLabelText("HTTP 状态").closest('[data-slot="scroll-area"]')
+    ).toHaveClass(
+      "[&_[data-slot=scroll-area-viewport]]:scroll-fade",
+      "[&_[data-slot=scroll-area-viewport]]:scroll-fade-6"
+    )
     await user.click(screen.getByRole("button", { name: "日期范围" }))
     const availableDays = Array.from(
       document.querySelectorAll<HTMLButtonElement>(
@@ -809,6 +872,7 @@ describe("RequestLogsPage", () => {
     )
     const moreFilters = screen.getByRole("button", { name: /^更多筛选/ })
     expect(diagnosticsSection).toContainElement(moreFilters)
+    expect(moreFilters).toHaveClass("h-9")
     expect(screen.getByRole("searchbox", { name: "搜索连接" })).toHaveClass(
       "bg-transparent"
     )
@@ -819,6 +883,12 @@ describe("RequestLogsPage", () => {
       screen.getByText("connection-1").closest('[data-slot="scroll-area"]')
     ).toHaveClass("h-[520px]")
     await userEvent.click(moreFilters)
+    expect(document.querySelector('[data-slot="popover-content"]')).toHaveClass(
+      "w-[min(32rem,calc(100vw-2rem))]"
+    )
+    expect(
+      screen.getByLabelText("握手 HTTP").closest('[data-slot="scroll-area"]')
+    ).toHaveClass("[&_[data-slot=scroll-area-viewport]]:scroll-fade")
     expect(
       await screen.findByRole("button", { name: "日期范围" })
     ).toBeInTheDocument()
