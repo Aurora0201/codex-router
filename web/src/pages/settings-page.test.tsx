@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react"
+import { render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { describe, expect, it, vi } from "vitest"
 
@@ -50,6 +50,14 @@ describe("SettingsPage", () => {
         Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy()
     expect(screen.queryByText("今日运行")).not.toBeInTheDocument()
+    await waitFor(() => {
+      expect(
+        document.querySelectorAll('[data-slot="availability-bucket"]')
+      ).toHaveLength(96)
+      expect(
+        document.querySelectorAll('[data-slot="request-volume-bucket"]')
+      ).toHaveLength(96)
+    })
   })
 
   it("counts nothing as forwarded while the config is still untouched", async () => {

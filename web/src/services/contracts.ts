@@ -343,7 +343,7 @@ export interface RequestLogsResponse {
   /**
    * The timeline is a capped sample of recent requests, so anything that has
    * to be counted or shaped over the whole window is aggregated server-side
-   * instead: `histogram` covers the range in 96 equal buckets.
+   * instead: `histogram` covers the full range in fixed-duration buckets.
    */
   timeline: Array<{
     id: string

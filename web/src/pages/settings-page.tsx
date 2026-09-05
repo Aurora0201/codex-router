@@ -17,6 +17,7 @@ import { WebSocketActivityCard } from "@/components/gateway/websocket-activity-c
 import { toast } from "@/components/ui/toast"
 import { useSlowLoad } from "@/hooks/use-slow-load"
 import { formatDuration } from "@/lib/format"
+import { normalizeRequestHistogram } from "@/lib/request-histogram"
 import { cn } from "@/lib/utils"
 import type {
   GatewayService,
@@ -49,6 +50,23 @@ const EMPTY: {
   },
 }
 
+type AvailabilitySnapshot = typeof EMPTY & {
+  range: RequestLogRange
+  from: number
+  to: number
+}
+
+function initialAvailabilitySnapshot(): AvailabilitySnapshot {
+  const to = Date.now()
+  const selected = RANGES[1]
+  return {
+    ...EMPTY,
+    range: selected.value,
+    from: to - selected.ms,
+    to,
+  }
+}
+
 export function SettingsPage({
   snapshot,
   service,
@@ -64,9 +82,8 @@ export function SettingsPage({
 }) {
   const { t } = useTranslation()
   const [range, setRange] = useState<RequestLogRange>("24h")
-  const [to, setTo] = useState(() => Date.now())
   const [now, setNow] = useState(() => Date.now())
-  const [data, setData] = useState(EMPTY)
+  const [availability, setAvailability] = useState(initialAvailabilitySnapshot)
   const [loadedRange, setLoadedRange] = useState<RequestLogRange | null>(null)
   const enabled = snapshot.settings.requestMetadataLogging
 
@@ -76,16 +93,32 @@ export function SettingsPage({
   useEffect(() => {
     if (!enabled) return
     let cancelled = false
+    const selected = RANGES.find((item) => item.value === range) ?? RANGES[1]
+    const queryTo = Date.now()
+    const queryFrom = queryTo - selected.ms
     void service
-      .getRequestLogs({ range, page: 1, limit: 1 })
+      .getRequestLogs({
+        range,
+        from: queryFrom,
+        to: queryTo,
+        page: 1,
+        limit: 1,
+      })
       .then((result) => {
         if (cancelled) return
-        setData({
+        setAvailability({
+          range,
+          from: queryFrom,
+          to: queryTo,
           timeline: result.timeline,
-          histogram: result.histogram,
+          histogram: normalizeRequestHistogram(
+            range,
+            queryFrom,
+            queryTo,
+            result.histogram
+          ),
           summary: result.summary,
         })
-        setTo(Date.now())
       })
       .catch((error) => {
         if (!cancelled)
@@ -117,7 +150,7 @@ export function SettingsPage({
 
   // Derived rather than stored: writing EMPTY back into state from the effect
   // is a synchronous setState that cascades a second render for nothing.
-  const shown = enabled ? data : EMPTY
+  const shown = enabled ? availability : { ...availability, ...EMPTY }
   // Derived, so the dim answers the question "is the window on screen the one
   // that was asked for" — and stays out of the way of the background refreshes
   // that arrive with live traffic, which keep the same range. Held back until
@@ -133,8 +166,8 @@ export function SettingsPage({
     "transition-opacity duration-200 motion-reduce:transition-none",
     busy && "opacity-60"
   )
-  const selected = RANGES.find((item) => item.value === range) ?? RANGES[1]
-  const from = to - selected.ms
+  const displayedRange =
+    RANGES.find((item) => item.value === availability.range) ?? RANGES[1]
 
   const rangeTabs = (
     <Tabs
@@ -146,7 +179,6 @@ export function SettingsPage({
         // Blanking them first collapsed the page by 50px and bounced
         // everything below the hero; the panels dim instead, which says
         // "updating" without moving anything.
-        setTo(Date.now())
         setRange(next.value)
       }}
       className="gap-0"
@@ -186,8 +218,8 @@ export function SettingsPage({
           onShowAccounts={onShowAccounts}
           summary={shown.summary}
           histogram={shown.histogram}
-          from={from}
-          rangeLabel={t(selected.label)}
+          from={shown.from}
+          rangeLabel={t(displayedRange.label)}
           uptimeLabel={formatDuration(snapshot.stats.uptimeSeconds)}
         />
 
