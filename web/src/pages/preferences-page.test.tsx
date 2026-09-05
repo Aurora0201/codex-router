@@ -9,6 +9,125 @@ import { PreferencesPage } from "./preferences-page"
 import { languageStorageKey } from "@/i18n"
 
 describe("PreferencesPage", () => {
+  it("uses single surfaces and keeps theme and logging controls connected", async () => {
+    const service = createGatewayServiceFixture()
+    const saveSettings = vi.spyOn(service, "saveSettings")
+    const reload = vi.fn().mockResolvedValue(undefined)
+    const onThemeChange = vi.fn().mockResolvedValue(undefined)
+    const { container } = render(
+      <ThemeProvider>
+        <Toaster>
+          <PreferencesPage
+            snapshot={service.snapshot}
+            service={service}
+            reload={reload}
+            onThemeChange={onThemeChange}
+          />
+        </Toaster>
+      </ThemeProvider>
+    )
+    expect(
+      container.querySelectorAll('[data-slot="settings-surface"]')
+    ).toHaveLength(3)
+    expect(container.querySelector('[data-slot="card"]')).toBeNull()
+    expect(
+      container.querySelectorAll('[data-slot="animate-tabs"]')
+    ).toHaveLength(2)
+    expect(screen.getByRole("tablist", { name: "主题" })).toBeInTheDocument()
+    expect(
+      screen.getByRole("tablist", { name: "运行日志等级" })
+    ).toBeInTheDocument()
+    expect(
+      container.querySelector(
+        '[data-slot="settings-surface"] [data-slot="settings-surface"]'
+      )
+    ).toBeNull()
+    await userEvent.click(screen.getByRole("tab", { name: "深色" }))
+    expect(onThemeChange).toHaveBeenCalledWith("dark")
+    await userEvent.click(screen.getByRole("tab", { name: "WARN" }))
+    await waitFor(() =>
+      expect(saveSettings).toHaveBeenCalledWith({ logLevel: "warn" })
+    )
+    await waitFor(() => expect(reload).toHaveBeenCalledTimes(1))
+    await userEvent.click(
+      screen.getByRole("switch", { name: "请求元数据记录" })
+    )
+    await waitFor(() =>
+      expect(saveSettings).toHaveBeenCalledWith({
+        requestMetadataLogging: false,
+      })
+    )
+    await waitFor(() => expect(reload).toHaveBeenCalledTimes(2))
+  })
+
+  it("disables logging controls while saving and reports failure", async () => {
+    const service = createGatewayServiceFixture()
+    let rejectSave!: (error: Error) => void
+    vi.spyOn(service, "saveSettings").mockImplementation(
+      () =>
+        new Promise((_, reject) => {
+          rejectSave = reject
+        })
+    )
+    render(
+      <ThemeProvider>
+        <Toaster>
+          <PreferencesPage
+            snapshot={service.snapshot}
+            service={service}
+            reload={vi.fn()}
+            onThemeChange={vi.fn()}
+          />
+        </Toaster>
+      </ThemeProvider>
+    )
+    await userEvent.click(screen.getByRole("tab", { name: "ERROR" }))
+    expect(
+      screen.getByRole("switch", { name: "请求元数据记录" })
+    ).toHaveAttribute("aria-disabled", "true")
+    expect(screen.getByRole("tab", { name: "WARN" })).toHaveAttribute(
+      "aria-disabled",
+      "true"
+    )
+    await userEvent.click(screen.getByRole("tab", { name: "WARN" }))
+    expect(service.saveSettings).toHaveBeenCalledTimes(1)
+    rejectSave(new Error("Network unavailable"))
+    expect(await screen.findByText("设置保存失败")).toBeInTheDocument()
+    await waitFor(() =>
+      expect(screen.getByRole("tab", { name: "WARN" })).not.toHaveAttribute(
+        "aria-disabled",
+        "true"
+      )
+    )
+    expect(screen.getByRole("tab", { name: "INFO" })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    )
+  })
+
+  it("disables directory copying in stdout mode", () => {
+    const service = createGatewayServiceFixture()
+    service.snapshot.health.logFilePath = null
+    render(
+      <ThemeProvider>
+        <Toaster>
+          <PreferencesPage
+            snapshot={service.snapshot}
+            service={service}
+            reload={vi.fn()}
+            onThemeChange={vi.fn()}
+          />
+        </Toaster>
+      </ThemeProvider>
+    )
+    expect(
+      screen.getByRole("button", { name: "Codex Router 运行日志" })
+    ).toBeDisabled()
+    expect(
+      screen.getByText("标准输出模式，没有独立日志目录")
+    ).toBeInTheDocument()
+  })
+
   it("renders local environment actions and copies their directory paths", async () => {
     const service = createGatewayServiceFixture()
     const writeText = vi.fn().mockResolvedValue(undefined)
@@ -60,21 +179,12 @@ describe("PreferencesPage", () => {
         "C:\\Users\\test\\.codex-router\\logs"
       )
     )
-    const dataItem = screen
-      .getByRole("button", { name: "数据目录" })
-      .closest('[data-slot="item"]')
-    expect(dataItem).toHaveClass(
-      "enabled:cursor-pointer",
-      "enabled:hover:bg-muted/50"
-    )
-    expect(dataItem?.querySelector('[data-slot="item-media"]')).toHaveClass(
-      "size-10",
-      "self-center!",
-      "translate-y-0!"
-    )
-    expect(dataItem?.querySelector('[data-slot="item-actions"]')).toHaveClass(
-      "self-center"
-    )
+    const environment = screen.getByRole("region", { name: "本地环境" })
+    expect(
+      environment.querySelector('[data-slot="settings-surface"]')
+    ).toHaveClass("bg-muted")
+    expect(environment.querySelector('[data-slot="card"]')).toBeNull()
+    expect(environment.querySelectorAll("dl > div")).toHaveLength(3)
     expect(
       screen
         .getByRole("switch", { name: "请求元数据记录" })
@@ -82,7 +192,8 @@ describe("PreferencesPage", () => {
     ).toHaveClass("items-center!")
     expect(screen.queryByText("Prompt logging")).not.toBeInTheDocument()
     expect(screen.getByRole("tab", { name: "INFO" })).toHaveAttribute(
-      "data-active"
+      "aria-selected",
+      "true"
     )
   })
 
