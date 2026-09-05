@@ -1169,6 +1169,7 @@ describe("security and admin API", () => {
     expect(response.statusCode).toBe(200);
     const body = response.json() as {
       items: unknown[];
+      histogram: unknown[];
       pagination: {
         page: number;
         pageSize: number;
@@ -1177,6 +1178,7 @@ describe("security and admin API", () => {
       };
     };
     expect(body.items.length).toBeLessThanOrEqual(2);
+    expect(body.histogram).toHaveLength(96);
     expect(body.pagination).toMatchObject({ page: 1, pageSize: 2 });
     expect(body.pagination.totalPages).toBe(
       Math.ceil(body.pagination.totalItems / 2),

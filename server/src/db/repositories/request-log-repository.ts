@@ -11,7 +11,6 @@ import type {
 import type { RequestEvidence } from "../../proxy/request-classification.js";
 import type { SettingsRepository } from "./settings-repository.js";
 
-/** Matches the 96 cells the runtime and log pages both draw. */
 /**
  * A histogram cell should cover a span someone would name — a minute, a
  * quarter hour, two hours — rather than whatever a fixed cell count divides

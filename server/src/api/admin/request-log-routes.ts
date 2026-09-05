@@ -131,9 +131,10 @@ export function registerRequestLogRoutes(
         )
       )
         throw new Error();
+      const now = Date.now();
       const result = ctx.database.requestLog.query({
-        since: from ?? Date.now() - RANGES[range],
-        until: to,
+        since: from ?? now - RANGES[range],
+        until: to ?? now,
         status: status as
           | "success"
           | "rejected"

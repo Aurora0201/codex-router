@@ -93,10 +93,10 @@ describe.sequential("CodexUsageService", () => {
     await writeFile(path.join(directory, `rollout-${secondThread}.jsonl`), `${row("2026-08-20T17:00:00.000Z", "session_meta", { id: secondThread, cwd: "C:\\Temp\\Codex\\2026-08-19\\another" })}\n${tokens("2026-08-20T17:00:01.000Z", 8, 1, 4, 1)}\n`);
     await writeFile(path.join(directory, `rollout-${thirdThread}.jsonl`), `${row("2026-08-20T18:00:00.000Z", "session_meta", { id: thirdThread, cwd: "D:\\codespace\\codex-document\\2026-08-30\\fa" })}\n${tokens("2026-08-20T18:00:01.000Z", 5, 1, 2, 1)}\n`);
     await service.scan();
-    const dashboard = service.getDashboard({ range: "14d" }) as any;
+    const dashboard = service.getDashboard({ range: "all" }) as any;
     expect(dashboard.filters.projects).toEqual([{ key: UNCATEGORIZED_PROJECT_KEY, label: "非项目类对话" }]);
     expect(dashboard.projects).toEqual([expect.objectContaining({ key: UNCATEGORIZED_PROJECT_KEY, label: "非项目类对话", totalTokens: 32 })]);
-    expect((service.getDashboard({ range: "14d", project: UNCATEGORIZED_PROJECT_KEY }) as any).summary.totalTokens).toBe(32);
+    expect((service.getDashboard({ range: "all", project: UNCATEGORIZED_PROJECT_KEY }) as any).summary.totalTokens).toBe(32);
     await service.close(); database.close();
   });
 
@@ -261,7 +261,7 @@ ${tokens("2026-08-22T17:00:01.000Z", 8, 1, 4, 1)}
     await writeFile(path.join(root, "sessions", `rollout-${thread}.jsonl`), `${tokens("2026-08-20T16:00:00.000Z", 12, 4, 3, 1)}\n`);
     const gateway = await buildGateway({ dataDir: path.join(root, "router"), webDistDir: path.join(root, "missing-web"), developerMode: true }, { backgroundTasks: false });
     await gateway.codexUsage.scan();
-    const response = await gateway.app.inject({ method: "GET", url: "/api/codex-usage?range=14d" });
+    const response = await gateway.app.inject({ method: "GET", url: "/api/codex-usage?range=all" });
     expect(response.statusCode).toBe(200); expect(response.json().summary.totalTokens).toBe(15);
     expect(JSON.stringify(response.json())).not.toContain(root);
     expect((await gateway.app.inject({ method: "GET", url: "/api/codex-usage?range=bad" })).statusCode).toBe(400);

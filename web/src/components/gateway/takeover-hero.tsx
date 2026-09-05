@@ -255,6 +255,7 @@ export function TakeoverHero({
           >
             {series.map((bucket) => (
               <span
+                data-slot="request-volume-bucket"
                 className={cn(
                   "min-w-0 flex-1 rounded-[2px]",
                   bucket.requests ? "bg-chart-3" : "bg-emphasis-muted/25"
