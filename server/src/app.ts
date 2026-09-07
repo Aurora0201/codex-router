@@ -133,7 +133,7 @@ export async function buildGateway(overrides: Partial<GatewayConfig> = {}, optio
   const adminContext = { config, database, accounts, auth, usage, accountStatus, logins, activeAccounts, csrf, startedAt, events, codexProcess, websocketConnections, codexUsage };
   registerLocalStatusRoutes(app, adminContext);
   await registerAdminApi(app, adminContext, codexConfig);
-  await registerWebSocketProxy(app, { upstreamBaseUrl: config.upstreamBaseUrl, activeAccounts, auth, database, websocketConnections });
+  await registerWebSocketProxy(app, { upstreamBaseUrl: config.upstreamBaseUrl, activeAccounts, auth, usage, database, websocketConnections });
 
   app.post("/backend-api/codex/responses", (request, reply) => proxy.handle(request, reply, "/responses"));
   app.post("/backend-api/codex/responses/compact", (request, reply) => proxy.handle(request, reply, "/responses/compact"));
