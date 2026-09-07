@@ -56,6 +56,9 @@
   --color-chart-3: var(--chart-3);
   --color-chart-2: var(--chart-2);
   --color-chart-1: var(--chart-1);
+  --color-emphasis-chart-1: var(--emphasis-chart-1);
+  --color-emphasis-chart-3: var(--emphasis-chart-3);
+  --color-emphasis-chart-5: var(--emphasis-chart-5);
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -170,6 +173,9 @@
   --chart-3: oklch(0.62 0.21 259);
   --chart-4: oklch(0.54 0.23 262);
   --chart-5: oklch(0.46 0.22 264);
+  --emphasis-chart-1: var(--chart-1);
+  --emphasis-chart-3: var(--chart-3);
+  --emphasis-chart-5: var(--chart-5);
   /* High-emphasis analytics surface. The name describes its role instead of
        baking the current dark-blue appearance into component code. */
   --emphasis: oklch(0.21 0.06 265);
@@ -229,6 +235,11 @@
   --chart-3: oklch(0.62 0.18 256);
   --chart-4: oklch(0.72 0.17 254);
   --chart-5: oklch(0.82 0.12 252);
+  /* The blue emphasis inset is lighter than neutral chart surfaces. Give
+     its stacked series a separate ramp, including the lowest/cached band. */
+  --emphasis-chart-1: oklch(0.66 0.1 259);
+  --emphasis-chart-3: oklch(0.78 0.12 256);
+  --emphasis-chart-5: oklch(0.9 0.06 252);
   /* Lightness alone cannot carry the hero in this theme. Going darker is out
        — at 0.16 it sat between --background and --card and read as a hole in
        the page. Going lighter is capped: against a neutral
