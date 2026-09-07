@@ -4,6 +4,7 @@ import { registerHealthRoutes } from "./health-routes.js";
 import { registerAccountRoutes } from "./account-routes.js";
 import { registerAccountLoginRoutes } from "./account-login-routes.js";
 import { registerActiveAccountRoutes } from "./active-account-routes.js";
+import { registerAutoSwitchRoutes } from "./auto-switch-routes.js";
 import { registerSettingsRoutes } from "./settings-routes.js";
 import { registerStatsRoutes } from "./stats-routes.js";
 import { registerCodexRoutes } from "./codex-routes.js";
@@ -25,6 +26,7 @@ export async function registerAdminApi(
   registerAccountLoginRoutes(app, ctx);
   registerActiveAccountRoutes(app, ctx);
   registerSettingsRoutes(app, ctx);
+  registerAutoSwitchRoutes(app, ctx);
   registerStatsRoutes(app, ctx);
   registerRequestLogRoutes(app, ctx);
   registerCodexRoutes(app, ctx, codexConfig);
