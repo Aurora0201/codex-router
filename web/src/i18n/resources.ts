@@ -741,7 +741,10 @@ export const en = {
   自动切换: "Auto switch",
   "自动切换 · 试运行": "Auto switch · trial run",
   "自动切换 · 已开": "Auto switch · on",
-  自动切换设置载入失败: "Could not load auto-switch settings",
+  "读不到自动切换设置。": "Auto-switch settings could not be read.",
+  网关没有回应这个设置: "The gateway did not answer for this setting",
+  "多半是正在运行的网关还是旧版本，重启一次网关就会带上这个接口。":
+    "The running gateway is probably an older build. Restart it and this endpoint comes with it.",
   保存失败: "Save failed",
   保存优先级失败: "Could not save the priority order",
   "关闭时一切照旧，路由只跟随你手动的选择。":

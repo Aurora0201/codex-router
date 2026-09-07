@@ -160,6 +160,37 @@ describe("AutoSwitchButton", () => {
     })
   })
 
+  it("explains a gateway that does not know the route, and retries", async () => {
+    const service: Fixture = createGatewayServiceFixture()
+    const read = vi
+      .spyOn(service, "getAutoSwitch")
+      .mockRejectedValue(new Error("Route GET:/api/auto-switch not found"))
+    const accounts = service.snapshot.accounts.accounts
+    render(
+      <AutoSwitchButton
+        accounts={accounts}
+        activeAccountId={accounts[0].id}
+        service={service}
+      />
+    )
+    // The background read failed before anyone opened anything, and that is
+    // not worth a toast.
+    await waitFor(() => expect(read).toHaveBeenCalled())
+    expect(document.querySelector("[data-slot=toast]")).toBeNull()
+
+    await userEvent.click(screen.getByRole("button", { name: /自动切换/ }))
+    expect(await screen.findByText("网关没有回应这个设置")).toBeInTheDocument()
+    expect(
+      screen.getByText("Route GET:/api/auto-switch not found")
+    ).toBeInTheDocument()
+    expect(rows()).toHaveLength(0)
+
+    read.mockRestore()
+    await userEvent.click(screen.getByRole("button", { name: "重试" }))
+    await waitFor(() => expect(rows()).toHaveLength(3))
+    expect(screen.queryByText("网关没有回应这个设置")).toBeNull()
+  })
+
   it("reads the threshold back in the words the setting is written in", async () => {
     await open({})
     expect(await screen.findByText("周额度低于 25%")).toBeInTheDocument()

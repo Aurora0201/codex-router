@@ -1,8 +1,16 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
-import { ArrowLeftRightIcon, GripVerticalIcon } from "lucide-react"
+import { ArrowLeftRightIcon, GripVerticalIcon, PlugZapIcon } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
 import { Button } from "@/components/ui/button"
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty"
 import {
   Select,
   SelectContent,
@@ -201,6 +209,8 @@ export function AutoSwitchButton({
   const [order, setOrder] = useState<string[]>([])
   const [enrolled, setEnrolled] = useState<Record<string, boolean>>({})
   const [dragId, setDragId] = useState<string | null>(null)
+  const [failure, setFailure] = useState<string | null>(null)
+  const [attempt, setAttempt] = useState(0)
 
   // The pool as it stood when the sheet opened. Reading it through a ref keeps
   // a routine snapshot reload from re-seating the list under a hand mid-drag.
@@ -217,6 +227,7 @@ export function AutoSwitchButton({
       .getAutoSwitch()
       .then((next) => {
         if (cancelled) return
+        setFailure(null)
         setState(next)
         // The gateway's own candidate order leads; the accounts it left out
         // still need a seat, so they can be dragged back into the rotation.
@@ -233,17 +244,16 @@ export function AutoSwitchButton({
           )
         )
       })
-      .catch((error: Error) =>
-        toast.add({
-          title: t("自动切换设置载入失败"),
-          description: error.message,
-          type: "error",
-        })
-      )
+      // Said inside the sheet rather than as a toast: this read also runs in
+      // the background, and a gateway too old to know the route would greet
+      // every page load with an error nobody asked for.
+      .catch((error: Error) => {
+        if (!cancelled) setFailure(error.message)
+      })
     return () => {
       cancelled = true
     }
-  }, [open, service, t])
+  }, [open, service, attempt])
 
   const byId = useMemo(
     () => new Map(accounts.map((account) => [account.id, account])),
@@ -317,15 +327,44 @@ export function AutoSwitchButton({
         <SheetHeader>
           <SheetTitle>{t("自动切换")}</SheetTitle>
           <SheetDescription>
-            {!on
-              ? t("关闭时一切照旧，路由只跟随你手动的选择。")
-              : settings?.dryRun
-                ? t("试运行中 · 只记录，不切换")
-                : t("已启用 · 会自动切换")}
+            {failure !== null
+              ? t("读不到自动切换设置。")
+              : !on
+                ? t("关闭时一切照旧，路由只跟随你手动的选择。")
+                : settings?.dryRun
+                  ? t("试运行中 · 只记录，不切换")
+                  : t("已启用 · 会自动切换")}
           </SheetDescription>
         </SheetHeader>
 
-        {settings === null ? (
+        {failure !== null ? (
+          <Empty className="py-10">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <PlugZapIcon aria-hidden="true" />
+              </EmptyMedia>
+              <EmptyTitle>{t("网关没有回应这个设置")}</EmptyTitle>
+              <EmptyDescription>
+                {/* The one cause worth naming: the console ships with the
+                    gateway, so a 404 here means the running gateway predates
+                    this page. */}
+                {t(
+                  "多半是正在运行的网关还是旧版本，重启一次网关就会带上这个接口。"
+                )}
+              </EmptyDescription>
+            </EmptyHeader>
+            <EmptyContent>
+              <p className="text-xs text-muted-foreground-subtle">{failure}</p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setAttempt((n) => n + 1)}
+              >
+                {t("重试")}
+              </Button>
+            </EmptyContent>
+          </Empty>
+        ) : settings === null ? (
           <p className="px-4 py-6 text-center text-sm text-muted-foreground">
             {t("正在载入…")}
           </p>
