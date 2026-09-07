@@ -123,12 +123,16 @@ describe("App", () => {
     await act(() => vi.advanceTimersByTimeAsync(0))
     expect(screen.getByRole("heading", { name: "账号与路由" })).toBeVisible()
 
+    // Connection belongs to the chrome: the header says it once, and the page
+    // keeps the last answer rather than being pushed down by a banner.
     await act(() => vi.advanceTimersByTimeAsync(30_000))
-    expect(screen.getByRole("alert")).toHaveTextContent("gateway_offline")
+    expect(screen.getByText("Codex Router 离线")).toBeVisible()
+    expect(screen.getByRole("button", { name: "重试" })).toBeVisible()
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument()
     expect(screen.getByRole("heading", { name: "账号与路由" })).toBeVisible()
 
     await act(() => vi.advanceTimersByTimeAsync(30_000))
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+    expect(screen.queryByText("Codex Router 离线")).not.toBeInTheDocument()
     expect(getSnapshot).toHaveBeenCalledTimes(3)
   })
 

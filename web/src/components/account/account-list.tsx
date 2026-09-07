@@ -62,6 +62,7 @@ export function AccountList({
   busyId,
   onSelect,
   onClearRoute,
+  routeBlock,
   onAction,
   onConsumeReset,
 }: {
@@ -69,6 +70,8 @@ export function AccountList({
   busyId: string | null
   onSelect(account: AccountView): void
   onClearRoute(): void
+  /** Why the routed account cannot serve, if it cannot. */
+  routeBlock?: { kind: "unavailable" | "exhausted"; detail: string } | null
   onAction(account: AccountView, action: AccountAction): void
   onConsumeReset(
     account: AccountView,
@@ -160,9 +163,28 @@ export function AccountList({
   return (
     <>
       <section className={cn("shrink-0", PANEL)}>
-        <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl bg-primary/8 p-3">
+        <div
+          data-slot="route-band"
+          className={cn(
+            "flex flex-wrap items-center justify-between gap-4 rounded-xl p-3",
+            routeBlock?.kind === "unavailable"
+              ? "bg-destructive/8"
+              : routeBlock?.kind === "exhausted"
+                ? "bg-warning/10"
+                : "bg-primary/8"
+          )}
+        >
           <div className="flex min-w-0 items-center gap-3">
-            <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-card text-primary">
+            <span
+              className={cn(
+                "grid size-9 shrink-0 place-items-center rounded-lg bg-card",
+                routeBlock?.kind === "unavailable"
+                  ? "text-destructive"
+                  : routeBlock?.kind === "exhausted"
+                    ? "text-warning"
+                    : "text-primary"
+              )}
+            >
               <RouteIcon aria-hidden="true" className="size-[18px]" />
             </span>
             <div className="min-w-0">
@@ -179,6 +201,21 @@ export function AccountList({
                   ? shortAccountId(active.chatgptAccountId)
                   : t("尚未选择路由账号 · 请求使用 Codex 当前登录账号透传")}
               </p>
+              {/* The band is where the reader already looks for the routed
+                  account's condition, so the condition is said here rather
+                  than in a banner that pushed the whole page down. */}
+              {routeBlock ? (
+                <p
+                  className={cn(
+                    "mt-0.5 truncate text-xs font-medium",
+                    routeBlock.kind === "unavailable"
+                      ? "text-destructive"
+                      : "text-warning"
+                  )}
+                >
+                  {routeBlock.detail}
+                </p>
+              ) : null}
             </div>
           </div>
           {active ? (

@@ -86,10 +86,47 @@ describe("AccountsPage", () => {
 
     renderPage(snapshot, service)
 
-    const alert = screen.getByRole("alert")
-    expect(alert).toHaveTextContent("当前路由账号不可用")
-    expect(alert).toHaveTextContent("需要重新登录")
-    expect(alert).toHaveClass("text-destructive")
+    // The condition is said on the band that already reports the routed
+    // account, not in a banner above it that pushes the page down.
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+    const band = document.querySelector("[data-slot=route-band]")
+    expect(band).toHaveTextContent("需要重新登录")
+    expect(band).toHaveTextContent("请处理该账号，或改选其他可路由账号")
+    expect(band?.className).toContain("bg-destructive/8")
+  })
+
+  it("leads an exhausted route with when it comes back", async () => {
+    const service = createGatewayServiceFixture()
+    const snapshot = await service.getSnapshot()
+    const account = snapshot.accounts.accounts[0]
+    account.limits.buckets = [
+      {
+        key: "default",
+        limitId: null,
+        limitName: null,
+        primary: {
+          usedPercent: 100,
+          resetsAt: Date.now() + 2 * 60 * 60_000,
+          windowDurationMins: 300,
+        },
+        secondary: null,
+        credits: null,
+        individualLimit: null,
+        spendControlReached: null,
+        planType: null,
+        rateLimitReachedType: null,
+      },
+    ]
+
+    renderPage(snapshot, service)
+
+    // Exhaustion clears by itself, so it is a warning rather than a failure,
+    // and the recovery time is the part worth reading.
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+    const band = document.querySelector("[data-slot=route-band]")
+    expect(band).toHaveTextContent("额度已耗尽")
+    expect(band).toHaveTextContent("2 小时后恢复")
+    expect(band?.className).toContain("bg-warning/10")
   })
 
   it("centers the add-account action against the two-line page heading", async () => {

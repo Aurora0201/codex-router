@@ -1,16 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react"
-import {
-  PlusIcon,
-  RefreshCwIcon,
-  TriangleAlertIcon,
-  UsersRoundIcon,
-} from "lucide-react"
+import { PlusIcon, RefreshCwIcon, UsersRoundIcon } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
 import { AccountList } from "@/components/account/account-list"
 import { BillingDialog } from "@/components/account/billing-dialog"
 import { OAuthDialog } from "@/components/account/oauth-dialog"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,7 +26,8 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty"
 import { toast } from "@/components/ui/toast"
-import { authStatusLabel, shortAccountId } from "@/lib/format"
+import { accountWindows } from "@/lib/account-state"
+import { authStatusLabel, formatCountdown, shortAccountId } from "@/lib/format"
 import type {
   AccountView,
   GatewayService,
@@ -192,6 +187,34 @@ export function AccountsPage({
         )
     ) ?? false
 
+  // A blocked route is a fact about the routed account, so it is said on the
+  // band that already reports that account rather than in a banner above it.
+  // Exhaustion is not a failure: it clears by itself, and when it clears is
+  // the one thing worth knowing, so it leads with the recovery time.
+  const earliestReset = active
+    ? accountWindows(active)
+        .map((window) => window.resetsAt)
+        .filter((value): value is number => value !== null)
+        .sort((a, b) => a - b)[0]
+    : undefined
+  const routeBlock = activeUnavailable
+    ? {
+        kind: "unavailable" as const,
+        detail: t("{{status}} · 请处理该账号，或改选其他可路由账号", {
+          status: active ? authStatusLabel(active.auth.status) : t("未知"),
+        }),
+      }
+    : activeExhausted
+      ? {
+          kind: "exhausted" as const,
+          detail: earliestReset
+            ? t("额度已耗尽 · {{time}}恢复", {
+                time: formatCountdown(earliestReset),
+              })
+            : t("额度已耗尽 · 恢复时间未报告"),
+        }
+      : null
+
   return (
     <section className="flex flex-col gap-4 lg:h-full lg:min-h-0">
       <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
@@ -228,36 +251,13 @@ export function AccountsPage({
         </div>
       </div>
 
-      {activeUnavailable || activeExhausted ? (
-        <Alert variant="destructive">
-          <TriangleAlertIcon />
-          <AlertTitle>
-            {activeUnavailable
-              ? t("当前路由账号不可用")
-              : t("当前路由账号额度已耗尽")}
-          </AlertTitle>
-          <AlertDescription>
-            {activeUnavailable
-              ? t(
-                  "{{account}} 当前为 {{status}} 状态，后续请求可能失败。请处理该账号状态，或手动选择其他可路由账号。",
-                  {
-                    account: shortAccountId(active?.chatgptAccountId ?? null),
-                    status: active
-                      ? authStatusLabel(active.auth.status)
-                      : t("未知"),
-                  }
-                )
-              : t("当前账号仍保持为手动路由目标，系统不会自动切换账号。")}
-          </AlertDescription>
-        </Alert>
-      ) : null}
-
       {accounts.length ? (
         <AccountList
           accounts={accounts}
           busyId={busyId}
           onAction={accountAction}
           onClearRoute={clearRoute}
+          routeBlock={routeBlock}
           onSelect={(account) =>
             void run(
               account.id,

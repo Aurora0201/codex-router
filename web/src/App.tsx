@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type CSSProperties } from "react"
-import { TriangleAlertIcon } from "lucide-react"
+import { PlugZapIcon, RotateCwIcon } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
 import { AppSidebar } from "@/components/app/app-sidebar"
@@ -11,8 +11,15 @@ import {
 import { needsAttention } from "@/lib/account-state"
 import { AppHeader } from "@/components/app/app-header"
 import { useTheme, type Theme } from "@/components/theme-provider"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -41,6 +48,36 @@ function LoadingPage() {
       </div>
       <Skeleton className="h-[30rem] w-full lg:min-h-0 lg:flex-1" />
     </div>
+  )
+}
+
+function OfflinePage({
+  message,
+  onRetry,
+}: {
+  message: string
+  onRetry(): void
+}) {
+  const { t } = useTranslation()
+  return (
+    <Empty className="min-h-[26rem]">
+      <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <PlugZapIcon />
+        </EmptyMedia>
+        <EmptyTitle>{t("连接不到 Codex Router")}</EmptyTitle>
+        <EmptyDescription>
+          {t("控制台需要本机网关在运行。启动它之后这一页会自动恢复。")}
+        </EmptyDescription>
+      </EmptyHeader>
+      <EmptyContent>
+        <Button variant="outline" size="sm" onClick={onRetry}>
+          <RotateCwIcon data-icon="inline-start" />
+          {t("重试")}
+        </Button>
+        <p className="text-xs text-muted-foreground-subtle">{message}</p>
+      </EmptyContent>
+    </Empty>
   )
 }
 
@@ -217,6 +254,7 @@ export function App({
           page={page}
           online={!error}
           uptimeSeconds={snapshot?.stats.uptimeSeconds}
+          onRetry={() => void reload()}
           onThemeChange={changeTheme}
         />
         <ScrollArea
@@ -241,23 +279,9 @@ export function App({
               accountsLayout && "lg:h-full"
             )}
           >
-            {error ? (
-              <Alert variant="destructive" className="mb-6">
-                <TriangleAlertIcon />
-                <AlertTitle>{t("无法连接 Codex Router")}</AlertTitle>
-                <AlertDescription className="flex flex-wrap items-center gap-3">
-                  <span>{error}</span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => void reload()}
-                  >
-                    {t("重试")}
-                  </Button>
-                </AlertDescription>
-              </Alert>
-            ) : null}
-            {!snapshot ? (
+            {!snapshot && error ? (
+              <OfflinePage message={error} onRetry={() => void reload()} />
+            ) : !snapshot ? (
               <LoadingPage />
             ) : page === "accounts" ? (
               <AccountsPage
