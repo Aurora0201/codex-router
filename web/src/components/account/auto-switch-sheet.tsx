@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
-import { GripVerticalIcon } from "lucide-react"
+import { ArrowLeftRightIcon, GripVerticalIcon } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
 import { Button } from "@/components/ui/button"
@@ -205,7 +205,9 @@ export function AutoSwitchButton({
   // The pool as it stood when the sheet opened. Reading it through a ref keeps
   // a routine snapshot reload from re-seating the list under a hand mid-drag.
   const accountsRef = useRef(accounts)
-  accountsRef.current = accounts
+  useEffect(() => {
+    accountsRef.current = accounts
+  }, [accounts])
 
   // Read once so the button can say whether switching is armed, and again on
   // every open so the ranking and the log are the gateway's, not a stale copy.
@@ -300,15 +302,14 @@ export function AutoSwitchButton({
       <SheetTrigger
         render={
           <Button variant="ghost" size="sm" disabled={disabled}>
-            <span
-              aria-hidden="true"
-              data-icon="inline-start"
-              className={cn(
-                "size-1.5 rounded-full",
-                on ? "bg-success" : "bg-muted-foreground-subtle"
-              )}
-            />
-            {t("自动切换")}
+            <ArrowLeftRightIcon aria-hidden="true" data-icon="inline-start" />
+            {/* Whether it is armed is said in words. Green is not one of the
+                four status tones, and off is the default, which wears none. */}
+            {!on
+              ? t("自动切换")
+              : settings?.dryRun
+                ? t("自动切换 · 试运行")
+                : t("自动切换 · 已开")}
           </Button>
         }
       />

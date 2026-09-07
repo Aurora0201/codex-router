@@ -739,6 +739,8 @@ export const en = {
   确认: "Confirm",
   // 自动切换
   自动切换: "Auto switch",
+  "自动切换 · 试运行": "Auto switch · trial run",
+  "自动切换 · 已开": "Auto switch · on",
   自动切换设置载入失败: "Could not load auto-switch settings",
   保存失败: "Save failed",
   保存优先级失败: "Could not save the priority order",
