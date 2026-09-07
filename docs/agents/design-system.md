@@ -119,8 +119,13 @@ Its legend uses the same tokens; neutral charts and heatmaps keep their ramp.
 ### Tint
 
 A tint on a surface is only ever `--primary` at low alpha (`/8`, `/10`), and
-only to mark routing: the route summary band and the selected account's
-control. Nothing else tints a surface.
+only to mark the selected account's own control. Nothing else tints a surface.
+
+**A healthy default does not wear one.** The route summary band used to, which
+put a second colour inside the panel's own ring and left the blocked states
+with nothing to stand out against; it takes the `--muted` inset now, and only
+warning or destructive when the route is actually in trouble. This is the
+status rule above applied to a surface rather than to text.
 
 ## Typography
 

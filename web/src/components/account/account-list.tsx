@@ -167,11 +167,15 @@ export function AccountList({
           data-slot="route-band"
           className={cn(
             "flex flex-wrap items-center justify-between gap-4 rounded-xl p-3",
+            // The healthy band is an inset like any other, so it takes the
+            // inset surface. It used to wear the routing tint, which put a
+            // second colour inside the panel's own ring and left the blocked
+            // states with nothing to stand out against.
             routeBlock?.kind === "unavailable"
               ? "bg-destructive/8"
               : routeBlock?.kind === "exhausted"
                 ? "bg-warning/10"
-                : "bg-primary/8"
+                : "bg-muted"
           )}
         >
           <div className="flex min-w-0 items-center gap-3">
@@ -182,7 +186,7 @@ export function AccountList({
                   ? "text-destructive"
                   : routeBlock?.kind === "exhausted"
                     ? "text-warning"
-                    : "text-primary"
+                    : "text-muted-foreground"
               )}
             >
               <RouteIcon aria-hidden="true" className="size-[18px]" />
