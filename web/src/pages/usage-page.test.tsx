@@ -103,6 +103,15 @@ describe("UsagePage", () => {
     )
 
     expect(await screen.findByLabelText("每日 Token 趋势")).toBeInTheDocument()
+    const trend = screen.getByLabelText("每日 Token 趋势")
+    for (const step of [1, 3, 5]) {
+      expect(trend.querySelector("style")?.textContent).toContain(
+        "var(--emphasis-chart-" + step + ")"
+      )
+      expect(
+        trend.parentElement?.querySelector(".bg-emphasis-chart-" + step)
+      ).not.toBeNull()
+    }
     expect(screen.getByText("区间总 Token")).toBeInTheDocument()
     expect(screen.getByText(/本机数据始于/)).toBeInTheDocument()
     // Every coverage diagnostic is on screen at once: the wide strip fits all

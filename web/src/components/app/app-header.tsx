@@ -1,4 +1,10 @@
-import { ClockArrowUpIcon, MoonIcon, SunIcon, WifiOffIcon } from "lucide-react"
+import {
+  ClockArrowUpIcon,
+  MoonIcon,
+  RotateCwIcon,
+  SunIcon,
+  WifiOffIcon,
+} from "lucide-react"
 import { useTranslation } from "react-i18next"
 
 import type { AppPage } from "@/components/app/navigation"
@@ -37,11 +43,14 @@ export function AppHeader({
   page,
   online,
   uptimeSeconds,
+  onRetry,
   onThemeChange,
 }: {
   page: AppPage
   online: boolean
   uptimeSeconds?: number
+  /** Offered from the offline state, which is where the reader notices it. */
+  onRetry?(): void
   onThemeChange?(theme: "light" | "dark"): Promise<void>
 }) {
   const { resolvedTheme, setTheme } = useTheme()
@@ -54,6 +63,8 @@ export function AppHeader({
         {t(pageTitle[page])}
       </p>
       <div className="ml-auto flex items-center gap-2">
+        {/* Connection is a property of the whole console, not of the page
+            being read, so it lives in the chrome and says so once. */}
         <div
           className={cn(
             "inline-flex items-center gap-1.5 text-xs font-medium [&_svg]:size-4",
@@ -70,6 +81,12 @@ export function AppHeader({
             {online ? formatUptime(uptimeSeconds, t) : t("Codex Router 离线")}
           </span>
         </div>
+        {online || !onRetry ? null : (
+          <Button variant="outline" size="sm" onClick={onRetry}>
+            <RotateCwIcon data-icon="inline-start" />
+            {t("重试")}
+          </Button>
+        )}
         <Tooltip>
           <TooltipTrigger
             render={

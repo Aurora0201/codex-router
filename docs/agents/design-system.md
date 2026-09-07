@@ -109,6 +109,13 @@ theme's ground and step 5 the most — which means **the dark ramp runs the
 opposite direction from the light one**, or the smallest series shouts the
 loudest. Do not give such series separate hues.
 
+The Token trend on the emphasis inset uses `--emphasis-chart-1/3/5`, not
+the neutral-surface ramp. Light theme aliases the existing chart colors;
+dark theme raises all three steps together. Calculated sRGB contrast against
+`--emphasis-surface` is 3.10 / 4.81 / 7.16:1 (cached input was 1.13:1).
+Its legend uses the same tokens; neutral charts and heatmaps keep their ramp.
+`chart-colors.test.ts` enforces the dark inset's 3:1 contrast floor.
+
 ### Tint
 
 A tint on a surface is only ever `--primary` at low alpha (`/8`, `/10`), and

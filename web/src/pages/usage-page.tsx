@@ -69,9 +69,12 @@ import type {
  * nested parts of one total, so the stack order is the ramp order.
  */
 const trendConfig = {
-  cachedInputTokens: { label: "缓存输入", color: "var(--chart-1)" },
-  uncachedInputTokens: { label: "非缓存输入", color: "var(--chart-3)" },
-  outputTokens: { label: "输出", color: "var(--chart-5)" },
+  cachedInputTokens: { label: "缓存输入", color: "var(--emphasis-chart-1)" },
+  uncachedInputTokens: {
+    label: "非缓存输入",
+    color: "var(--emphasis-chart-3)",
+  },
+  outputTokens: { label: "输出", color: "var(--emphasis-chart-5)" },
   rollingAverage7d: { label: "7 日均线", color: "var(--emphasis-muted)" },
 } satisfies ChartConfig
 
@@ -634,9 +637,9 @@ export function UsagePage({
                 </span>
                 <ul className="flex flex-wrap items-center gap-3">
                   {[
-                    { name: t("缓存输入"), className: "bg-chart-1" },
-                    { name: t("非缓存输入"), className: "bg-chart-3" },
-                    { name: t("输出"), className: "bg-chart-5" },
+                    { name: t("缓存输入"), className: "bg-emphasis-chart-1" },
+                    { name: t("非缓存输入"), className: "bg-emphasis-chart-3" },
+                    { name: t("输出"), className: "bg-emphasis-chart-5" },
                   ].map((item) => (
                     <li className="flex items-center gap-1.5" key={item.name}>
                       <span
