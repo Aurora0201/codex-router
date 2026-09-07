@@ -1,21 +1,23 @@
 import type {
   AccountView,
   AccountsResponse,
+  AutoSwitchSettingsView,
+  AutoSwitchView,
   CodexStatusView,
   CodexUsageDashboard,
   CodexUsageFilters,
-  GatewayService,
-  GatewayResource,
   GatewayActivityEvent,
+  GatewayResource,
+  GatewayService,
   HealthView,
   LoginSessionView,
   RequestLogFilters,
   RequestLogsResponse,
   SettingsView,
   StatsView,
-  WebSocketConnectionView,
   WebSocketConnectionLogFilters,
   WebSocketConnectionLogsResponse,
+  WebSocketConnectionView,
 } from "@/services/contracts"
 
 type ErrorPayload = { error?: string }
@@ -218,6 +220,17 @@ export function createHttpGatewayService(): GatewayService {
       }),
     saveSettings: (values) =>
       request<SettingsView>("/api/settings", json("PATCH", values)),
+    getAutoSwitch: () => request<AutoSwitchView>("/api/auto-switch"),
+    saveAutoSwitch: (values) =>
+      request<AutoSwitchSettingsView>(
+        "/api/auto-switch",
+        json("PATCH", values)
+      ),
+    saveAutoSwitchPriority: (input) =>
+      request<{ candidateIds: string[] }>(
+        "/api/auto-switch/priority",
+        json("PATCH", input)
+      ),
     async applyCodexConfig() {
       await request<unknown>("/api/codex/apply-config", json("POST", {}))
       return request<CodexStatusView>("/api/codex/status")

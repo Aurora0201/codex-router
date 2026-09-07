@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next"
 import { AccountCard } from "./account-card"
 import { AccountDetailSheet } from "./account-detail-sheet"
 import { AccountStatus } from "./account-status-badge"
+import { AutoSwitchButton } from "./auto-switch-sheet"
 import type { AccountAction } from "./account-actions"
 import {
   Tabs,
@@ -42,6 +43,7 @@ import { SearchField } from "@/components/app/search-field"
 import { cn } from "@/lib/utils"
 import type {
   AccountView,
+  GatewayService,
   RateLimitResetCreditView,
 } from "@/services/contracts"
 
@@ -60,6 +62,7 @@ function readFades(el: HTMLElement) {
 export function AccountList({
   accounts,
   busyId,
+  service,
   onSelect,
   onClearRoute,
   routeBlock,
@@ -68,6 +71,7 @@ export function AccountList({
 }: {
   accounts: AccountView[]
   busyId: string | null
+  service: GatewayService
   onSelect(account: AccountView): void
   onClearRoute(): void
   /** Why the routed account cannot serve, if it cannot. */
@@ -222,33 +226,45 @@ export function AccountList({
               ) : null}
             </div>
           </div>
-          {active ? (
-            <div className="flex items-center gap-5 text-right text-xs">
-              <div>
-                <p className="text-muted-foreground-subtle">{t("认证状态")}</p>
-                <div className="mt-0.5 flex justify-end">
-                  <AccountStatus account={active} />
+          <div className="flex items-center gap-5 text-right text-xs">
+            {active ? (
+              <>
+                <div>
+                  <p className="text-muted-foreground-subtle">
+                    {t("认证状态")}
+                  </p>
+                  <div className="mt-0.5 flex justify-end">
+                    <AccountStatus account={active} />
+                  </div>
                 </div>
-              </div>
-              <div>
-                <p className="text-muted-foreground-subtle">{t("紧要额度")}</p>
-                <p className="mt-0.5 font-medium tabular-nums">
-                  {activeRemaining === null
-                    ? t("未报告")
-                    : t("{{value}}%", { value: Math.round(activeRemaining) })}
-                </p>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={busyId !== null}
-                onClick={onClearRoute}
-              >
-                <RouteOffIcon data-icon="inline-start" />
-                {t("清除路由")}
-              </Button>
-            </div>
-          ) : null}
+                <div>
+                  <p className="text-muted-foreground-subtle">
+                    {t("紧要额度")}
+                  </p>
+                  <p className="mt-0.5 font-medium tabular-nums">
+                    {activeRemaining === null
+                      ? t("未报告")
+                      : t("{{value}}%", { value: Math.round(activeRemaining) })}
+                  </p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={busyId !== null}
+                  onClick={onClearRoute}
+                >
+                  <RouteOffIcon data-icon="inline-start" />
+                  {t("清除路由")}
+                </Button>
+              </>
+            ) : null}
+            <AutoSwitchButton
+              accounts={accounts}
+              activeAccountId={active?.id ?? null}
+              service={service}
+              disabled={busyId !== null}
+            />
+          </div>
         </div>
       </section>
 

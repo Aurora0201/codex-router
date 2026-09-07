@@ -123,6 +123,42 @@ export interface SettingsView {
   theme: "system" | "light" | "dark"
 }
 
+export type AllBelowBehaviour = "highest" | "stay" | "pause"
+
+export interface AutoSwitchSettingsView {
+  enabled: boolean
+  dryRun: boolean
+  thresholdPercent: number
+  minDwellMs: number
+  switchBackToHigherPriority: boolean
+  onAllBelow: AllBelowBehaviour
+  triggerOn429: boolean
+  triggerOnAuthFailure: boolean
+}
+
+export type SwitchReason =
+  | "quota_below_threshold"
+  | "upstream_rate_limited"
+  | "account_unavailable"
+  | "higher_priority_recovered"
+
+export interface SwitchLogEntryView {
+  id: string
+  switchedAt: number
+  fromAccountId: string | null
+  toAccountId: string | null
+  reason: SwitchReason
+  dryRun: boolean
+  evidence: Record<string, unknown> | null
+}
+
+export interface AutoSwitchView {
+  settings: AutoSwitchSettingsView
+  /** The order the gateway would walk, so the console never re-derives it. */
+  candidateIds: string[]
+  recent: SwitchLogEntryView[]
+}
+
 export interface LoginSessionView {
   loginId: string
   authUrl: string
@@ -463,6 +499,14 @@ export interface GatewayService {
   startLogin(): Promise<LoginSessionView>
   getLoginStatus(loginId: string): Promise<LoginSessionView>
   cancelLogin(loginId: string): Promise<void>
+  getAutoSwitch(): Promise<AutoSwitchView>
+  saveAutoSwitch(
+    values: Partial<AutoSwitchSettingsView>
+  ): Promise<AutoSwitchSettingsView>
+  saveAutoSwitchPriority(input: {
+    order?: string[]
+    enrolled?: Record<string, boolean>
+  }): Promise<{ candidateIds: string[] }>
   saveSettings(
     values: Partial<
       Pick<SettingsView, "requestMetadataLogging" | "theme" | "logLevel">

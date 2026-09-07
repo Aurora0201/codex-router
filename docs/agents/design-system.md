@@ -405,6 +405,11 @@ decorate, and never to make a fast thing feel slow.
 - Icons are lucide-react and `aria-hidden`: `size-4` in a panel header,
   `size-3.5` inline beside text, `size-[18px]` inside a `size-9` tile. An icon
   in a tile marks a subject; a bare icon marks a line.
+- A Base UI control wrapped in a `<label>` takes that label's whole text as its
+  accessible name, and `aria-labelledby` beats any `aria-label` you also set. So
+  a setting row puts only the title inside the label and leaves the explanatory
+  hint outside it — otherwise the name a screen reader reads is a paragraph.
+  `account/auto-switch-sheet` — `SettingRow` is the shape.
 - Anything truncated is reachable another way — a `title`, a tooltip on a
   focusable element, or the detail sheet.
 - A panel whose data is reloading carries `aria-busy`.
