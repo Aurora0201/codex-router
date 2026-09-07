@@ -46,6 +46,9 @@ export interface AccountRecord {
   lastAuthRefreshAt: number | null;
   lastLimitsRefreshAt: number | null;
   lastUsedAt: number | null;
+  /** Priority for automatic switching; null sorts after every ranked account. */
+  autoSwitchRank: number | null;
+  autoSwitchEnrolled: boolean;
   createdAt: number;
   updatedAt: number;
 }

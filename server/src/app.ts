@@ -12,6 +12,7 @@ import { AccountStatusService } from "./accounts/account-status-service.js";
 import { CredentialReader } from "./accounts/credential-reader.js";
 import { GatewayDatabase } from "./db/database.js";
 import { HttpProxy } from "./proxy/http-proxy.js";
+import { AutoSwitchService } from "./routing/auto-switch-service.js";
 import { registerLocalStatusRoutes } from "./api/local/status-routes.js";
 import { registerWebSocketProxy } from "./proxy/ws-proxy.js";
 import { ActiveAccountService } from "./routing/active-account-service.js";
@@ -114,23 +115,41 @@ export async function buildGateway(overrides: Partial<GatewayConfig> = {}, optio
   const auth = new AccountAuthService(config, database, accountStatus);
   const usage = new AccountUsageService(config, database, accountStatus, backgroundTasks);
   const csrf = new CsrfGuard();
-  const proxy = new HttpProxy({ upstreamBaseUrl: config.upstreamBaseUrl, activeAccounts, auth, usage, database });
-  const codexConfig = new CodexConfigService();
   const events = new AdminEventHub();
+  const autoSwitch = new AutoSwitchService(database, activeAccounts);
+  const reEvaluateRouting = (trigger: Parameters<AutoSwitchService["evaluate"]>[0]) => {
+    try {
+      if (autoSwitch.evaluate(trigger)) events.invalidate("accounts");
+    } catch (error) {
+      app.log.warn({ err: error }, "auto_switch_evaluation_failed");
+    }
+  };
+  const proxy = new HttpProxy({
+    upstreamBaseUrl: config.upstreamBaseUrl,
+    activeAccounts, auth, usage, database,
+    onRateLimited: (accountId) => reEvaluateRouting({ kind: "rate_limited", accountId }),
+  });
+  const codexConfig = new CodexConfigService();
   const codexUsage = await CodexUsageService.create({ dataDir: config.dataDir, legacyDb: database.raw, onChange: () => events.invalidate("usage"), log: app.log });
   if (backgroundTasks) codexUsage.start();
   const websocketConnections = new WebSocketConnectionRegistry((connectionId) => {
     events.emitActivity({ type: "connection_updated", connectionId });
     events.invalidate("websocketConnections");
   });
-  const rateLimitTimer = backgroundTasks ? startUsageRefreshScheduler(accountStatus, () => events.invalidate("accounts")) : null;
+  // Quota readings only change on a refresh, so that is the moment worth
+  // re-deciding on. The switch itself is the same select() a person clicks.
+  const onAccountsRefreshed = () => {
+    events.invalidate("accounts");
+    reEvaluateRouting({ kind: "quota" });
+  };
+  const rateLimitTimer = backgroundTasks ? startUsageRefreshScheduler(accountStatus, onAccountsRefreshed) : null;
   const codexProcess = new CodexProcessMonitor(() => events.invalidate("codex"));
   if (backgroundTasks) await codexProcess.start();
   database.requestLog.onStarted = (id) => { events.emitActivity({ type: "request_started", id }); events.invalidate("logs"); };
   database.requestLog.onFinished = (id) => { events.emitActivity({ type: "request_finished", id }); events.invalidate("stats", "logs"); };
   database.websocketConnectionLog.onUpdated = (connectionId) => { events.emitActivity({ type: "connection_updated", connectionId }); events.invalidate("logs"); };
 
-  const adminContext = { config, database, accounts, auth, usage, accountStatus, logins, activeAccounts, csrf, startedAt, events, codexProcess, websocketConnections, codexUsage };
+  const adminContext = { config, database, accounts, auth, usage, accountStatus, autoSwitch, logins, activeAccounts, csrf, startedAt, events, codexProcess, websocketConnections, codexUsage };
   registerLocalStatusRoutes(app, adminContext);
   await registerAdminApi(app, adminContext, codexConfig);
   await registerWebSocketProxy(app, { upstreamBaseUrl: config.upstreamBaseUrl, activeAccounts, auth, usage, database, websocketConnections });

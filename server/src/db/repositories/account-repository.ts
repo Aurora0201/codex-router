@@ -8,7 +8,7 @@ export interface NewAccount {
   codexHome: string;
 }
 
-export type AccountPatch = Partial<Pick<AccountRecord, "chatgptAccountId" | "email" | "planType" | "subscriptionStartedAt" | "subscriptionExpiresAt" | "subscriptionExpirySource" | "billingAnchorAt" | "billingCadence" | "enabled" | "authStatus" | "fedRamp" | "authMode" | "authCheckedAt" | "authLastSuccessfulAt" | "authErrorCode">>;
+export type AccountPatch = Partial<Pick<AccountRecord, "autoSwitchRank" | "autoSwitchEnrolled" | "chatgptAccountId" | "email" | "planType" | "subscriptionStartedAt" | "subscriptionExpiresAt" | "subscriptionExpirySource" | "billingAnchorAt" | "billingCadence" | "enabled" | "authStatus" | "fedRamp" | "authMode" | "authCheckedAt" | "authLastSuccessfulAt" | "authErrorCode">>;
 
 function asAccount(row: Record<string, unknown>): AccountRecord {
   return {
@@ -40,6 +40,8 @@ function asAccount(row: Record<string, unknown>): AccountRecord {
     lastAuthRefreshAt: row.last_auth_refresh_at == null ? null : Number(row.last_auth_refresh_at),
     lastLimitsRefreshAt: row.last_limits_refresh_at == null ? null : Number(row.last_limits_refresh_at),
     lastUsedAt: row.last_used_at == null ? null : Number(row.last_used_at),
+    autoSwitchRank: row.auto_switch_rank == null ? null : Number(row.auto_switch_rank),
+    autoSwitchEnrolled: Number(row.auto_switch_enrolled ?? 1) === 1,
     createdAt: Number(row.created_at),
     updatedAt: Number(row.updated_at),
   };
@@ -78,9 +80,10 @@ export class AccountRepository {
     this.db.prepare(`
       UPDATE accounts SET
         chatgpt_account_id=?, email=?, plan_type=?, subscription_started_at=?, subscription_expires_at=?, subscription_expiry_source=?, billing_anchor_at=?, billing_cadence=?,
-        enabled=?, auth_status=?, fedramp=?, auth_mode=?, auth_checked_at=?, auth_last_successful_at=?, auth_error_code=?, updated_at=?
+        enabled=?, auth_status=?, fedramp=?, auth_mode=?, auth_checked_at=?, auth_last_successful_at=?, auth_error_code=?,
+        auto_switch_rank=?, auto_switch_enrolled=?, updated_at=?
       WHERE id=?
-    `).run(next.chatgptAccountId, next.email, next.planType, next.subscriptionStartedAt, next.subscriptionExpiresAt, next.subscriptionExpirySource, next.billingAnchorAt, next.billingCadence, next.enabled ? 1 : 0, next.authStatus, next.fedRamp ? 1 : 0, next.authMode, next.authCheckedAt, next.authLastSuccessfulAt, next.authErrorCode, Date.now(), id);
+    `).run(next.chatgptAccountId, next.email, next.planType, next.subscriptionStartedAt, next.subscriptionExpiresAt, next.subscriptionExpirySource, next.billingAnchorAt, next.billingCadence, next.enabled ? 1 : 0, next.authStatus, next.fedRamp ? 1 : 0, next.authMode, next.authCheckedAt, next.authLastSuccessfulAt, next.authErrorCode, next.autoSwitchRank, next.autoSwitchEnrolled ? 1 : 0, Date.now(), id);
     return this.get(id)!;
   }
 

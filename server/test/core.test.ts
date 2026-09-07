@@ -255,7 +255,10 @@ describe("database migration v16", () => {
       subscriptionExpiresAt: null,
       subscriptionExpirySource: null,
     });
-    database.raw.prepare("UPDATE schema_migrations SET version = 15 WHERE version = 17").run();
+    // Wind the schema back below v16 whatever the current version is; naming
+    // the current one here means this test quietly stops migrating on the next
+    // schema bump instead of failing.
+    database.raw.prepare("UPDATE schema_migrations SET version = 15").run();
     database.close();
 
     const migrated = new GatewayDatabase(dbPath);
