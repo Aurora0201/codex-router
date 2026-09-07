@@ -12,6 +12,7 @@ import { AccountStatusService } from "./accounts/account-status-service.js";
 import { CredentialReader } from "./accounts/credential-reader.js";
 import { GatewayDatabase } from "./db/database.js";
 import { HttpProxy } from "./proxy/http-proxy.js";
+import { registerLocalStatusRoutes } from "./api/local/status-routes.js";
 import { registerWebSocketProxy } from "./proxy/ws-proxy.js";
 import { ActiveAccountService } from "./routing/active-account-service.js";
 import { registerAdminApi } from "./api/admin/index.js";
@@ -129,8 +130,10 @@ export async function buildGateway(overrides: Partial<GatewayConfig> = {}, optio
   database.requestLog.onFinished = (id) => { events.emitActivity({ type: "request_finished", id }); events.invalidate("stats", "logs"); };
   database.websocketConnectionLog.onUpdated = (connectionId) => { events.emitActivity({ type: "connection_updated", connectionId }); events.invalidate("logs"); };
 
-  await registerAdminApi(app, { config, database, accounts, auth, usage, accountStatus, logins, activeAccounts, csrf, startedAt, events, codexProcess, websocketConnections, codexUsage }, codexConfig);
-  await registerWebSocketProxy(app, { upstreamBaseUrl: config.upstreamBaseUrl, activeAccounts, auth, database, websocketConnections });
+  const adminContext = { config, database, accounts, auth, usage, accountStatus, logins, activeAccounts, csrf, startedAt, events, codexProcess, websocketConnections, codexUsage };
+  registerLocalStatusRoutes(app, adminContext);
+  await registerAdminApi(app, adminContext, codexConfig);
+  await registerWebSocketProxy(app, { upstreamBaseUrl: config.upstreamBaseUrl, activeAccounts, auth, usage, database, websocketConnections });
 
   app.post("/backend-api/codex/responses", (request, reply) => proxy.handle(request, reply, "/responses"));
   app.post("/backend-api/codex/responses/compact", (request, reply) => proxy.handle(request, reply, "/responses/compact"));

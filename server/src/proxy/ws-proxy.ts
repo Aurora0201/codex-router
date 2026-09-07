@@ -4,6 +4,7 @@ import websocket from "@fastify/websocket";
 import WebSocket, { type RawData } from "ws";
 import type { AccountRecord, IdentityMode } from "../types.js";
 import { AccountAuthService } from "../accounts/account-auth-service.js";
+import type { AccountUsageService } from "../accounts/account-usage-service.js";
 import { GatewayDatabase } from "../db/database.js";
 import { ActiveAccountService } from "../routing/active-account-service.js";
 import { hasBrowserOrigin } from "../security/origin-guard.js";
@@ -24,6 +25,7 @@ interface WsProxyOptions {
   upstreamBaseUrl: string;
   activeAccounts: ActiveAccountService;
   auth: AccountAuthService;
+  usage: AccountUsageService;
   database: GatewayDatabase;
   websocketConnections: WebSocketConnectionRegistry;
 }
@@ -301,6 +303,12 @@ export async function registerWebSocketProxy(app: FastifyInstance, options: WsPr
       if (terminal && lifecycle) {
         responseLifecycles.shift();
         if (lifecycle.request) options.database.requestLog.finishRequest(lifecycle.request.logId, { ...terminal, bytesIn: lifecycle.request.bytesIn, bytesOut: lifecycle.request.bytesOut });
+        // The work that actually spends quota arrives over this socket, so the
+        // reading has to be refreshed here too. Without it the display only
+        // moved when some HTTP request — in practice Codex's /models poll —
+        // happened to run the same check. refreshIfStale carries its own
+        // 60s cooldown, so a busy connection does not hammer upstream.
+        if (context.account) options.usage.refreshIfStale(context.account.id);
         context.registryHandle.update(responseLifecycles.length > 0 ? "transmitting" : "idle", responseLifecycles[0]?.activity);
       }
       if (client.readyState === WebSocket.OPEN) {
