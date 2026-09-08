@@ -13,14 +13,10 @@ export function jsonBody(request: FastifyRequest): Record<string, unknown> {
   }
 }
 
-export async function requireCsrf(request: FastifyRequest, reply: FastifyReply, csrf: CsrfGuard): Promise<void> {
+async function requireCsrf(request: FastifyRequest, reply: FastifyReply, csrf: CsrfGuard): Promise<void> {
   if (!csrf.verify(request)) await reply.code(403).send({ error: "csrf_validation_failed" });
 }
 
-export function publicAccount(account: AccountRecord) {
-  const { codexHome: _codexHome, ...safe } = account;
-  return safe;
-}
 
 export function statusForError(error: Error): number {
   if (error.message.endsWith("_not_found")) return 404;
