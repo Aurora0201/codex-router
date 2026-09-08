@@ -405,6 +405,14 @@ decorate, and never to make a fast thing feel slow.
 - Icons are lucide-react and `aria-hidden`: `size-4` in a panel header,
   `size-3.5` inline beside text, `size-[18px]` inside a `size-9` tile. An icon
   in a tile marks a subject; a bare icon marks a line.
+- `SheetContent` sets its own width through `data-[side=right]:sm:max-w-sm`. A
+  plain `sm:max-w-*` passed alongside it loses on specificity and is silently
+  inert — the sheet stays at 24rem and nothing warns you. Set the width through
+  the same variant: `data-[side=right]:sm:max-w-2xl`.
+- `overflow-y-auto` leaves `overflow-x` at `auto`, so a scrolling column grows a
+  horizontal scrollbar as soon as anything inside is a pixel too wide. Use the
+  shadcn `ScrollArea` for a scrolling region, and build rows out of `Item` so
+  the text column clamps and the control wraps instead of pushing.
 - A Base UI control wrapped in a `<label>` takes that label's whole text as its
   accessible name, and `aria-labelledby` beats any `aria-label` you also set. So
   a setting row puts only the title inside the label and leaves the explanatory
