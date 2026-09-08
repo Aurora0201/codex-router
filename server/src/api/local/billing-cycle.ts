@@ -51,4 +51,3 @@ export function nextBillingAt(
   }
   return candidate;
 }
-
