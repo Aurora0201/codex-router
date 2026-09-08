@@ -20,6 +20,14 @@ import { useTranslation } from "react-i18next"
 
 import { Button } from "@/components/ui/button"
 import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemTitle,
+} from "@/components/ui/item"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import {
   Empty,
   EmptyContent,
   EmptyDescription,
@@ -125,29 +133,33 @@ function Section({
 }
 
 /**
- * One setting on a line. The label wraps the control so its own text is the
- * accessible name; the hint sits outside it, where it explains without becoming
- * part of what the control is called.
+ * One setting on a line, built on `Item`: the title and its hint share the
+ * flexible column and clamp rather than push, so a long label wraps the control
+ * onto the next line instead of widening the sheet.
+ *
+ * The control carries its own `aria-label`, which is the title verbatim. A
+ * `<label>` around the whole row would hand the control the hint as well, and
+ * the name a screen reader reads would be a paragraph.
  */
 function SettingRow({
   title,
   hint,
-  control,
+  children,
 }: {
   title: string
   hint?: string
-  control: ReactNode
+  children: ReactNode
 }) {
   return (
-    <div className="grid gap-0.5 py-2 first:pt-0 last:pb-0">
-      <label className="flex min-h-7 items-center gap-4">
-        <span className="flex-1 text-sm font-medium">{title}</span>
-        {control}
-      </label>
-      {hint ? (
-        <span className="pr-14 text-xs text-muted-foreground">{hint}</span>
-      ) : null}
-    </div>
+    <Item size="xs" className="px-0">
+      <ItemContent className="min-w-0">
+        <ItemTitle className="max-w-full">{title}</ItemTitle>
+        {hint ? (
+          <ItemDescription className="text-xs">{hint}</ItemDescription>
+        ) : null}
+      </ItemContent>
+      <ItemActions>{children}</ItemActions>
+    </Item>
   )
 }
 
@@ -200,7 +212,7 @@ function PriorityRow({
   disabled,
   onToggle,
   onDragStart,
-  onDragEnter,
+  onDragOver,
   onDrop,
 }: {
   account: AccountView
@@ -211,7 +223,7 @@ function PriorityRow({
   disabled: boolean
   onToggle(next: boolean): void
   onDragStart(): void
-  onDragEnter(): void
+  onDragOver(pointerY: number, rect: DOMRect): void
   onDrop(): void
 }) {
   const { t } = useTranslation()
@@ -223,8 +235,10 @@ function PriorityRow({
       data-slot="auto-switch-row"
       data-account-id={account.id}
       onDragStart={onDragStart}
-      onDragEnter={onDragEnter}
-      onDragOver={(event) => event.preventDefault()}
+      onDragOver={(event) => {
+        event.preventDefault()
+        onDragOver(event.clientY, event.currentTarget.getBoundingClientRect())
+      }}
       onDrop={onDrop}
       className={cn(
         // A tile on the inset, which returns to the outer surface: out, in, out.
@@ -352,6 +366,8 @@ export function AutoSwitchButton({
   // FLIP: where each row sat before the order changed, so it can be played
   // back from there into its new seat instead of teleporting.
   const listRef = useRef<HTMLOListElement>(null)
+  /** True while rows are still travelling, so no new decision is taken. */
+  const settling = useRef(false)
   const seatsRef = useRef<Map<string, number>>(new Map())
   const readSeats = () => {
     const seats = new Map<string, number>()
@@ -363,22 +379,39 @@ export function AutoSwitchButton({
   useLayoutEffect(() => {
     const before = seatsRef.current
     seatsRef.current = new Map()
-    if (before.size === 0 || !listRef.current) return
-    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return
+    if (before.size === 0 || !listRef.current) {
+      settling.current = false
+      return
+    }
+    const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)")
+    const flights: Animation[] = []
     listRef.current
       .querySelectorAll<HTMLElement>("[data-account-id]")
       .forEach((row) => {
+        // The dragged row is already following the pointer; animating it too
+        // would fight the browser's own drag image.
+        if (row.dataset.accountId === dragId) return
         const delta = (before.get(row.dataset.accountId!) ?? 0) - row.offsetTop
-        if (delta === 0) return
-        row.animate?.(
+        if (delta === 0 || reduced?.matches) return
+        const flight = row.animate?.(
           [
             { transform: `translateY(${delta}px)` },
             { transform: "translateY(0)" },
           ],
           { duration: SNAP_MS, easing: "cubic-bezier(0.2, 0, 0, 1)" }
         )
+        if (flight) flights.push(flight)
       })
-  }, [order])
+    if (flights.length === 0) {
+      settling.current = false
+      return
+    }
+    void Promise.allSettled(flights.map((flight) => flight.finished)).then(
+      () => {
+        settling.current = false
+      }
+    )
+  }, [order, dragId])
 
   const byId = useMemo(
     () => new Map(accounts.map((account) => [account.id, account])),
@@ -425,11 +458,26 @@ export function AutoSwitchButton({
       )
   }
 
-  // Moved as the pointer crosses a row, so the list reads as it will end up;
-  // written once on drop rather than on every row it passes over.
-  const reorder = (targetId: string) => {
-    if (!dragId || dragId === targetId) return
+  /**
+   * A row changes places only once the pointer has crossed the middle of the
+   * row it is over, in the direction it is travelling. Swapping on entry
+   * instead makes the two rows trade seats under a still pointer and then
+   * trade back — the list shakes rather than settles.
+   *
+   * Holding off while rows are still travelling is the other half of it: a row
+   * mid-flight measures somewhere between its two seats, so a decision taken
+   * then is taken against a position that means nothing.
+   */
+  const reorder = (targetId: string, pointerY: number, rect: DOMRect) => {
+    if (!dragId || dragId === targetId || settling.current) return
+    const from = order.indexOf(dragId)
+    const to = order.indexOf(targetId)
+    if (from < 0 || to < 0) return
+    const middle = rect.top + rect.height / 2
+    if (to > from ? pointerY < middle : pointerY > middle) return
+
     readSeats()
+    settling.current = true
     setOrder((current) => {
       const next = [...current]
       next.splice(
@@ -457,7 +505,10 @@ export function AutoSwitchButton({
           </Button>
         }
       />
-      <SheetContent className="w-full sm:max-w-xl">
+      {/* SheetContent's own cap is `data-[side=right]:sm:max-w-sm`, and a bare
+          `sm:max-w-*` loses to it on specificity — the width has to be set
+          through the same variant or it silently stays at 24rem. */}
+      <SheetContent className="w-full data-[side=right]:sm:max-w-2xl">
         <SheetHeader>
           <SheetTitle>{t("自动切换")}</SheetTitle>
           <SheetDescription>
@@ -503,145 +554,154 @@ export function AutoSwitchButton({
             {t("正在载入…")}
           </p>
         ) : (
-          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 pb-6">
-            <Section title={t("运行方式")} icon={PowerIcon}>
-              <div className="grid divide-y divide-border">
-                <SettingRow
-                  title={t("额度不足时自动换账号")}
-                  hint={t("按下面的顺序换到下一个够用的账号。")}
-                  control={
+          <ScrollArea className="min-h-0 flex-1">
+            <div className="flex flex-col gap-3 px-4 pb-6">
+              <Section title={t("运行方式")} icon={PowerIcon}>
+                <div className="grid divide-y divide-border">
+                  <SettingRow
+                    title={t("额度不足时自动换账号")}
+                    hint={t("按下面的顺序换到下一个够用的账号。")}
+                  >
                     <Switch
+                      aria-label={t("额度不足时自动换账号")}
                       checked={settings.enabled}
                       onCheckedChange={(value) => patch({ enabled: value })}
                     />
-                  }
-                />
-                <SettingRow
-                  title={t("先试运行")}
-                  hint={t("只记录本来会切的时刻，不真的切换。")}
-                  control={
+                  </SettingRow>
+                  <SettingRow
+                    title={t("先试运行")}
+                    hint={t("只记录本来会切的时刻，不真的切换。")}
+                  >
                     <Switch
+                      aria-label={t("先试运行")}
                       checked={settings.dryRun}
                       disabled={!on}
                       onCheckedChange={(value) => patch({ dryRun: value })}
                     />
-                  }
-                />
-              </div>
-            </Section>
+                  </SettingRow>
+                </div>
+              </Section>
 
-            <Section title={t("按哪个额度切换")} icon={GaugeIcon}>
-              <ToggleGroup
-                className="w-full"
-                variant="outline"
-                size="sm"
-                disabled={!on}
-                value={[settings.switchOn]}
-                onValueChange={(values) => {
-                  const next = values[0] as SwitchBasis | undefined
-                  // An empty selection would leave nothing deciding, so the
-                  // current choice stands until another is picked.
-                  if (next) patch({ switchOn: next })
-                }}
-              >
-                {(Object.keys(BASIS_LABEL) as SwitchBasis[]).map((basis) => (
-                  <ToggleGroupItem key={basis} className="flex-1" value={basis}>
-                    {t(BASIS_LABEL[basis])}
-                  </ToggleGroupItem>
-                ))}
-              </ToggleGroup>
-              <div className="mt-1 grid divide-y divide-border">
-                {settings.switchOn !== "short" ? (
-                  <ThresholdRow
-                    title={t("周额度")}
-                    hint={t("长窗口决定这一周还剩多少。")}
-                    value={settings.thresholdPercent}
-                    disabled={!on}
-                    onDrag={(value) => draft({ thresholdPercent: value })}
-                    onCommit={(value) => patch({ thresholdPercent: value })}
-                  />
-                ) : null}
-                {settings.switchOn !== "weekly" ? (
-                  <ThresholdRow
-                    title={t("5 小时额度")}
-                    hint={t("短窗口才是挡住下一个请求的那个，通常设得更紧。")}
-                    value={settings.shortThresholdPercent}
-                    disabled={!on}
-                    onDrag={(value) => draft({ shortThresholdPercent: value })}
-                    onCommit={(value) =>
-                      patch({ shortThresholdPercent: value })
-                    }
-                  />
-                ) : null}
-              </div>
-            </Section>
-
-            <Section
-              title={t("优先级")}
-              icon={ListOrderedIcon}
-              hint={t("拖动排序")}
-            >
-              <ol ref={listRef} className="grid gap-1.5">
-                {order.map((id, index) => {
-                  const account = byId.get(id)
-                  if (!account) return null
-                  return (
-                    <PriorityRow
-                      key={id}
-                      account={account}
-                      seat={index + 1}
-                      live={id === activeAccountId}
-                      enrolled={enrolled[id] ?? false}
-                      dragging={dragId === id}
+              <Section title={t("按哪个额度切换")} icon={GaugeIcon}>
+                {/* A segmented control on the section's own fill: the
+                    selected segment returns to the card surface, because the
+                    toggle's default pressed state is `bg-muted` — the very
+                    colour it is sitting on. */}
+                <ToggleGroup
+                  className="w-full"
+                  size="sm"
+                  disabled={!on}
+                  value={[settings.switchOn]}
+                  onValueChange={(values) => {
+                    const next = values[0] as SwitchBasis | undefined
+                    // An empty selection would leave nothing deciding, so the
+                    // current choice stands until another is picked.
+                    if (next) patch({ switchOn: next })
+                  }}
+                >
+                  {(Object.keys(BASIS_LABEL) as SwitchBasis[]).map((basis) => (
+                    <ToggleGroupItem
+                      key={basis}
+                      className="flex-1 hover:bg-card/60 aria-pressed:bg-card aria-pressed:shadow-sm"
+                      value={basis}
+                    >
+                      {t(BASIS_LABEL[basis])}
+                    </ToggleGroupItem>
+                  ))}
+                </ToggleGroup>
+                <div className="mt-1 grid divide-y divide-border">
+                  {settings.switchOn !== "short" ? (
+                    <ThresholdRow
+                      title={t("周额度")}
+                      hint={t("长窗口决定这一周还剩多少。")}
+                      value={settings.thresholdPercent}
                       disabled={!on}
-                      onToggle={(next) => {
-                        const merged = { ...enrolled, [id]: next }
-                        setEnrolled(merged)
-                        persistPriority(order, merged)
-                      }}
-                      onDragStart={() => setDragId(id)}
-                      onDragEnter={() => reorder(id)}
-                      onDrop={() => {
-                        setDragId(null)
-                        persistPriority(order, enrolled)
-                      }}
+                      onDrag={(value) => draft({ thresholdPercent: value })}
+                      onCommit={(value) => patch({ thresholdPercent: value })}
                     />
-                  )
-                })}
-              </ol>
-            </Section>
+                  ) : null}
+                  {settings.switchOn !== "weekly" ? (
+                    <ThresholdRow
+                      title={t("5 小时额度")}
+                      hint={t("短窗口才是挡住下一个请求的那个，通常设得更紧。")}
+                      value={settings.shortThresholdPercent}
+                      disabled={!on}
+                      onDrag={(value) =>
+                        draft({ shortThresholdPercent: value })
+                      }
+                      onCommit={(value) =>
+                        patch({ shortThresholdPercent: value })
+                      }
+                    />
+                  ) : null}
+                </div>
+              </Section>
 
-            <Section title={t("触发与节奏")} icon={SlidersHorizontalIcon}>
-              <div className="grid divide-y divide-border">
-                <SettingRow
-                  title={t("上游返回 429")}
-                  control={
+              <Section
+                title={t("优先级")}
+                icon={ListOrderedIcon}
+                hint={t("拖动排序")}
+              >
+                <ol ref={listRef} className="grid gap-1.5">
+                  {order.map((id, index) => {
+                    const account = byId.get(id)
+                    if (!account) return null
+                    return (
+                      <PriorityRow
+                        key={id}
+                        account={account}
+                        seat={index + 1}
+                        live={id === activeAccountId}
+                        enrolled={enrolled[id] ?? false}
+                        dragging={dragId === id}
+                        disabled={!on}
+                        onToggle={(next) => {
+                          const merged = { ...enrolled, [id]: next }
+                          setEnrolled(merged)
+                          persistPriority(order, merged)
+                        }}
+                        onDragStart={() => setDragId(id)}
+                        onDragOver={(pointerY, rect) =>
+                          reorder(id, pointerY, rect)
+                        }
+                        onDrop={() => {
+                          setDragId(null)
+                          persistPriority(order, enrolled)
+                        }}
+                      />
+                    )
+                  })}
+                </ol>
+              </Section>
+
+              <Section title={t("触发与节奏")} icon={SlidersHorizontalIcon}>
+                <div className="grid divide-y divide-border">
+                  <SettingRow title={t("上游返回 429")}>
                     <Switch
+                      aria-label={t("上游返回 429")}
                       checked={settings.triggerOn429}
                       disabled={!on}
                       onCheckedChange={(value) =>
                         patch({ triggerOn429: value })
                       }
                     />
-                  }
-                />
-                <SettingRow
-                  title={t("认证失效或账号停用")}
-                  control={
+                  </SettingRow>
+                  <SettingRow title={t("认证失效或账号停用")}>
                     <Switch
+                      aria-label={t("认证失效或账号停用")}
                       checked={settings.triggerOnAuthFailure}
                       disabled={!on}
                       onCheckedChange={(value) =>
                         patch({ triggerOnAuthFailure: value })
                       }
                     />
-                  }
-                />
-                <SettingRow
-                  title={t("最短驻留")}
-                  hint={t("防止在阈值附近来回横跳。")}
-                  control={
+                  </SettingRow>
+                  <SettingRow
+                    title={t("最短驻留")}
+                    hint={t("防止在阈值附近来回横跳。")}
+                  >
                     <Select
+                      aria-label={t("最短驻留")}
                       value={String(settings.minDwellMs)}
                       disabled={!on}
                       onValueChange={(value) =>
@@ -668,24 +728,20 @@ export function AutoSwitchButton({
                         </SelectGroup>
                       </SelectContent>
                     </Select>
-                  }
-                />
-                <SettingRow
-                  title={t("恢复后切回更高优先级")}
-                  control={
+                  </SettingRow>
+                  <SettingRow title={t("恢复后切回更高优先级")}>
                     <Switch
+                      aria-label={t("恢复后切回更高优先级")}
                       checked={settings.switchBackToHigherPriority}
                       disabled={!on}
                       onCheckedChange={(value) =>
                         patch({ switchBackToHigherPriority: value })
                       }
                     />
-                  }
-                />
-                <SettingRow
-                  title={t("全部低于阈值时")}
-                  control={
+                  </SettingRow>
+                  <SettingRow title={t("全部低于阈值时")}>
                     <Select
+                      aria-label={t("全部低于阈值时")}
                       value={settings.onAllBelow}
                       disabled={!on}
                       onValueChange={(value) =>
@@ -713,47 +769,47 @@ export function AutoSwitchButton({
                         </SelectGroup>
                       </SelectContent>
                     </Select>
-                  }
-                />
-              </div>
-            </Section>
+                  </SettingRow>
+                </div>
+              </Section>
 
-            <Section title={t("切换记录")} icon={HistoryIcon}>
-              {state && state.recent.length > 0 ? (
-                <ul className="grid divide-y divide-border">
-                  {state.recent.map((entry) => (
-                    <li
-                      key={entry.id}
-                      className="grid grid-cols-[5.5rem_1fr] gap-3 py-1.5 first:pt-0 last:pb-0"
-                    >
-                      <span className="text-xs text-muted-foreground-subtle tabular-nums">
-                        {formatRelativeTime(entry.switchedAt)}
-                      </span>
-                      <span className="min-w-0">
-                        <span className="block truncate text-sm">
-                          {entry.dryRun
-                            ? t("未切换")
-                            : t("切到 {{account}}", {
-                                account: shortAccountId(
-                                  byId.get(entry.toAccountId ?? "")
-                                    ?.chatgptAccountId ?? entry.toAccountId
-                                ),
-                              })}
+              <Section title={t("切换记录")} icon={HistoryIcon}>
+                {state && state.recent.length > 0 ? (
+                  <ul className="grid divide-y divide-border">
+                    {state.recent.map((entry) => (
+                      <li
+                        key={entry.id}
+                        className="grid grid-cols-[5.5rem_1fr] gap-3 py-1.5 first:pt-0 last:pb-0"
+                      >
+                        <span className="text-xs text-muted-foreground-subtle tabular-nums">
+                          {formatRelativeTime(entry.switchedAt)}
                         </span>
-                        <span className="block truncate text-xs text-muted-foreground">
-                          {t(reasonLabel(entry))}
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm">
+                            {entry.dryRun
+                              ? t("未切换")
+                              : t("切到 {{account}}", {
+                                  account: shortAccountId(
+                                    byId.get(entry.toAccountId ?? "")
+                                      ?.chatgptAccountId ?? entry.toAccountId
+                                  ),
+                                })}
+                          </span>
+                          <span className="block truncate text-xs text-muted-foreground">
+                            {t(reasonLabel(entry))}
+                          </span>
                         </span>
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="py-1 text-xs text-muted-foreground">
-                  {t("还没有切换记录")}
-                </p>
-              )}
-            </Section>
-          </div>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="py-1 text-xs text-muted-foreground">
+                    {t("还没有切换记录")}
+                  </p>
+                )}
+              </Section>
+            </div>
+          </ScrollArea>
         )}
       </SheetContent>
     </Sheet>

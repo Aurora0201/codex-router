@@ -58,14 +58,26 @@ function rows() {
   )
 }
 
-/** Drag-and-drop is not something userEvent drives; the events are dispatched
- *  one render apart so the component sees the drag it is being asked about. */
-function drag(from: HTMLElement, over: HTMLElement) {
-  act(() => {
-    from.dispatchEvent(new Event("dragstart", { bubbles: true }))
+/**
+ * jsdom lays nothing out, so every row measures 0×0 at the origin. `rect` is
+ * what the row would measure, and `pointerY` where the pointer is inside it.
+ */
+function hover(row: HTMLElement, pointerY: number, top: number, height = 40) {
+  const event = new Event("dragover", { bubbles: true, cancelable: true })
+  Object.defineProperty(event, "clientY", { value: pointerY })
+  Object.defineProperty(row, "getBoundingClientRect", {
+    configurable: true,
+    value: () => ({ top, height, bottom: top + height }) as DOMRect,
   })
   act(() => {
-    over.dispatchEvent(new Event("dragenter", { bubbles: true }))
+    row.dispatchEvent(event)
+  })
+}
+
+/** Drag-and-drop is not something userEvent drives. */
+function startDrag(row: HTMLElement) {
+  act(() => {
+    row.dispatchEvent(new Event("dragstart", { bubbles: true }))
   })
 }
 
@@ -124,19 +136,48 @@ describe("AutoSwitchButton", () => {
     expect(rows()[0]).not.toHaveAttribute("draggable", "true")
   })
 
-  it("writes the order once the row is dropped, not while it is moving", async () => {
-    const service = await open({})
-    const save = vi.spyOn(service, "saveAutoSwitchPriority")
+  it("waits for the pointer to cross a row's middle before moving it", async () => {
+    await open({})
     await waitFor(() => expect(rows()).toHaveLength(3))
+    startDrag(rows()[0])
 
-    const [first, , third] = rows()
-    drag(first, third)
-    expect(save).not.toHaveBeenCalled()
+    // Into the top half of the third row, travelling down: not yet.
+    hover(rows()[2], 90, 80)
+    expect(rows()[0]).toHaveTextContent("account-1@example.com")
+
+    // Past its middle: now.
+    hover(rows()[2], 110, 80)
     expect(rows().map((row) => row.textContent)).toEqual([
       expect.stringContaining("account-2@example.com"),
       expect.stringContaining("account-3@example.com"),
       expect.stringContaining("account-1@example.com"),
     ])
+  })
+
+  it("does not trade the same two rows back and forth under a still pointer", async () => {
+    await open({})
+    await waitFor(() => expect(rows()).toHaveLength(3))
+    startDrag(rows()[0])
+
+    // Past the middle of the second seat (40–80), so the two rows swap.
+    hover(rows()[1], 70, 40)
+    const settled = rows().map((row) => row.textContent)
+    expect(settled[1]).toContain("account-1@example.com")
+
+    // The dragged row now occupies that seat, so a pointer that has not moved
+    // is over the row it is carrying. It must not swap anything back.
+    for (let i = 0; i < 5; i += 1) hover(rows()[1], 70, 40)
+    expect(rows().map((row) => row.textContent)).toEqual(settled)
+  })
+
+  it("writes the order once the row is dropped, not while it is moving", async () => {
+    const service = await open({})
+    const save = vi.spyOn(service, "saveAutoSwitchPriority")
+    await waitFor(() => expect(rows()).toHaveLength(3))
+
+    startDrag(rows()[0])
+    hover(rows()[2], 110, 80)
+    expect(save).not.toHaveBeenCalled()
 
     act(() => {
       rows()[2].dispatchEvent(new Event("drop", { bubbles: true }))
