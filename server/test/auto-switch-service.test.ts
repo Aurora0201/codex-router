@@ -49,7 +49,7 @@ function account(
 }
 
 function settings(patch: Partial<AutoSwitchSettings>) {
-  database.settings.update({ autoSwitch: { enabled: true, dryRun: false, ...patch } });
+  database.settings.update({ autoSwitch: { enabled: true, ...patch } });
 }
 
 beforeEach(async () => {
@@ -217,7 +217,7 @@ describe("AutoSwitchService", () => {
     active.select("a");
     // watchShortWindow meant "the week, and also the short window".
     database.settings.update({
-      autoSwitch: { enabled: true, dryRun: false, watchShortWindow: true, shortThresholdPercent: 15 },
+      autoSwitch: { enabled: true, watchShortWindow: true, shortThresholdPercent: 15 },
     });
     expect(database.settings.autoSwitch().switchOn).toBe("both");
     expect(service.decide({ kind: "quota" })?.to).toBe("b");
@@ -285,23 +285,20 @@ describe("AutoSwitchService", () => {
     expect(decision?.reason).toBe("higher_priority_recovered");
   });
 
-  it("records the decision but leaves routing alone in a dry run", () => {
-    account("a", { weeklyUsed: 95, rank: 1 });
-    account("b", { rank: 2 });
-    active.select("a");
-    database.settings.update({ autoSwitch: { enabled: true, dryRun: true, thresholdPercent: 25 } });
-
-    expect(service.evaluate({ kind: "quota" })?.to).toBe("b");
-    expect(active.get()?.id).toBe("a");
-    const [entry] = database.accountSwitchLog.recent();
-    expect(entry.dryRun).toBe(true);
-    expect(entry.toAccountId).toBe("b");
-    // A dry run must not start the dwell clock either, or the first real
-    // switch would be held back by one that never happened.
-    expect(database.accountSwitchLog.lastSwitchAt()).toBeNull();
+  it("keeps a partial change from resetting everything it did not name", () => {
+    account("a", { rank: 1 });
+    database.settings.patchAutoSwitch({ enabled: true, thresholdPercent: 40 });
+    // The console saves one field at a time; the row is replaced whole, so a
+    // second save used to put `enabled` back to its default.
+    database.settings.patchAutoSwitch({ switchOn: "short" });
+    expect(database.settings.autoSwitch()).toMatchObject({
+      enabled: true,
+      thresholdPercent: 40,
+      switchOn: "short",
+    });
   });
 
-  it("switches and records when it is not a dry run", () => {
+  it("switches and records", () => {
     account("a", { weeklyUsed: 95, rank: 1 });
     account("b", { rank: 2 });
     active.select("a");
@@ -310,9 +307,31 @@ describe("AutoSwitchService", () => {
     service.evaluate({ kind: "quota" });
     expect(active.get()?.id).toBe("b");
     const [entry] = database.accountSwitchLog.recent();
-    expect(entry.dryRun).toBe(false);
     expect(entry.fromAccountId).toBe("a");
     expect(entry.reason).toBe("quota_below_threshold");
     expect(entry.evidence).toMatchObject({ thresholdPercent: 25 });
+  });
+});
+
+describe("AutoSwitchService.stalled", () => {
+  it("says nothing while it is switched off", () => {
+    account("a", { weeklyUsed: 99, rank: 1 });
+    expect(service.stalled()).toBe(false);
+  });
+
+  it("says so once every account in the rotation is under its threshold", () => {
+    account("a", { weeklyUsed: 95, rank: 1 });
+    account("b", { weeklyUsed: 90, rank: 2 });
+    active.select("a");
+    settings({ thresholdPercent: 25, onAllBelow: "pause" });
+    expect(service.stalled()).toBe(true);
+  });
+
+  it("stays quiet while one of them still has room", () => {
+    account("a", { weeklyUsed: 95, rank: 1 });
+    account("b", { weeklyUsed: 10, rank: 2 });
+    active.select("a");
+    settings({ thresholdPercent: 25, onAllBelow: "pause" });
+    expect(service.stalled()).toBe(false);
   });
 });

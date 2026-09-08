@@ -42,9 +42,9 @@ export interface GatewayBuildOptions {
   backgroundTasks?: boolean;
 }
 
-function startUsageRefreshScheduler(status: AccountStatusService, onRefresh: () => void): NodeJS.Timeout {
+function startUsageRefreshScheduler(status: AccountStatusService): NodeJS.Timeout {
   const refreshAccounts = () => {
-    void status.refreshAll(onRefresh);
+    void status.refreshAll();
   };
   refreshAccounts();
   const timer = setInterval(refreshAccounts, 5 * 60_000);
@@ -138,18 +138,18 @@ export async function buildGateway(overrides: Partial<GatewayConfig> = {}, optio
   });
   // Quota readings only change on a refresh, so that is the moment worth
   // re-deciding on. The switch itself is the same select() a person clicks.
-  const onAccountsRefreshed = () => {
+  accountStatus.onRefreshed = () => {
     events.invalidate("accounts");
     reEvaluateRouting({ kind: "quota" });
   };
-  const rateLimitTimer = backgroundTasks ? startUsageRefreshScheduler(accountStatus, onAccountsRefreshed) : null;
+  const rateLimitTimer = backgroundTasks ? startUsageRefreshScheduler(accountStatus) : null;
   const codexProcess = new CodexProcessMonitor(() => events.invalidate("codex"));
   if (backgroundTasks) await codexProcess.start();
   database.requestLog.onStarted = (id) => { events.emitActivity({ type: "request_started", id }); events.invalidate("logs"); };
   database.requestLog.onFinished = (id) => { events.emitActivity({ type: "request_finished", id }); events.invalidate("stats", "logs"); };
   database.websocketConnectionLog.onUpdated = (connectionId) => { events.emitActivity({ type: "connection_updated", connectionId }); events.invalidate("logs"); };
 
-  const adminContext = { config, database, accounts, auth, usage, accountStatus, autoSwitch, logins, activeAccounts, csrf, startedAt, events, codexProcess, websocketConnections, codexUsage };
+  const adminContext = { config, database, accounts, auth, usage, accountStatus, autoSwitch, reEvaluateRouting, logins, activeAccounts, csrf, startedAt, events, codexProcess, websocketConnections, codexUsage };
   registerLocalStatusRoutes(app, adminContext);
   await registerAdminApi(app, adminContext, codexConfig);
   await registerWebSocketProxy(app, { upstreamBaseUrl: config.upstreamBaseUrl, activeAccounts, auth, usage, database, websocketConnections });

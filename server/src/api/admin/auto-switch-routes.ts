@@ -40,14 +40,22 @@ export function registerAutoSwitchRoutes(app: FastifyInstance, ctx: AdminContext
     // The order the service would actually walk, so the console shows the
     // ranking that is in force rather than one it re-derives for itself.
     candidateIds: ctx.autoSwitch.candidates().map((account) => account.id),
+    stalled: ctx.autoSwitch.stalled(),
     recent: ctx.database.accountSwitchLog.recent(20),
   }));
 
   app.patch("/api/auto-switch", { preHandler: protect }, async (request, reply) => {
     await apiAction(reply, () => {
-      const settings = ctx.database.settings.update({ autoSwitch: jsonBody(request) });
+      const body = jsonBody(request);
+      if (typeof body !== "object" || body === null) throw new Error("invalid_request");
+      // A patch, laid over what is stored. Replacing the row would reset every
+      // field the console did not happen to send.
+      const settings = ctx.database.settings.patchAutoSwitch(body);
       ctx.events.invalidate("settings", "accounts");
-      return settings.autoSwitch;
+      // Arming it is itself a reason to look: waiting for the next sweep would
+      // leave the routed account below the threshold the user just set.
+      if (settings.enabled) ctx.reEvaluateRouting({ kind: "quota" });
+      return settings;
     });
   });
 

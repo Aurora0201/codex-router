@@ -47,6 +47,15 @@ export class AccountStatusService {
   private readonly shutdownController = new AbortController();
   private closed = false;
 
+  /**
+   * Called after every reading that lands, whichever path asked for it — the
+   * sweep, a request finding the numbers stale, or a 429. Auto switching
+   * decides on these numbers, so every one of them is a moment to re-decide;
+   * hanging it off the sweep alone made the readings fresh and the decisions
+   * five minutes old.
+   */
+  onRefreshed: (accountId: string) => void = () => undefined;
+
   constructor(
     private readonly config: GatewayConfig,
     private readonly database: GatewayDatabase,
@@ -74,7 +83,10 @@ export class AccountStatusService {
 
   refreshInBackground(accountId: string): Promise<boolean> {
     if (this.closed) return Promise.resolve(false);
-    const task = this.refreshWithRetry(accountId);
+    const task = this.refreshWithRetry(accountId).then((ok) => {
+      if (ok && !this.closed) this.onRefreshed(accountId);
+      return ok;
+    });
     this.backgroundTasks.add(task);
     void task.finally(() => this.backgroundTasks.delete(task));
     return task;
@@ -95,15 +107,13 @@ export class AccountStatusService {
     });
   }
 
-  async refreshAll(onRefreshed: () => void = () => undefined): Promise<void> {
+  async refreshAll(): Promise<void> {
     if (this.closed) return;
     const ids = this.database.accounts.list().filter((account) => account.enabled).map((account) => account.id);
     let cursor = 0;
     const worker = async () => {
       while (!this.closed && cursor < ids.length) {
-        const id = ids[cursor++];
-        await this.refreshInBackground(id);
-        if (!this.closed) onRefreshed();
+        await this.refreshInBackground(ids[cursor++]);
       }
     };
     await Promise.all(Array.from({ length: Math.min(REFRESH_CONCURRENCY, ids.length) }, worker));

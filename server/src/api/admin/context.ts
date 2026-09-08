@@ -23,6 +23,8 @@ export interface AdminContext {
   usage: AccountUsageService;
   accountStatus: AccountStatusService;
   autoSwitch: AutoSwitchService;
+  /** Ask the router to look at the pool again, the way a refresh would. */
+  reEvaluateRouting(trigger: Parameters<AutoSwitchService["evaluate"]>[0]): void;
   logins: AccountLoginService;
   activeAccounts: ActiveAccountService;
   csrf: CsrfGuard;

@@ -42,7 +42,7 @@ describe("auto-switch API", () => {
   it("starts switched off, so an upgrade changes nobody's routing", async () => {
     const body = (await gateway.app.inject({ method: "GET", url: "/api/auto-switch" })).json();
     expect(body.settings.enabled).toBe(false);
-    expect(body.settings.dryRun).toBe(true);
+    expect(body.stalled).toBe(false);
     expect(body.recent).toEqual([]);
   });
 

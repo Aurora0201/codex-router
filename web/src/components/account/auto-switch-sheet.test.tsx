@@ -16,7 +16,6 @@ type Fixture = GatewayService & {
 
 const SETTINGS: AutoSwitchSettingsView = {
   enabled: true,
-  dryRun: true,
   switchOn: "weekly",
   thresholdPercent: 25,
   shortThresholdPercent: 15,
@@ -36,6 +35,7 @@ async function open(view?: Partial<AutoSwitchView>) {
       candidateIds: service.snapshot.accounts.accounts.map(
         (account) => account.id
       ),
+      stalled: false,
       recent: [],
       ...view,
     })
@@ -98,6 +98,18 @@ describe("AutoSwitchButton", () => {
     ).not.toBeChecked()
   })
 
+  it("names the window the ranking is actually judged on", async () => {
+    const service = await open({})
+    await waitFor(() => expect(rows()).toHaveLength(3))
+    expect(rows()[0]).toHaveTextContent("周额度")
+
+    await userEvent.click(screen.getByRole("button", { name: "5 小时额度" }))
+    // The row has to read back the number the decision uses, or the list is
+    // ranked on one window and reported on another.
+    expect(rows()[0]).toHaveTextContent("5 小时额度")
+    expect(service).toBeTruthy()
+  })
+
   it("says no more than the four things needed to rank an account", async () => {
     await open({})
 
@@ -111,7 +123,7 @@ describe("AutoSwitchButton", () => {
     expect(first).not.toHaveTextContent("已就绪")
   })
 
-  it("arms switching without taking it out of the trial run", async () => {
+  it("arms switching", async () => {
     const service = await open()
     const save = vi.spyOn(service, "saveAutoSwitch")
 
@@ -119,7 +131,18 @@ describe("AutoSwitchButton", () => {
       await screen.findByRole("switch", { name: "额度不足时自动换账号" })
     )
     expect(save).toHaveBeenCalledWith({ enabled: true })
-    expect(screen.getByRole("switch", { name: "先试运行" })).toBeChecked()
+  })
+
+  it("says on the button itself when there is nowhere left to switch", async () => {
+    await open({ stalled: true })
+    expect(
+      await screen.findByText("轮换里的账号都低于阈值，暂时无处可切。")
+    ).toBeInTheDocument()
+    // The open sheet makes the page behind it inert, so the trigger is not
+    // reachable by role — it is still the thing that has to say this.
+    expect(
+      document.querySelector("[data-slot=sheet-trigger]")
+    ).toHaveTextContent("自动切换 · 已暂停")
   })
 
   it("keeps every other setting out of reach until switching is on", async () => {
@@ -127,7 +150,7 @@ describe("AutoSwitchButton", () => {
 
     // Base UI switches are spans, so being off-limits reads as aria-disabled.
     expect(
-      await screen.findByRole("switch", { name: "先试运行" })
+      await screen.findByRole("switch", { name: "上游返回 429" })
     ).toHaveAttribute("aria-disabled", "true")
     expect(
       screen.getByRole("switch", { name: "额度不足时自动换账号" })
@@ -299,7 +322,6 @@ describe("AutoSwitchButton", () => {
           fromAccountId: "account-1",
           toAccountId: "account-2",
           reason: "quota_below_threshold",
-          dryRun: false,
           evidence: { window: "short", thresholdPercent: 15 },
         },
       ],

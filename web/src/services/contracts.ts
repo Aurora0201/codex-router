@@ -130,7 +130,6 @@ export type SwitchBasis = "weekly" | "short" | "both"
 
 export interface AutoSwitchSettingsView {
   enabled: boolean
-  dryRun: boolean
   switchOn: SwitchBasis
   /** The long (weekly) window's threshold. */
   thresholdPercent: number
@@ -155,7 +154,6 @@ export interface SwitchLogEntryView {
   fromAccountId: string | null
   toAccountId: string | null
   reason: SwitchReason
-  dryRun: boolean
   evidence: Record<string, unknown> | null
 }
 
@@ -163,6 +161,8 @@ export interface AutoSwitchView {
   settings: AutoSwitchSettingsView
   /** The order the gateway would walk, so the console never re-derives it. */
   candidateIds: string[]
+  /** Switching is on and every account in the rotation is below its threshold. */
+  stalled: boolean
   recent: SwitchLogEntryView[]
 }
 

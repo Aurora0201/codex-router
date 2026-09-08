@@ -158,7 +158,9 @@ function SettingRow({
           <ItemDescription className="text-xs">{hint}</ItemDescription>
         ) : null}
       </ItemContent>
-      <ItemActions>{children}</ItemActions>
+      {/* A switch is 18px tall and a select is 32; without a floor the rows
+          step up and down the list depending on which control they hold. */}
+      <ItemActions className="min-h-8">{children}</ItemActions>
     </Item>
   )
 }
@@ -203,8 +205,22 @@ function ThresholdRow({
   )
 }
 
+/** The window the ranking is actually judged on, and what to call it. */
+function judgedWindow(account: AccountView, basis: SwitchBasis) {
+  const [long, short] = accountWindowSlots(account)
+  const weekly = { window: long, label: "周额度" }
+  const hourly = { window: short, label: "5 小时额度" }
+  if (basis === "weekly") return weekly
+  if (basis === "short") return hourly
+  // Watching both: show whichever has less left, since that is the one that
+  // will trip first.
+  const left = (w: typeof long) => (w ? (remainingPercent(w) ?? 101) : 101)
+  return left(short) < left(long) ? hourly : weekly
+}
+
 function PriorityRow({
   account,
+  basis,
   seat,
   live,
   enrolled,
@@ -216,6 +232,7 @@ function PriorityRow({
   onDrop,
 }: {
   account: AccountView
+  basis: SwitchBasis
   seat: number
   live: boolean
   enrolled: boolean
@@ -227,8 +244,8 @@ function PriorityRow({
   onDrop(): void
 }) {
   const { t } = useTranslation()
-  const weekly = accountWindowSlots(account)[0]
-  const remaining = weekly ? remainingPercent(weekly) : null
+  const judged = judgedWindow(account, basis)
+  const remaining = judged.window ? remainingPercent(judged.window) : null
   return (
     <li
       draggable={!disabled}
@@ -281,7 +298,7 @@ function PriorityRow({
             : t("{{value}}%", { value: Math.round(remaining) })}
         </span>
         <span className="block text-xs text-muted-foreground-subtle">
-          {t("周额度")}
+          {t(judged.label)}
         </span>
       </span>
       <Switch
@@ -499,8 +516,8 @@ export function AutoSwitchButton({
                 four status tones, and off is the default, which wears none. */}
             {!on
               ? t("自动切换")
-              : settings?.dryRun
-                ? t("自动切换 · 试运行")
+              : state?.stalled
+                ? t("自动切换 · 已暂停")
                 : t("自动切换 · 已开")}
           </Button>
         }
@@ -516,8 +533,8 @@ export function AutoSwitchButton({
               ? t("读不到自动切换设置。")
               : !on
                 ? t("关闭时一切照旧，路由只跟随你手动的选择。")
-                : settings?.dryRun
-                  ? t("试运行中 · 只记录，不切换")
+                : state?.stalled
+                  ? t("轮换里的账号都低于阈值，暂时无处可切。")
                   : t("已启用 · 会自动切换")}
           </SheetDescription>
         </SheetHeader>
@@ -566,17 +583,6 @@ export function AutoSwitchButton({
                       aria-label={t("额度不足时自动换账号")}
                       checked={settings.enabled}
                       onCheckedChange={(value) => patch({ enabled: value })}
-                    />
-                  </SettingRow>
-                  <SettingRow
-                    title={t("先试运行")}
-                    hint={t("只记录本来会切的时刻，不真的切换。")}
-                  >
-                    <Switch
-                      aria-label={t("先试运行")}
-                      checked={settings.dryRun}
-                      disabled={!on}
-                      onCheckedChange={(value) => patch({ dryRun: value })}
                     />
                   </SettingRow>
                 </div>
@@ -650,6 +656,7 @@ export function AutoSwitchButton({
                       <PriorityRow
                         key={id}
                         account={account}
+                        basis={settings.switchOn}
                         seat={index + 1}
                         live={id === activeAccountId}
                         enrolled={enrolled[id] ?? false}
@@ -786,14 +793,12 @@ export function AutoSwitchButton({
                         </span>
                         <span className="min-w-0">
                           <span className="block truncate text-sm">
-                            {entry.dryRun
-                              ? t("未切换")
-                              : t("切到 {{account}}", {
-                                  account: shortAccountId(
-                                    byId.get(entry.toAccountId ?? "")
-                                      ?.chatgptAccountId ?? entry.toAccountId
-                                  ),
-                                })}
+                            {t("切到 {{account}}", {
+                              account: shortAccountId(
+                                byId.get(entry.toAccountId ?? "")
+                                  ?.chatgptAccountId ?? entry.toAccountId
+                              ),
+                            })}
                           </span>
                           <span className="block truncate text-xs text-muted-foreground">
                             {t(reasonLabel(entry))}

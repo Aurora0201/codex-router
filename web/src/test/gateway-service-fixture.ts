@@ -37,7 +37,6 @@ const account = (id: string, isActive = false): AccountView => ({
 
 const AUTO_SWITCH: AutoSwitchSettingsView = {
   enabled: false,
-  dryRun: true,
   switchOn: "weekly",
   thresholdPercent: 25,
   shortThresholdPercent: 15,
@@ -279,6 +278,7 @@ export function createGatewayServiceFixture({
       return {
         settings: { ...AUTO_SWITCH, ...autoSwitch },
         candidateIds: accounts.map((account) => account.id),
+        stalled: false,
         recent: [],
       }
     },

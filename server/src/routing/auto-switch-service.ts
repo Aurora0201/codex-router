@@ -186,24 +186,32 @@ export class AutoSwitchService {
     return { reason: this.reasonFor(trigger), from: current?.id ?? null, to: target.id, evidence: evidence(target) };
   }
 
-  /**
-   * Decide, record, and — unless this is a dry run — switch. Returns what was
-   * decided so a caller can surface it.
-   */
+  /** Decide, record, and switch. Returns what was decided so a caller can say so. */
   evaluate(trigger: SwitchTrigger, now = Date.now()): SwitchDecision | null {
     const decision = this.decide(trigger, now);
     if (!decision) return null;
-    const dryRun = this.database.settings.autoSwitch().dryRun;
     this.database.accountSwitchLog.record({
       switchedAt: now,
       fromAccountId: decision.from,
       toAccountId: decision.to,
       reason: decision.reason,
-      dryRun,
       evidence: decision.evidence,
     });
-    if (!dryRun) this.activeAccounts.select(decision.to);
+    this.activeAccounts.select(decision.to);
     return decision;
+  }
+
+  /**
+   * Switching is on, and there is nowhere left to go: every account in the
+   * rotation is under its own threshold. Said out loud on the console, because
+   * "暂停并提示" has to actually be a prompt.
+   */
+  stalled(): boolean {
+    const settings = this.database.settings.autoSwitch();
+    if (!settings.enabled) return false;
+    const ranked = this.candidates();
+    if (ranked.length === 0) return true;
+    return ranked.every((account) => !meetsThresholds(account, settings));
   }
 
   private reasonFor(trigger: SwitchTrigger): SwitchReason {

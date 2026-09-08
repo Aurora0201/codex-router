@@ -14,8 +14,6 @@ export type SwitchBasis = (typeof SWITCH_BASES)[number];
 
 export interface AutoSwitchSettings {
   enabled: boolean;
-  /** Record what would have happened without doing it. */
-  dryRun: boolean;
   /**
    * Which reading decides a switch. The 5-hour window is what actually stops
    * the next request; the week is what runs out for good. Watching both is
@@ -43,7 +41,6 @@ export interface AutoSwitchSettings {
  */
 export const AUTO_SWITCH_DEFAULTS: AutoSwitchSettings = {
   enabled: false,
-  dryRun: true,
   switchOn: "weekly",
   thresholdPercent: 25,
   shortThresholdPercent: 15,
@@ -84,7 +81,6 @@ function parseAutoSwitch(value: unknown): AutoSwitchSettings {
 
   return {
     enabled: bool("enabled"),
-    dryRun: bool("dryRun"),
     switchOn: switchOn as SwitchBasis,
     thresholdPercent: percent("thresholdPercent"),
     shortThresholdPercent: percent("shortThresholdPercent"),
@@ -120,6 +116,17 @@ export class SettingsRepository {
 
   requestMetadataLoggingEnabled(): boolean {
     return this.get().requestMetadataLogging === true;
+  }
+
+  /**
+   * Lay a partial change over what is stored. `update` replaces the whole row
+   * and `parseAutoSwitch` fills anything missing from the defaults, so patching
+   * one field through it would quietly reset every other one — turning the
+   * feature off again the moment a threshold moved.
+   */
+  patchAutoSwitch(patch: Partial<AutoSwitchSettings>): AutoSwitchSettings {
+    const next = { ...this.autoSwitch(), ...patch };
+    return this.update({ autoSwitch: next }).autoSwitch as AutoSwitchSettings;
   }
 
   autoSwitch(): AutoSwitchSettings {

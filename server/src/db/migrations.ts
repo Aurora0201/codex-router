@@ -438,7 +438,6 @@ export function migrate(db: SqliteDatabase): void {
         from_account_id TEXT,
         to_account_id TEXT,
         reason TEXT NOT NULL,
-        dry_run INTEGER NOT NULL DEFAULT 0,
         evidence_json TEXT
       );
       CREATE INDEX IF NOT EXISTS account_switch_log_at ON account_switch_log(switched_at DESC);

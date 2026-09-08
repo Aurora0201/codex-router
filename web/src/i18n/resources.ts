@@ -739,8 +739,10 @@ export const en = {
   确认: "Confirm",
   // 自动切换
   自动切换: "Auto switch",
-  "自动切换 · 试运行": "Auto switch · trial run",
   "自动切换 · 已开": "Auto switch · on",
+  "自动切换 · 已暂停": "Auto switch · paused",
+  "轮换里的账号都低于阈值，暂时无处可切。":
+    "Every account in the rotation is below its threshold, so there is nowhere to switch to.",
   "读不到自动切换设置。": "Auto-switch settings could not be read.",
   网关没有回应这个设置: "The gateway did not answer for this setting",
   "多半是正在运行的网关还是旧版本，重启一次网关就会带上这个接口。":
@@ -749,17 +751,12 @@ export const en = {
   保存优先级失败: "Could not save the priority order",
   "关闭时一切照旧，路由只跟随你手动的选择。":
     "While this is off nothing changes: the route follows only what you pick by hand.",
-  "试运行中 · 只记录，不切换": "Trial run · records only, never switches",
   "已启用 · 会自动切换": "On · switches on its own",
   "正在载入…": "Loading…",
   额度不足时自动换账号: "Switch accounts when quota runs low",
   "按下面的顺序换到下一个够用的账号。":
     "Moves to the next account with room, in the order below.",
   启用自动切换: "Enable auto switch",
-  先试运行: "Trial run first",
-  "只记录本来会切的时刻，不真的切换。":
-    "Records the moments it would have switched without switching.",
-  试运行: "Trial run",
   优先级: "Priority",
   拖动排序: "drag to reorder",
   周额度低于阈值: "Weekly quota below the threshold",
@@ -790,7 +787,6 @@ export const en = {
   留在当前: "Stay put",
   暂停并提示: "Pause and warn",
   切换记录: "Switch history",
-  未切换: "Not switched",
   "切到 {{account}}": "Switched to {{account}}",
   还没有切换记录: "No switches recorded yet",
   账号不可用: "Account unavailable",

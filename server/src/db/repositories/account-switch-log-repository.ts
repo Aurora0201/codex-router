@@ -18,7 +18,6 @@ export interface SwitchLogEntry {
   toAccountId: string | null;
   reason: SwitchReason;
   /** True when the switch was only recorded, not performed. */
-  dryRun: boolean;
   /** The judgement at the moment, so a past decision can be re-read. */
   evidence: Record<string, unknown> | null;
 }
@@ -35,8 +34,8 @@ export class AccountSwitchLogRepository {
     const id = randomUUID();
     this.db
       .prepare(
-        `INSERT INTO account_switch_log(id, switched_at, from_account_id, to_account_id, reason, dry_run, evidence_json)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO account_switch_log(id, switched_at, from_account_id, to_account_id, reason, evidence_json)
+         VALUES (?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
@@ -44,7 +43,6 @@ export class AccountSwitchLogRepository {
         entry.fromAccountId,
         entry.toAccountId,
         entry.reason,
-        entry.dryRun ? 1 : 0,
         entry.evidence === null ? null : JSON.stringify(entry.evidence),
       );
     return { id, ...entry };
@@ -60,7 +58,6 @@ export class AccountSwitchLogRepository {
       fromAccountId: row.from_account_id == null ? null : String(row.from_account_id),
       toAccountId: row.to_account_id == null ? null : String(row.to_account_id),
       reason: String(row.reason) as SwitchReason,
-      dryRun: Number(row.dry_run) === 1,
       evidence: row.evidence_json == null ? null : (JSON.parse(String(row.evidence_json)) as Record<string, unknown>),
     }));
   }
@@ -68,7 +65,7 @@ export class AccountSwitchLogRepository {
   /** When the routed account last changed, which is what min-dwell measures from. */
   lastSwitchAt(): number | null {
     const row = this.db
-      .prepare("SELECT switched_at FROM account_switch_log WHERE dry_run=0 ORDER BY switched_at DESC LIMIT 1")
+      .prepare("SELECT switched_at FROM account_switch_log ORDER BY switched_at DESC LIMIT 1")
       .get() as { switched_at?: number } | undefined;
     return row?.switched_at == null ? null : Number(row.switched_at);
   }

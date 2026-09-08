@@ -34,7 +34,8 @@ export function registerAccountRoutes(app: FastifyInstance, ctx: AdminContext): 
   });
 
   app.post("/api/accounts/refresh-status", { preHandler: protect }, async (_request, reply) => {
-    void ctx.accountStatus.refreshAll(() => ctx.events.invalidate("accounts")).catch(() => undefined);
+    // Invalidating per account is the service's own onRefreshed hook now.
+    void ctx.accountStatus.refreshAll().catch(() => undefined);
     await reply.code(202).send({ started: true });
   });
 
