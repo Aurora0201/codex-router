@@ -9,7 +9,11 @@ function parseCookies(header: string | undefined): Record<string, string> {
   return Object.fromEntries(
     header.split(";").map((entry) => {
       const index = entry.indexOf("=");
-      return [entry.slice(0, index).trim(), decodeURIComponent(entry.slice(index + 1).trim())];
+      try {
+        return [entry.slice(0, index).trim(), decodeURIComponent(entry.slice(index + 1).trim())];
+      } catch {
+        return ["", ""];
+      }
     }).filter(([key]) => key.length > 0),
   );
 }

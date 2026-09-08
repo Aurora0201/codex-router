@@ -2,7 +2,7 @@ import type Database from "better-sqlite3";
 
 type SqliteDatabase = Database.Database;
 
-export const SCHEMA_VERSION = 18;
+export const SCHEMA_VERSION = 19;
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -441,6 +441,15 @@ export function migrate(db: SqliteDatabase): void {
         evidence_json TEXT
       );
       CREATE INDEX IF NOT EXISTS account_switch_log_at ON account_switch_log(switched_at DESC);
+    `);
+  }
+
+  if (version < 19) {
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_request_log_started_id ON request_log(started_at DESC, id DESC);
+      CREATE INDEX IF NOT EXISTS idx_websocket_connection_started_id ON websocket_connection_log(started_at DESC, id DESC);
+      DROP INDEX IF EXISTS idx_request_log_started;
+      DROP INDEX IF EXISTS idx_websocket_connection_started;
     `);
   }
 

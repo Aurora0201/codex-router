@@ -73,8 +73,8 @@ export function registerAccountRoutes(app: FastifyInstance, ctx: AdminContext): 
 
   app.delete<{ Params: { id: string } }>("/api/accounts/:id", { preHandler: protect }, async (request, reply) => {
     await apiAction(reply, async () => {
-      await ctx.accounts.remove(request.params.id);
-      ctx.events.invalidate("accounts", "stats");
+      try { await ctx.accounts.remove(request.params.id); }
+      finally { ctx.events.invalidate("accounts", "stats"); }
     });
   });
 

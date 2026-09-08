@@ -19,18 +19,20 @@ function decodeCursor(
   value: string | undefined,
 ): { startedAt: number; id: string } | undefined {
   if (!value) return undefined;
+  if (value.length > 1024) throw new Error();
   const parsed = JSON.parse(
     Buffer.from(value, "base64url").toString("utf8"),
   ) as { startedAt?: unknown; id?: unknown };
-  if (typeof parsed.startedAt !== "number" || typeof parsed.id !== "string")
+  if (!Number.isSafeInteger(parsed.startedAt) || (parsed.startedAt as number) < 0 || typeof parsed.id !== "string" || !parsed.id || parsed.id.length > 128)
     throw new Error();
-  return { startedAt: parsed.startedAt, id: parsed.id };
+  return { startedAt: parsed.startedAt as number, id: parsed.id };
 }
 export function registerWebSocketConnectionLogRoutes(
   app: FastifyInstance,
   ctx: AdminContext,
 ): void {
   app.get("/api/websocket-connection-logs", async (request, reply) => {
+    let validated = false;
     try {
       const query = request.query as Record<string, string | undefined>;
       const range = query.range ?? "24h";
@@ -44,17 +46,17 @@ export function registerWebSocketConnectionLogRoutes(
       const clientCloseCode = number(query.clientCloseCode);
       const upstreamCloseCode = number(query.upstreamCloseCode);
       if (
-        !RANGES[range] ||
+        !Object.hasOwn(RANGES, range) ||
         !Number.isInteger(limit) ||
         limit < 1 ||
         limit > 100 ||
-        (page !== undefined && (!Number.isInteger(page) || page < 1)) ||
+        (page !== undefined && (!Number.isSafeInteger(page) || page < 1)) ||
         (page !== undefined && query.cursor !== undefined)
       )
         throw new Error();
       if (
-        (from !== undefined && !Number.isSafeInteger(from)) ||
-        (to !== undefined && !Number.isSafeInteger(to)) ||
+        (from !== undefined && (!Number.isSafeInteger(from) || from < 0)) ||
+        (to !== undefined && (!Number.isSafeInteger(to) || to < 0)) ||
         (from !== undefined && to !== undefined && from > to)
       )
         throw new Error();
@@ -69,9 +71,11 @@ export function registerWebSocketConnectionLogRoutes(
       if (query.closeInitiator && !INITIATORS.has(query.closeInitiator))
         throw new Error();
       if ((query.q?.length ?? 0) > 100) throw new Error();
-      const result = ctx.database.websocketConnectionLog.query({
-        since: from ?? Date.now() - RANGES[range],
-        until: to,
+      const now = Date.now();
+      const filters: Parameters<typeof ctx.database.websocketConnectionLog.query>[0] = {
+        relativeRangeMs: from === undefined && to === undefined ? RANGES[range] : undefined,
+        since: from ?? now - RANGES[range],
+        until: to ?? now,
         outcome: query.outcome as ConnectionOutcome | undefined,
         accountId: query.accountId,
         query: query.q?.trim() || undefined,
@@ -83,14 +87,18 @@ export function registerWebSocketConnectionLogRoutes(
         cursor: decodeCursor(query.cursor),
         page,
         limit,
-      });
+      };
+      if (filters.since > filters.until!) throw new Error();
+      validated = true;
+      const result = ctx.database.websocketConnectionLog.query(filters);
       return {
         ...result,
         nextCursor: result.nextCursor
           ? Buffer.from(JSON.stringify(result.nextCursor)).toString("base64url")
           : null,
       };
-    } catch {
+    } catch (error) {
+      if (validated) throw error;
       return reply
         .code(400)
         .send({ error: "invalid_websocket_connection_log_query" });

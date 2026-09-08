@@ -25,5 +25,23 @@ describe("admin error boundaries", () => {
     const failed = await gateway.app.inject({ method: "DELETE", url: "/api/accounts/missing", headers: { origin: headers.origin, cookie: headers.cookie, "x-csrf-token": headers["x-csrf-token"] } });
     expect(failed.statusCode).toBe(500);
     expect(failed.json()).toEqual({ error: "internal_error" });
+    for (const [url, repository] of [
+      ["/api/request-logs", gateway.database.requestLog],
+      ["/api/websocket-connection-logs", gateway.database.websocketConnectionLog],
+    ] as const) {
+      const broken = vi.spyOn(repository, "query").mockImplementation(() => { throw new Error("private database detail"); });
+      const response = await gateway.app.inject({ url });
+      expect(response.statusCode).toBe(500);
+      expect(response.json()).toEqual({ error: "internal_error" });
+      broken.mockRestore();
+      for (const query of ["range=constructor", "from=-1", "from=200&to=100", "cursor=" + Buffer.from(JSON.stringify({ id: "a", createdAt: -1, startedAt: -1 })).toString("base64url")]) {
+        expect((await gateway.app.inject({ url: url + "?" + query })).statusCode).toBe(400);
+      }
+    }
+    const badCookie = await gateway.app.inject({
+      method: "PATCH", url: "/api/settings", headers: { ...headers, cookie: "cg_csrf=%ZZ" }, payload: "{}",
+    });
+    expect(badCookie.statusCode).toBe(403);
+
   });
 });
