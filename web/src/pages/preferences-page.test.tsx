@@ -216,7 +216,12 @@ describe("PreferencesPage", () => {
       "简体中文"
     )
     await userEvent.click(screen.getByRole("combobox", { name: "语言" }))
-    await userEvent.click(screen.getByRole("option", { name: "English" }))
+    // The listbox is a portal that mounts a tick after the click, so the
+    // option has to be waited for. A synchronous getByRole passes whenever the
+    // machine is quick enough and fails when it is not.
+    await userEvent.click(
+      await screen.findByRole("option", { name: "English" })
+    )
 
     expect(
       await screen.findByRole("heading", { name: "Preferences" })
