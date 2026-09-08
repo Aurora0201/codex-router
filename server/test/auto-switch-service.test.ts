@@ -147,12 +147,21 @@ describe("AutoSwitchService", () => {
     expect(service.decide({ kind: "quota" })?.to).toBe("b");
   });
 
-  it("ignores the 5-hour window until it is asked to watch it", () => {
+  it("reads only the week when the week is what it was pointed at", () => {
     account("a", { shortUsed: 98, rank: 1 });
     account("b", { rank: 2 });
     active.select("a");
-    settings({ thresholdPercent: 25 });
-    // The week is untouched, and the week is all it was told to watch.
+    settings({ switchOn: "weekly", thresholdPercent: 25 });
+    // The 5-hour window is spent, but the week is what decides here.
+    expect(service.decide({ kind: "quota" })).toBeNull();
+  });
+
+  it("reads only the 5-hour window when that is what it was pointed at", () => {
+    account("a", { weeklyUsed: 95, shortUsed: 0, rank: 1 });
+    account("b", { weeklyUsed: 90, rank: 2 });
+    active.select("a");
+    settings({ switchOn: "short", shortThresholdPercent: 15 });
+    // The week is nearly gone on both, and on this setting neither week counts.
     expect(service.decide({ kind: "quota" })).toBeNull();
   });
 
@@ -160,7 +169,7 @@ describe("AutoSwitchService", () => {
     account("a", { shortUsed: 95, rank: 1 });
     account("b", { rank: 2 });
     active.select("a");
-    settings({ thresholdPercent: 25, watchShortWindow: true, shortThresholdPercent: 15 });
+    settings({ switchOn: "short", shortThresholdPercent: 15 });
 
     const decision = service.decide({ kind: "quota" });
     expect(decision?.to).toBe("b");
@@ -168,13 +177,13 @@ describe("AutoSwitchService", () => {
     expect(decision?.evidence).toMatchObject({ window: "short", thresholdPercent: 15, currentRemainingPercent: 5 });
   });
 
-  it("keeps the two windows on their own thresholds", () => {
+  it("keeps the two windows on their own thresholds when watching both", () => {
     // 20% left on the short window clears its 15% bar; the same 20% on the
     // week would not clear the week's 25%.
     account("a", { shortUsed: 80, rank: 1 });
     account("b", { rank: 2 });
     active.select("a");
-    settings({ thresholdPercent: 25, watchShortWindow: true, shortThresholdPercent: 15 });
+    settings({ switchOn: "both", thresholdPercent: 25, shortThresholdPercent: 15 });
     expect(service.decide({ kind: "quota" })).toBeNull();
   });
 
@@ -183,7 +192,7 @@ describe("AutoSwitchService", () => {
     account("alsoSpent", { shortUsed: 92, rank: 2 });
     account("c", { rank: 3 });
     active.select("a");
-    settings({ thresholdPercent: 25, watchShortWindow: true, shortThresholdPercent: 15 });
+    settings({ switchOn: "both", thresholdPercent: 25, shortThresholdPercent: 15 });
     expect(service.decide({ kind: "quota" })?.to).toBe("c");
   });
 
@@ -194,11 +203,23 @@ describe("AutoSwitchService", () => {
     account("c", { weeklyUsed: 78, shortUsed: 90, rank: 3 });
     active.select("a");
     settings({
+      switchOn: "both",
       thresholdPercent: 25,
-      watchShortWindow: true,
       shortThresholdPercent: 15,
       onAllBelow: "highest",
     });
+    expect(service.decide({ kind: "quota" })?.to).toBe("b");
+  });
+
+  it("still honours the boolean an older console saved", () => {
+    account("a", { shortUsed: 95, rank: 1 });
+    account("b", { rank: 2 });
+    active.select("a");
+    // watchShortWindow meant "the week, and also the short window".
+    database.settings.update({
+      autoSwitch: { enabled: true, dryRun: false, watchShortWindow: true, shortThresholdPercent: 15 },
+    });
+    expect(database.settings.autoSwitch().switchOn).toBe("both");
     expect(service.decide({ kind: "quota" })?.to).toBe("b");
   });
 

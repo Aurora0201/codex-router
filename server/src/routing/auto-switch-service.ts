@@ -55,9 +55,11 @@ function watchedWindows(account: AccountRecord, settings: AutoSwitchSettings): W
   };
 
   const windows: WatchedWindow[] = [];
-  const long = pick("long");
-  if (long) windows.push({ role: "long", remaining: remaining(long.used), threshold: settings.thresholdPercent });
-  if (settings.watchShortWindow) {
+  if (settings.switchOn !== "short") {
+    const long = pick("long");
+    if (long) windows.push({ role: "long", remaining: remaining(long.used), threshold: settings.thresholdPercent });
+  }
+  if (settings.switchOn !== "weekly") {
     const short = pick("short");
     if (short) {
       windows.push({ role: "short", remaining: remaining(short.used), threshold: settings.shortThresholdPercent });
@@ -142,8 +144,10 @@ export class AutoSwitchService {
       return {
         // The window that actually made the call, so the log can say "5 小时"
         // rather than leaving the reader to guess which number moved.
-        window: worst?.role ?? "long",
-        thresholdPercent: worst?.threshold ?? settings.thresholdPercent,
+        window: worst?.role ?? (settings.switchOn === "short" ? "short" : "long"),
+        thresholdPercent:
+          worst?.threshold ??
+          (settings.switchOn === "short" ? settings.shortThresholdPercent : settings.thresholdPercent),
         currentRemainingPercent: worst?.remaining ?? null,
         targetRemainingPercent: tightest(target, settings)?.remaining ?? null,
         trigger: trigger.kind,

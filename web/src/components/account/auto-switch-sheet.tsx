@@ -45,6 +45,7 @@ import {
 } from "@/components/ui/sheet"
 import { Slider } from "@/components/ui/slider"
 import { Switch } from "@/components/ui/switch"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { toast } from "@/components/ui/toast"
 import { accountWindowSlots, remainingPercent } from "@/lib/account-state"
 import { formatRelativeTime, shortAccountId } from "@/lib/format"
@@ -55,10 +56,17 @@ import type {
   AutoSwitchSettingsView,
   AutoSwitchView,
   GatewayService,
+  SwitchBasis,
   SwitchLogEntryView,
 } from "@/services/contracts"
 
 const DWELL_CHOICES = [60_000, 5 * 60_000, 15 * 60_000] as const
+
+const BASIS_LABEL: Record<SwitchBasis, string> = {
+  weekly: "周额度",
+  short: "5 小时额度",
+  both: "两个都看",
+}
 
 const ALL_BELOW_LABEL: Record<AllBelowBehaviour, string> = {
   highest: "留在剩余最多的",
@@ -149,40 +157,21 @@ function ThresholdRow({
   hint,
   value,
   disabled,
-  toggle,
   onDrag,
   onCommit,
 }: {
   title: string
   hint: string
   value: number
-  /** The whole row is off-limits — switching itself is off. */
   disabled: boolean
-  /** Present when the window itself can be taken out of the reckoning. */
-  toggle?: { checked: boolean; onChange(next: boolean): void }
   onDrag(value: number): void
   onCommit(value: number): void
 }) {
   const { t } = useTranslation()
-  // The toggle stays reachable while the row is armed, or the window it arms
-  // could never be turned back on.
-  const sliderDisabled = disabled || (toggle ? !toggle.checked : false)
   return (
     <div className="grid gap-1 py-2.5 first:pt-0 last:pb-0">
       <div className="flex items-center gap-4">
-        {toggle ? (
-          <label className="flex flex-1 items-center gap-2">
-            <Switch
-              size="sm"
-              checked={toggle.checked}
-              disabled={disabled}
-              onCheckedChange={toggle.onChange}
-            />
-            <span className="text-sm font-medium">{title}</span>
-          </label>
-        ) : (
-          <span className="flex-1 text-sm font-medium">{title}</span>
-        )}
+        <span className="flex-1 text-sm font-medium">{title}</span>
         <span className="text-sm font-medium tabular-nums">
           {t("低于 {{value}}%", { value })}
         </span>
@@ -192,7 +181,7 @@ function ThresholdRow({
         max={60}
         step={5}
         value={value}
-        disabled={sliderDisabled}
+        disabled={disabled}
         onValueChange={onDrag}
         onValueCommitted={onCommit}
         label={title}
@@ -541,28 +530,49 @@ export function AutoSwitchButton({
               </div>
             </Section>
 
-            <Section title={t("切换阈值")} icon={GaugeIcon}>
-              <div className="grid divide-y divide-border">
-                <ThresholdRow
-                  title={t("周额度")}
-                  hint={t("长窗口决定这一周还剩多少。")}
-                  value={settings.thresholdPercent}
-                  disabled={!on}
-                  onDrag={(value) => draft({ thresholdPercent: value })}
-                  onCommit={(value) => patch({ thresholdPercent: value })}
-                />
-                <ThresholdRow
-                  title={t("5 小时额度")}
-                  hint={t("短窗口才是挡住下一个请求的那个，通常设得更紧。")}
-                  value={settings.shortThresholdPercent}
-                  disabled={!on}
-                  toggle={{
-                    checked: settings.watchShortWindow,
-                    onChange: (value) => patch({ watchShortWindow: value }),
-                  }}
-                  onDrag={(value) => draft({ shortThresholdPercent: value })}
-                  onCommit={(value) => patch({ shortThresholdPercent: value })}
-                />
+            <Section title={t("按哪个额度切换")} icon={GaugeIcon}>
+              <ToggleGroup
+                className="w-full"
+                variant="outline"
+                size="sm"
+                disabled={!on}
+                value={[settings.switchOn]}
+                onValueChange={(values) => {
+                  const next = values[0] as SwitchBasis | undefined
+                  // An empty selection would leave nothing deciding, so the
+                  // current choice stands until another is picked.
+                  if (next) patch({ switchOn: next })
+                }}
+              >
+                {(Object.keys(BASIS_LABEL) as SwitchBasis[]).map((basis) => (
+                  <ToggleGroupItem key={basis} className="flex-1" value={basis}>
+                    {t(BASIS_LABEL[basis])}
+                  </ToggleGroupItem>
+                ))}
+              </ToggleGroup>
+              <div className="mt-1 grid divide-y divide-border">
+                {settings.switchOn !== "short" ? (
+                  <ThresholdRow
+                    title={t("周额度")}
+                    hint={t("长窗口决定这一周还剩多少。")}
+                    value={settings.thresholdPercent}
+                    disabled={!on}
+                    onDrag={(value) => draft({ thresholdPercent: value })}
+                    onCommit={(value) => patch({ thresholdPercent: value })}
+                  />
+                ) : null}
+                {settings.switchOn !== "weekly" ? (
+                  <ThresholdRow
+                    title={t("5 小时额度")}
+                    hint={t("短窗口才是挡住下一个请求的那个，通常设得更紧。")}
+                    value={settings.shortThresholdPercent}
+                    disabled={!on}
+                    onDrag={(value) => draft({ shortThresholdPercent: value })}
+                    onCommit={(value) =>
+                      patch({ shortThresholdPercent: value })
+                    }
+                  />
+                ) : null}
               </div>
             </Section>
 

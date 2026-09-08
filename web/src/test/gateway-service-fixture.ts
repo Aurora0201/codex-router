@@ -38,8 +38,8 @@ const account = (id: string, isActive = false): AccountView => ({
 const AUTO_SWITCH: AutoSwitchSettingsView = {
   enabled: false,
   dryRun: true,
+  switchOn: "weekly",
   thresholdPercent: 25,
-  watchShortWindow: false,
   shortThresholdPercent: 15,
   minDwellMs: 5 * 60_000,
   switchBackToHigherPriority: false,

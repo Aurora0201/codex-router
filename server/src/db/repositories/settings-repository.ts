@@ -8,19 +8,26 @@ const ALLOWED_KEYS = new Set(["requestMetadataLogging", "theme", "logLevel", "au
 export const ALL_BELOW_BEHAVIOURS = ["highest", "stay", "pause"] as const;
 export type AllBelowBehaviour = (typeof ALL_BELOW_BEHAVIOURS)[number];
 
+/** Which quota window the switch decision reads. */
+export const SWITCH_BASES = ["weekly", "short", "both"] as const;
+export type SwitchBasis = (typeof SWITCH_BASES)[number];
+
 export interface AutoSwitchSettings {
   enabled: boolean;
   /** Record what would have happened without doing it. */
   dryRun: boolean;
-  /** Switch when the routed account's long (weekly) window drops below this. */
+  /**
+   * Which reading decides a switch. The 5-hour window is what actually stops
+   * the next request; the week is what runs out for good. Watching both is
+   * neither one's job, so it is a choice rather than a default.
+   */
+  switchOn: SwitchBasis;
+  /** The long (weekly) window's threshold. */
   thresholdPercent: number;
   /**
-   * The short (5-hour) window is what actually stops the next request, so it
-   * gets to trigger a switch too — but only when asked, and on its own
-   * threshold, because a five-hour window at 25% is far more urgent than a
-   * week at 25%.
+   * The short window's own threshold, because a five-hour window at 25% is far
+   * more urgent than a week at 25%.
    */
-  watchShortWindow: boolean;
   shortThresholdPercent: number;
   /** Quota hovers around a threshold; without this it would flap. */
   minDwellMs: number;
@@ -37,8 +44,8 @@ export interface AutoSwitchSettings {
 export const AUTO_SWITCH_DEFAULTS: AutoSwitchSettings = {
   enabled: false,
   dryRun: true,
+  switchOn: "weekly",
   thresholdPercent: 25,
-  watchShortWindow: false,
   shortThresholdPercent: 15,
   minDwellMs: 5 * 60_000,
   switchBackToHigherPriority: false,
@@ -65,14 +72,21 @@ function parseAutoSwitch(value: unknown): AutoSwitchSettings {
   if (typeof dwell !== "number" || !Number.isSafeInteger(dwell) || dwell < 0 || dwell > 6 * 3_600_000) {
     throw new Error("invalid_setting");
   }
+  // An earlier shape had a boolean that meant "the week, and also the short
+  // window". Read it as that, so a console saved before the choice existed
+  // keeps behaving the way it was left.
+  const legacyBoth = input.switchOn === undefined && input.watchShortWindow === true;
+  const switchOn = legacyBoth ? "both" : (input.switchOn ?? AUTO_SWITCH_DEFAULTS.switchOn);
+  if (!SWITCH_BASES.includes(switchOn as SwitchBasis)) throw new Error("invalid_setting");
+
   const onAllBelow = input.onAllBelow ?? AUTO_SWITCH_DEFAULTS.onAllBelow;
   if (!ALL_BELOW_BEHAVIOURS.includes(onAllBelow as AllBelowBehaviour)) throw new Error("invalid_setting");
 
   return {
     enabled: bool("enabled"),
     dryRun: bool("dryRun"),
+    switchOn: switchOn as SwitchBasis,
     thresholdPercent: percent("thresholdPercent"),
-    watchShortWindow: bool("watchShortWindow"),
     shortThresholdPercent: percent("shortThresholdPercent"),
     minDwellMs: dwell,
     switchBackToHigherPriority: bool("switchBackToHigherPriority"),

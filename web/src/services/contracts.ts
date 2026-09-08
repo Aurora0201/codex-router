@@ -125,13 +125,16 @@ export interface SettingsView {
 
 export type AllBelowBehaviour = "highest" | "stay" | "pause"
 
+/** Which quota window the switch decision reads. */
+export type SwitchBasis = "weekly" | "short" | "both"
+
 export interface AutoSwitchSettingsView {
   enabled: boolean
   dryRun: boolean
+  switchOn: SwitchBasis
   /** The long (weekly) window's threshold. */
   thresholdPercent: number
-  /** The 5-hour window gets a say too, on its own tighter threshold. */
-  watchShortWindow: boolean
+  /** The 5-hour window's own, tighter threshold. */
   shortThresholdPercent: number
   minDwellMs: number
   switchBackToHigherPriority: boolean
