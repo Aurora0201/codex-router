@@ -1,6 +1,10 @@
 export class AccountOperationLock {
   private readonly pending = new Map<string, Promise<unknown>>();
 
+  async drain(): Promise<void> {
+    await Promise.allSettled(this.pending.values());
+  }
+
   run<T>(accountId: string, operation: () => Promise<T>): Promise<T> {
     const previous = this.pending.get(accountId) ?? Promise.resolve();
     const next = previous.catch(() => undefined).then(operation);

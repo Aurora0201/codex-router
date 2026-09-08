@@ -22,6 +22,7 @@ interface PendingCall {
 
 export class AppServerClient extends EventEmitter {
   private child: ChildProcessWithoutNullStreams | null = null;
+  private closing: Promise<void> | null = null;
   private nextId = 1;
   private readonly pending = new Map<number | string, PendingCall>();
   constructor(
@@ -33,6 +34,7 @@ export class AppServerClient extends EventEmitter {
   }
 
   async start(): Promise<void> {
+    await this.closing;
     if (this.child) return;
     const child = spawn(this.codexCliPath, this.codexArgs, {
       env: { ...process.env, CODEX_HOME: this.codexHome },
@@ -88,7 +90,14 @@ export class AppServerClient extends EventEmitter {
     this.child?.stdin.write(`${JSON.stringify({ method, params })}\n`);
   }
 
-  async close(): Promise<void> {
+  close(): Promise<void> {
+    if (this.closing) return this.closing;
+    const closing = this.closeChild().finally(() => { this.closing = null; });
+    this.closing = closing;
+    return closing;
+  }
+
+  private async closeChild(): Promise<void> {
     const child = this.child;
     if (!child) return;
     this.child = null;
@@ -99,13 +108,19 @@ export class AppServerClient extends EventEmitter {
     // the CODEX_HOME directory can be renamed, so we wait for the real exit
     // rather than racing a fixed timeout.
     child.stdin.end();
-    const graceful = await Promise.race([
-      exited.then(() => true),
-      new Promise<false>((resolve) => setTimeout(() => resolve(false), 30_000)),
-    ]);
-    if (!graceful) {
-      await forceKillProcessTree(child);
-      await Promise.race([exited, new Promise((resolve) => setTimeout(resolve, 2_000))]);
+    let timer: NodeJS.Timeout | undefined;
+    try {
+      const graceful = await Promise.race([
+        exited.then(() => true),
+        new Promise<false>((resolve) => { timer = setTimeout(() => resolve(false), 30_000); }),
+      ]);
+      clearTimeout(timer);
+      if (!graceful) {
+        await forceKillProcessTree(child);
+        await Promise.race([exited, new Promise<void>((resolve) => { timer = setTimeout(resolve, 2_000); })]);
+      }
+    } finally {
+      clearTimeout(timer);
     }
   }
 
@@ -133,7 +148,7 @@ async function forceKillProcessTree(child: ChildProcessWithoutNullStreams): Prom
   if (typeof child.pid !== "number") return;
   if (process.platform === "win32") {
     try {
-      await promisify(execFile)("taskkill", ["/PID", String(child.pid), "/T", "/F"]);
+      await promisify(execFile)("taskkill", ["/PID", String(child.pid), "/T", "/F"], { windowsHide: true });
       return;
     } catch {
       // Fall through to a plain kill if the tree kill is unavailable.

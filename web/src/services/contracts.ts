@@ -123,6 +123,49 @@ export interface SettingsView {
   theme: "system" | "light" | "dark"
 }
 
+export type AllBelowBehaviour = "highest" | "stay" | "pause"
+
+/** Which quota window the switch decision reads. */
+export type SwitchBasis = "weekly" | "short" | "both"
+
+export interface AutoSwitchSettingsView {
+  enabled: boolean
+  switchOn: SwitchBasis
+  /** The long (weekly) window's threshold. */
+  thresholdPercent: number
+  /** The 5-hour window's own, tighter threshold. */
+  shortThresholdPercent: number
+  minDwellMs: number
+  switchBackToHigherPriority: boolean
+  onAllBelow: AllBelowBehaviour
+  triggerOn429: boolean
+  triggerOnAuthFailure: boolean
+}
+
+export type SwitchReason =
+  | "quota_below_threshold"
+  | "upstream_rate_limited"
+  | "account_unavailable"
+  | "higher_priority_recovered"
+
+export interface SwitchLogEntryView {
+  id: string
+  switchedAt: number
+  fromAccountId: string | null
+  toAccountId: string | null
+  reason: SwitchReason
+  evidence: Record<string, unknown> | null
+}
+
+export interface AutoSwitchView {
+  settings: AutoSwitchSettingsView
+  /** The order the gateway would walk, so the console never re-derives it. */
+  candidateIds: string[]
+  /** Switching is on and every account in the rotation is below its threshold. */
+  stalled: boolean
+  recent: SwitchLogEntryView[]
+}
+
 export interface LoginSessionView {
   loginId: string
   authUrl: string
@@ -463,6 +506,14 @@ export interface GatewayService {
   startLogin(): Promise<LoginSessionView>
   getLoginStatus(loginId: string): Promise<LoginSessionView>
   cancelLogin(loginId: string): Promise<void>
+  getAutoSwitch(): Promise<AutoSwitchView>
+  saveAutoSwitch(
+    values: Partial<AutoSwitchSettingsView>
+  ): Promise<AutoSwitchSettingsView>
+  saveAutoSwitchPriority(input: {
+    order?: string[]
+    enrolled?: Record<string, boolean>
+  }): Promise<{ candidateIds: string[] }>
   saveSettings(
     values: Partial<
       Pick<SettingsView, "requestMetadataLogging" | "theme" | "logLevel">

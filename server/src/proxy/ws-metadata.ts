@@ -79,7 +79,7 @@ function safeId(value: unknown): string | undefined {
     : undefined;
 }
 
-export function inspectTurnMetadata(value: unknown): Pick<ClientFrameMetadata, "requestKind" | "sessionId" | "threadId" | "turnId"> {
+function inspectTurnMetadata(value: unknown): Pick<ClientFrameMetadata, "requestKind" | "sessionId" | "threadId" | "turnId"> {
   if (
     typeof value !== "string" ||
     Buffer.byteLength(value) > MAX_TURN_METADATA_BYTES

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { LogQueryCache } from "../log-query-cache.js";
 import type Database from "better-sqlite3";
 import type { IdentityMode } from "../../types.js";
 
@@ -8,8 +9,9 @@ export type ConnectionOutcome =
   "connected" | "rejected" | "failed" | "retired" | "closed";
 
 export class WebSocketConnectionLogRepository {
+  private readonly cache: LogQueryCache;
   onUpdated?: (connectionId: string) => void;
-  constructor(private readonly db: SqliteDatabase) {}
+  constructor(private readonly db: SqliteDatabase) { this.cache = new LogQueryCache(db); }
 
   start(input: {
     connectionId: string;
@@ -81,6 +83,7 @@ export class WebSocketConnectionLogRepository {
   }
 
   query(filters: {
+    relativeRangeMs?: number;
     since: number;
     until?: number;
     outcome?: ConnectionOutcome;
@@ -94,6 +97,9 @@ export class WebSocketConnectionLogRepository {
     page?: number;
     limit: number;
   }) {
+    if (filters.relativeRangeMs !== undefined) {
+      filters = { ...filters, ...this.cache.window(filters.relativeRangeMs) };
+    }
     const where = ["websocket_connection_log.started_at>=?"];
     const values: Array<string | number> = [filters.since];
     if (filters.until !== undefined) {
@@ -136,52 +142,56 @@ export class WebSocketConnectionLogRepository {
     }
     const base = where.join(" AND ");
     const joined = `websocket_connection_log LEFT JOIN accounts ON accounts.id=account_id`;
-    const summary = this.db
-      .prepare(
-        `SELECT COUNT(*) connections,COUNT(CASE WHEN outcome IN ('failed','rejected') THEN 1 END) failures,COUNT(CASE WHEN outcome='retired' THEN 1 END) retired FROM ${joined} WHERE ${base}`,
-      )
-      .get(...values) as {
-      connections: number;
-      failures: number;
-      retired: number;
-    };
-    const windowStart = filters.since;
-    const windowEnd = filters.until ?? Date.now();
-    const bucketMs = Math.max(
-      1,
-      Math.ceil((windowEnd - windowStart) / HISTOGRAM_BUCKETS),
-    );
-    const histogramRows = this.db
-      .prepare(
-        `SELECT MIN(?, CAST((websocket_connection_log.started_at - ?) / ? AS INTEGER)) bucket,
-      COUNT(*) connections,
-      COUNT(CASE WHEN outcome IN ('failed','rejected') THEN 1 END) failures,
-      COUNT(CASE WHEN outcome='retired' THEN 1 END) retired
-      FROM ${joined} WHERE ${base} GROUP BY bucket`,
-      )
-      .all(HISTOGRAM_BUCKETS - 1, windowStart, bucketMs, ...values) as Array<{
-      bucket: number;
-      connections: number;
-      failures: number;
-      retired: number;
-    }>;
-    const histogram = Array.from(
-      { length: HISTOGRAM_BUCKETS },
-      (_unused, index) => ({
-        startedAt: windowStart + index * bucketMs,
-        endedAt: windowStart + (index + 1) * bucketMs,
-        connections: 0,
-        failures: 0,
-        retired: 0,
-      }),
-    );
-    for (const row of histogramRows) {
-      const slot = histogram[row.bucket];
-      if (!slot) continue;
-      slot.connections = row.connections ?? 0;
-      slot.failures = row.failures ?? 0;
-      slot.retired = row.retired ?? 0;
-    }
+    const aggregateFrom = filters.query ? joined : "websocket_connection_log";
+    const { summary, histogram } = this.cache.get(JSON.stringify(["aggregates", base, values, filters.until]), () => {
+        const summary = this.db
+          .prepare(
+            `SELECT COUNT(*) connections,COUNT(CASE WHEN outcome IN ('failed','rejected') THEN 1 END) failures,COUNT(CASE WHEN outcome='retired' THEN 1 END) retired FROM ${aggregateFrom} WHERE ${base}`,
+          )
+          .get(...values) as {
+          connections: number;
+          failures: number;
+          retired: number;
+        };
+        const windowStart = filters.since;
+        const windowEnd = filters.until ?? Date.now();
+        const bucketMs = Math.max(
+          1,
+          Math.ceil((windowEnd - windowStart) / HISTOGRAM_BUCKETS),
+        );
+        const histogramRows = this.db
+          .prepare(
+            `SELECT MIN(?, CAST((websocket_connection_log.started_at - ?) / ? AS INTEGER)) bucket,
+          COUNT(*) connections,
+          COUNT(CASE WHEN outcome IN ('failed','rejected') THEN 1 END) failures,
+          COUNT(CASE WHEN outcome='retired' THEN 1 END) retired
+          FROM ${aggregateFrom} WHERE ${base} GROUP BY bucket`,
+          )
+          .all(HISTOGRAM_BUCKETS - 1, windowStart, bucketMs, ...values) as Array<{
+          bucket: number;
+          connections: number;
+          failures: number;
+          retired: number;
+        }>;
+        const histogram = Array.from(
+          { length: HISTOGRAM_BUCKETS },
+          (_unused, index) => ({
+            startedAt: windowStart + index * bucketMs,
+            endedAt: windowStart + (index + 1) * bucketMs,
+            connections: 0,
+            failures: 0,
+            retired: 0,
+          }),
+        );
+        for (const row of histogramRows) {
+          const slot = histogram[row.bucket];
+          if (!slot) continue;
+          slot.connections = row.connections ?? 0;
+          slot.failures = row.failures ?? 0;
+          slot.retired = row.retired ?? 0;
+        }
+        return { summary, histogram };
+    });
     const total = summary.connections;
     const totalPages = Math.ceil(total / filters.limit);
     const page = totalPages === 0 ? 1 : Math.min(filters.page ?? 1, totalPages);

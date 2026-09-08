@@ -8,6 +8,7 @@ import type {
   RateLimitBucketView,
   UsageWindowView,
 } from "@/services/contracts"
+import { createGatewayServiceFixture } from "@/test/gateway-service-fixture"
 import { AccountList } from "./account-list"
 
 const HOUR = 60 * 60 * 1000
@@ -80,6 +81,8 @@ function account(values: Partial<AccountView> = {}): AccountView {
   }
 }
 
+const service = createGatewayServiceFixture()
+
 const renderList = (
   accounts: AccountView[],
   props: Partial<Parameters<typeof AccountList>[0]> = {}
@@ -89,6 +92,7 @@ const renderList = (
       <AccountList
         accounts={accounts}
         busyId={null}
+        service={service}
         onSelect={vi.fn()}
         onClearRoute={vi.fn()}
         onAction={vi.fn()}
@@ -241,6 +245,7 @@ describe("AccountList", () => {
             pool[3],
           ]}
           busyId={null}
+          service={service}
           onSelect={vi.fn()}
           onClearRoute={vi.fn()}
           onAction={vi.fn()}

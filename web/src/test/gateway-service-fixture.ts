@@ -1,5 +1,6 @@
 import type {
   AccountView,
+  AutoSwitchSettingsView,
   GatewayService,
   GatewaySnapshot,
   LoginSessionView,
@@ -34,6 +35,18 @@ const account = (id: string, isActive = false): AccountView => ({
   },
 })
 
+const AUTO_SWITCH: AutoSwitchSettingsView = {
+  enabled: false,
+  switchOn: "weekly",
+  thresholdPercent: 25,
+  shortThresholdPercent: 15,
+  minDwellMs: 5 * 60_000,
+  switchBackToHigherPriority: false,
+  onAllBelow: "highest",
+  triggerOn429: true,
+  triggerOnAuthFailure: true,
+}
+
 export function createGatewayServiceFixture({
   activeAccountId = "account-1",
   degraded = false,
@@ -48,6 +61,7 @@ export function createGatewayServiceFixture({
     account("account-2", activeAccountId === "account-2"),
     account("account-3", activeAccountId === "account-3"),
   ]
+  let autoSwitch: Partial<AutoSwitchSettingsView> = {}
   let login: LoginSessionView = {
     loginId: "login-1",
     authUrl: "https://auth.openai.test/codex",
@@ -259,6 +273,23 @@ export function createGatewayServiceFixture({
     },
     async cancelLogin() {
       login = { ...login, status: "cancelled" }
+    },
+    async getAutoSwitch() {
+      return {
+        settings: { ...AUTO_SWITCH, ...autoSwitch },
+        candidateIds: accounts.map((account) => account.id),
+        stalled: false,
+        recent: [],
+      }
+    },
+    async saveAutoSwitch(values) {
+      autoSwitch = { ...autoSwitch, ...values }
+      return { ...AUTO_SWITCH, ...autoSwitch }
+    },
+    async saveAutoSwitchPriority(input) {
+      return {
+        candidateIds: input.order ?? accounts.map((account) => account.id),
+      }
     },
     async saveSettings(values) {
       snapshot.settings = { ...snapshot.settings, ...values }

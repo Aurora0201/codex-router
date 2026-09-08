@@ -14,7 +14,15 @@ import { ResponsesSseInspector } from "./responses-sse-inspector.js";
 import { transportErrorEvidence } from "./transport-error.js";
 
 export type ProxyPath = "/responses" | "/responses/compact" | "/models" | "/alpha/search";
-interface HttpProxyOptions { upstreamBaseUrl:string; activeAccounts:ActiveAccountService; auth:AccountAuthService; usage:AccountUsageService; database:GatewayDatabase; }
+interface HttpProxyOptions {
+  upstreamBaseUrl:string;
+  activeAccounts:ActiveAccountService;
+  auth:AccountAuthService;
+  usage:AccountUsageService;
+  database:GatewayDatabase;
+  /** A 429 is proof the account cannot serve, so the pool is re-examined. */
+  onRateLimited?(accountId:string):void;
+}
 
 function errorStatus(error: unknown): number {
   switch ((error as Error).message) { case "no_active_account_selected": return 503; case "account_disabled": case "account_not_ready": case "fedramp_accounts_not_supported": return 409; default: return 502; }
@@ -52,7 +60,7 @@ export class HttpProxy {
       request.raw.once("aborted",abort);reply.raw.once("close",abort);
       const send=()=>undiciRequest(this.upstreamUrl(request,path),{method:request.method as Dispatcher.HttpMethod,headers:credential?buildUpstreamHeaders(request.headers,credential,request.method==="GET"?undefined:rawBody.length):buildClientPassthroughHeaders(request.headers,request.method==="GET"?undefined:rawBody.length),body:request.method==="GET"?undefined:rawBody,signal:controller.signal,headersTimeout:120_000,bodyTimeout:0,dispatcher:this.dispatcher});
       let upstream=await send(); if(upstream.statusCode===401&&selectedAccount&&credential){await upstream.body.dump();credential=await this.options.auth.refresh(selectedAccount.id);upstream=await send();}
-      if(upstream.statusCode===429&&selectedAccount){this.options.database.accounts.update(selectedAccount.id,{authStatus:"rate_limited"});void this.options.usage.refreshInBackground(selectedAccount.id);}
+      if(upstream.statusCode===429&&selectedAccount){this.options.database.accounts.update(selectedAccount.id,{authStatus:"rate_limited"});void this.options.usage.refreshInBackground(selectedAccount.id);this.options.onRateLimited?.(selectedAccount.id);}
       const headers=upstream.headers as Record<string,string|string[]|undefined>; const safe=safeResponseMetadata(headers);
       failureStage="streaming";copyResponseHeaders(headers,reply.raw);reply.hijack();reply.raw.writeHead(upstream.statusCode);
       let bytesOut=0;const counter=new Transform({transform(chunk:Buffer,_e,cb){bytesOut+=chunk.length;cb(null,chunk);}});

@@ -57,13 +57,14 @@ function decodeCursor(
   value: string | undefined,
 ): { createdAt: number; id: string } | undefined {
   if (!value) return undefined;
+  if (value.length > 1024) throw new Error("invalid_request_log_query");
   try {
     const parsed = JSON.parse(
       Buffer.from(value, "base64url").toString("utf8"),
     ) as { createdAt?: unknown; id?: unknown };
-    if (typeof parsed.createdAt !== "number" || typeof parsed.id !== "string")
+    if (!Number.isSafeInteger(parsed.createdAt) || (parsed.createdAt as number) < 0 || typeof parsed.id !== "string" || !parsed.id || parsed.id.length > 128)
       throw new Error();
-    return { createdAt: parsed.createdAt, id: parsed.id };
+    return { createdAt: parsed.createdAt as number, id: parsed.id };
   } catch {
     throw new Error("invalid_request_log_query");
   }
@@ -74,6 +75,7 @@ export function registerRequestLogRoutes(
   ctx: AdminContext,
 ): void {
   app.get("/api/request-logs", async (request, reply) => {
+    let validated = false;
     try {
       const query = request.query as Record<string, string | undefined>;
       const range = query.range ?? "24h";
@@ -85,15 +87,15 @@ export function registerRequestLogRoutes(
       const to = integer(query.to);
       const httpStatus = integer(query.httpStatus);
       if (
-        !RANGES[range] ||
+        !Object.hasOwn(RANGES, range) ||
         !Number.isInteger(limit) ||
         limit < 1 ||
         limit > 100
       )
         throw new Error();
       if (
-        (from !== undefined && !Number.isSafeInteger(from)) ||
-        (to !== undefined && !Number.isSafeInteger(to)) ||
+        (from !== undefined && (!Number.isSafeInteger(from) || from < 0)) ||
+        (to !== undefined && (!Number.isSafeInteger(to) || to < 0)) ||
         (from !== undefined && to !== undefined && from > to)
       )
         throw new Error();
@@ -102,7 +104,7 @@ export function registerRequestLogRoutes(
         (!Number.isInteger(httpStatus) || httpStatus < 100 || httpStatus > 599)
       )
         throw new Error();
-      if (page !== undefined && (!Number.isInteger(page) || page < 1))
+      if (page !== undefined && (!Number.isSafeInteger(page) || page < 1))
         throw new Error();
       if (page !== undefined && query.cursor !== undefined) throw new Error();
       if (
@@ -132,7 +134,8 @@ export function registerRequestLogRoutes(
       )
         throw new Error();
       const now = Date.now();
-      const result = ctx.database.requestLog.query({
+      const filters: Parameters<typeof ctx.database.requestLog.query>[0] = {
+        relativeRangeMs: from === undefined && to === undefined ? RANGES[range] : undefined,
         since: from ?? now - RANGES[range],
         until: to ?? now,
         status: status as
@@ -155,14 +158,18 @@ export function registerRequestLogRoutes(
         cursor: decodeCursor(query.cursor),
         page,
         limit,
-      });
+      };
+      if (filters.since > filters.until!) throw new Error("invalid_request_log_query");
+      validated = true;
+      const result = ctx.database.requestLog.query(filters);
       return {
         ...result,
         nextCursor: result.nextCursor
           ? Buffer.from(JSON.stringify(result.nextCursor)).toString("base64url")
           : null,
       };
-    } catch {
+    } catch (error) {
+      if (validated) throw error;
       return reply.code(400).send({ error: "invalid_request_log_query" });
     }
   });

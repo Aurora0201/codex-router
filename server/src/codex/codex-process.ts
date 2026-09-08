@@ -21,7 +21,7 @@ async function exists(filePath: string): Promise<boolean> {
   }
 }
 
-export async function detectCodexPath(): Promise<string | null> {
+async function detectCodexPath(): Promise<string | null> {
   const configPath = codexConfigPath();
   if (await exists(configPath)) {
     const content = await readFile(configPath, "utf8");

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { LogQueryCache } from "../log-query-cache.js";
 import type Database from "better-sqlite3";
 import type {
   FailureSource,
@@ -60,6 +61,7 @@ export interface FinishRequestInput extends RequestEvidence {
 }
 
 export interface RequestLogFilters {
+  relativeRangeMs?: number;
   since: number;
   until?: number;
   status?: "success" | "rejected" | "error" | "cancelled" | "running";
@@ -171,13 +173,14 @@ function view(row: RequestLogRow): RequestLogView {
 }
 
 export class RequestLogRepository {
+  private readonly cache: LogQueryCache;
   onStarted?: (id: string) => void;
   onFinished?: (id: string) => void;
 
   constructor(
     private readonly db: SqliteDatabase,
     private readonly settings: SettingsRepository,
-  ) {}
+  ) { this.cache = new LogQueryCache(db); }
 
   startRequest(input: StartRequestInput): string | null {
     if (!this.settings.requestMetadataLoggingEnabled()) return null;
@@ -277,6 +280,9 @@ export class RequestLogRepository {
   }
 
   query(filters: RequestLogFilters) {
+    if (filters.relativeRangeMs !== undefined) {
+      filters = { ...filters, ...this.cache.window(filters.relativeRangeMs) };
+    }
     const where = ["request_log.started_at >= ?"];
     const values: Array<string | number> = [filters.since];
     if (filters.until !== undefined) {
@@ -340,107 +346,107 @@ export class RequestLogRepository {
       values.push(search, search, search, search, search, search, search);
     }
     const baseWhere = where.join(" AND ");
-    const summary = this.db
-      .prepare(
-        `SELECT
-      COUNT(CASE WHEN state <> 'running' THEN 1 END) requests,
-      COUNT(CASE WHEN outcome IN ('upstream_error','gateway_error') THEN 1 END) errors,
-      COUNT(CASE WHEN outcome='rejected' THEN 1 END) rejected,
-      COUNT(CASE WHEN outcome='client_cancelled' THEN 1 END) cancelled,
-      COUNT(CASE WHEN outcome IN ('success','upstream_error') THEN 1 END) availability_requests,
-      COUNT(CASE WHEN outcome='upstream_error' THEN 1 END) availability_errors,
-      AVG(CASE WHEN state <> 'running' THEN completed_at-started_at END) average_duration_ms
-      FROM request_log LEFT JOIN accounts ON accounts.id=request_log.account_id WHERE ${baseWhere}`,
-      )
-      .get(...values) as Record<string, number | null>;
-    // The timeline is capped at 500 rows, so it is a sample and cannot be
-    // counted or bucketed. Anything that needs a shape over the whole window
-    // has to be aggregated here, where the filter already lives.
-    const windowStart = filters.since;
-    const windowEnd = filters.until ?? Date.now();
-    const bucketMs = histogramBucketMs(windowEnd - windowStart);
-    const bucketCount = Math.max(
-      1,
-      Math.ceil((windowEnd - windowStart) / bucketMs),
+    const joined = filters.query ? "request_log LEFT JOIN accounts ON accounts.id=request_log.account_id" : "request_log";
+    const { summary, histogram, failureSources, diagnosticCodes, timelineRows, totalItems } = this.cache.get(
+      JSON.stringify(["aggregates", baseWhere, values, filters.until]),
+      () => {
+        const summary = this.db
+          .prepare(
+            `SELECT COUNT(*) total_items,
+          COUNT(CASE WHEN state <> 'running' THEN 1 END) requests,
+          COUNT(CASE WHEN outcome IN ('upstream_error','gateway_error') THEN 1 END) errors,
+          COUNT(CASE WHEN outcome='rejected' THEN 1 END) rejected,
+          COUNT(CASE WHEN outcome='client_cancelled' THEN 1 END) cancelled,
+          COUNT(CASE WHEN outcome IN ('success','upstream_error') THEN 1 END) availability_requests,
+          COUNT(CASE WHEN outcome='upstream_error' THEN 1 END) availability_errors,
+          AVG(CASE WHEN state <> 'running' THEN completed_at-started_at END) average_duration_ms
+          FROM ${joined} WHERE ${baseWhere}`,
+          )
+          .get(...values) as Record<string, number | null>;
+        // The timeline is capped at 500 rows, so it is a sample and cannot be
+        // counted or bucketed. Anything that needs a shape over the whole window
+        // has to be aggregated here, where the filter already lives.
+        const windowStart = filters.since;
+        const windowEnd = filters.until ?? Date.now();
+        const bucketMs = histogramBucketMs(windowEnd - windowStart);
+        const bucketCount = Math.max(
+          1,
+          Math.ceil((windowEnd - windowStart) / bucketMs),
+        );
+        const histogramRows = this.db
+          .prepare(
+            `SELECT MIN(?, CAST((request_log.started_at - ?) / ? AS INTEGER)) bucket,
+          COUNT(CASE WHEN state <> 'running' THEN 1 END) requests,
+          COUNT(CASE WHEN outcome IN ('upstream_error','gateway_error') THEN 1 END) errors,
+          COUNT(CASE WHEN outcome='rejected' THEN 1 END) rejected,
+          COUNT(CASE WHEN outcome='client_cancelled' THEN 1 END) cancelled
+          FROM ${joined}
+          WHERE ${baseWhere} GROUP BY bucket`,
+          )
+          .all(bucketCount - 1, windowStart, bucketMs, ...values) as Array<{
+          bucket: number;
+          requests: number;
+          errors: number;
+          rejected: number;
+          cancelled: number;
+        }>;
+        const histogram = Array.from({ length: bucketCount }, (_unused, index) => ({
+          startedAt: windowStart + index * bucketMs,
+          endedAt: windowStart + (index + 1) * bucketMs,
+          requests: 0,
+          errors: 0,
+          rejected: 0,
+          cancelled: 0,
+        }));
+        for (const row of histogramRows) {
+          const slot = histogram[row.bucket];
+          if (!slot) continue;
+          slot.requests = row.requests ?? 0;
+          slot.errors = row.errors ?? 0;
+          slot.rejected = row.rejected ?? 0;
+          slot.cancelled = row.cancelled ?? 0;
+        }
+
+        const failureSources = (
+          this.db
+            .prepare(
+              `SELECT request_log.failure_source source, COUNT(*) count
+          FROM ${joined}
+          WHERE ${baseWhere} AND request_log.failure_source IS NOT NULL
+          GROUP BY request_log.failure_source ORDER BY count DESC`,
+            )
+            .all(...values) as Array<{ source: FailureSource; count: number }>
+        ).map((row) => ({ source: row.source, count: row.count }));
+
+        const diagnosticCodes = (
+          this.db
+            .prepare(
+              `SELECT request_log.diagnostic_code code, COUNT(*) count
+          FROM ${joined}
+          WHERE ${baseWhere} AND request_log.diagnostic_code IS NOT NULL
+          GROUP BY request_log.diagnostic_code ORDER BY count DESC LIMIT 5`,
+            )
+            .all(...values) as Array<{ code: string; count: number }>
+        ).map((row) => ({ code: row.code, count: row.count }));
+
+        const timelineRows = this.db
+          .prepare(
+            `SELECT request_log.id, request_log.started_at, request_log.completed_at, request_log.http_status, request_log.state, request_log.outcome, request_log.transport
+          FROM ${joined}
+          WHERE ${baseWhere} AND request_log.state <> 'running' ORDER BY request_log.started_at DESC, request_log.id DESC LIMIT 500`,
+          )
+          .all(...values) as Array<{
+          id: string;
+          started_at: number;
+          completed_at: number;
+          http_status: number | null;
+          state: RequestState;
+          outcome: RequestOutcome;
+          transport: Transport;
+        }>;
+        return { summary, histogram, failureSources, diagnosticCodes, timelineRows, totalItems: summary.total_items ?? 0 };
+      },
     );
-    const histogramRows = this.db
-      .prepare(
-        `SELECT CAST((request_log.started_at - ?) / ? AS INTEGER) bucket,
-      COUNT(CASE WHEN state <> 'running' THEN 1 END) requests,
-      COUNT(CASE WHEN outcome IN ('upstream_error','gateway_error') THEN 1 END) errors,
-      COUNT(CASE WHEN outcome='rejected' THEN 1 END) rejected,
-      COUNT(CASE WHEN outcome='client_cancelled' THEN 1 END) cancelled
-      FROM request_log LEFT JOIN accounts ON accounts.id=request_log.account_id
-      WHERE ${baseWhere} GROUP BY bucket`,
-      )
-      .all(windowStart, bucketMs, ...values) as Array<{
-      bucket: number;
-      requests: number;
-      errors: number;
-      rejected: number;
-      cancelled: number;
-    }>;
-    const histogram = Array.from({ length: bucketCount }, (_unused, index) => ({
-      startedAt: windowStart + index * bucketMs,
-      endedAt: windowStart + (index + 1) * bucketMs,
-      requests: 0,
-      errors: 0,
-      rejected: 0,
-      cancelled: 0,
-    }));
-    for (const row of histogramRows) {
-      const slot = histogram[row.bucket];
-      if (!slot) continue;
-      slot.requests = row.requests ?? 0;
-      slot.errors = row.errors ?? 0;
-      slot.rejected = row.rejected ?? 0;
-      slot.cancelled = row.cancelled ?? 0;
-    }
-
-    const failureSources = (
-      this.db
-        .prepare(
-          `SELECT request_log.failure_source source, COUNT(*) count
-      FROM request_log LEFT JOIN accounts ON accounts.id=request_log.account_id
-      WHERE ${baseWhere} AND request_log.failure_source IS NOT NULL
-      GROUP BY request_log.failure_source ORDER BY count DESC`,
-        )
-        .all(...values) as Array<{ source: FailureSource; count: number }>
-    ).map((row) => ({ source: row.source, count: row.count }));
-
-    const diagnosticCodes = (
-      this.db
-        .prepare(
-          `SELECT request_log.diagnostic_code code, COUNT(*) count
-      FROM request_log LEFT JOIN accounts ON accounts.id=request_log.account_id
-      WHERE ${baseWhere} AND request_log.diagnostic_code IS NOT NULL
-      GROUP BY request_log.diagnostic_code ORDER BY count DESC LIMIT 5`,
-        )
-        .all(...values) as Array<{ code: string; count: number }>
-    ).map((row) => ({ code: row.code, count: row.count }));
-
-    const timelineRows = this.db
-      .prepare(
-        `SELECT request_log.id, request_log.started_at, request_log.completed_at, request_log.http_status, request_log.state, request_log.outcome, request_log.transport
-      FROM request_log LEFT JOIN accounts ON accounts.id=request_log.account_id
-      WHERE ${baseWhere} AND request_log.state <> 'running' ORDER BY request_log.started_at DESC, request_log.id DESC LIMIT 500`,
-      )
-      .all(...values) as Array<{
-      id: string;
-      started_at: number;
-      completed_at: number;
-      http_status: number | null;
-      state: RequestState;
-      outcome: RequestOutcome;
-      transport: Transport;
-    }>;
-    const totalItems = (
-      this.db
-        .prepare(
-          `SELECT COUNT(*) count FROM request_log LEFT JOIN accounts ON accounts.id=request_log.account_id WHERE ${baseWhere}`,
-        )
-        .get(...values) as { count: number }
-    ).count;
     const totalPages = Math.ceil(totalItems / filters.limit);
     const requestedPage = filters.page ?? 1;
     const currentPage =
