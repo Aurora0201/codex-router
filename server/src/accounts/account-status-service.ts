@@ -6,7 +6,12 @@ import { object, parseRateLimitResponse, stringAt } from "./rate-limit-parser.js
 import type { CredentialSnapshot, GatewayConfig, RateLimitSnapshot } from "../types.js";
 import { GatewayDatabase } from "../db/database.js";
 
-const REFRESH_COOLDOWN_MS = 60_000;
+/**
+ * How stale a reading may be before a request triggers a fresh read. Auto
+ * switching decides on these numbers, so a reading a minute old is already too
+ * old to act on: half a minute is the floor everywhere, on every path.
+ */
+const REFRESH_COOLDOWN_MS = 30_000;
 const BACKGROUND_RETRY_DELAY_MS = 2_000;
 const REFRESH_CONCURRENCY = 2;
 

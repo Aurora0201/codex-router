@@ -543,6 +543,41 @@ describe("Codex app-server adapter", () => {  it("uses isolated CODEX_HOME and J
     await new Promise((resolve) => setTimeout(resolve, 50));
     const throttledLog = await readFile(path.join(accountHome, "rpc.log"), "utf8");
     expect(throttledLog.match(/account\/rateLimits\/read/g)).toHaveLength(1);
+
+    // The cooldown is 30 seconds, everywhere and on every path: auto
+    // switching decides on these readings, and a minute-old one is already
+    // too old to act on. 29 seconds is still too soon; 31 is not.
+    const reads = async (home: string) => {
+      const log = await readFile(path.join(home, "rpc.log"), "utf8").catch(() => "");
+      return log.match(/account\/rateLimits\/read/g)?.length ?? 0;
+    };
+    const homes: Record<string, string> = {};
+    for (const [id, age] of [
+      ["fresh", 29_000],
+      ["stale", 31_000],
+    ] as const) {
+      homes[id] = path.join(root, id);
+      await mkdir(homes[id], { recursive: true });
+      database.accounts.insert({ id, codexHome: homes[id] });
+      database.accounts.update(id, { authStatus: "ready" });
+      // lastLimitsRefreshAt is only ever written by a reading, so age it the
+      // way a reading would.
+      database.accounts.updateRateLimits(id, {
+        primary: null,
+        secondary: null,
+        rateLimitReachedType: null,
+        planType: null,
+        buckets: [],
+        defaultBucketKey: null,
+        resetCredits: null,
+        loadedAt: Date.now() - age,
+      });
+      usage.refreshIfStale(id);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(await reads(homes.fresh)).toBe(0);
+    expect(await reads(homes.stale)).toBe(1);
+
     database.close();
   });
 
