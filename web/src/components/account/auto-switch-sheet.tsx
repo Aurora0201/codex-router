@@ -127,7 +127,9 @@ function Section({
           <span className="text-xs text-muted-foreground-subtle">{hint}</span>
         ) : null}
       </header>
-      <div className="mt-2">{children}</div>
+      {/* Matches the section's own padding, so the gap under the header and
+          the gap above the bottom edge read as one rhythm. */}
+      <div className="mt-3">{children}</div>
     </section>
   )
 }
@@ -191,6 +193,9 @@ function ThresholdRow({
         </span>
       </div>
       <Slider
+        // Inset from the row, so a thumb parked at either end is not sitting
+        // against the section's edge.
+        className="px-2"
         min={5}
         max={60}
         step={5}
@@ -510,15 +515,37 @@ export function AutoSwitchButton({
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger
         render={
-          <Button variant="ghost" size="sm" disabled={disabled}>
+          <Button
+            className="h-9 flex-1 rounded-xl sm:flex-none"
+            variant="outline"
+            disabled={disabled}
+          >
             <ArrowLeftRightIcon aria-hidden="true" data-icon="inline-start" />
-            {/* Whether it is armed is said in words. Green is not one of the
-                four status tones, and off is the default, which wears none. */}
+            {/* Whether it is armed is said in words first. The dot is
+                supplemental, and it beats rather than sits still only while
+                the router may actually move on its own. */}
             {!on
               ? t("自动切换")
               : state?.stalled
                 ? t("自动切换 · 已暂停")
                 : t("自动切换 · 已开")}
+            {on ? (
+              <span
+                aria-hidden="true"
+                data-icon="inline-end"
+                className="relative grid size-2 place-items-center"
+              >
+                {state?.stalled ? null : (
+                  <span className="absolute size-full animate-ping rounded-full bg-primary opacity-60 motion-reduce:hidden" />
+                )}
+                <span
+                  className={cn(
+                    "relative size-full rounded-full",
+                    state?.stalled ? "bg-warning" : "bg-primary"
+                  )}
+                />
+              </span>
+            ) : null}
           </Button>
         }
       />

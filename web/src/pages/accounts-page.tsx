@@ -3,6 +3,7 @@ import { PlusIcon, RefreshCwIcon, UsersRoundIcon } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
 import { AccountList } from "@/components/account/account-list"
+import { AutoSwitchButton } from "@/components/account/auto-switch-sheet"
 import { BillingDialog } from "@/components/account/billing-dialog"
 import { OAuthDialog } from "@/components/account/oauth-dialog"
 import {
@@ -229,6 +230,15 @@ export function AccountsPage({
           </p>
         </div>
         <div className="flex w-full gap-2 sm:w-auto">
+          {/* Routing policy is a page-level control, not a trailing action on
+              the route band — and being on is worth seeing without opening
+              anything. */}
+          <AutoSwitchButton
+            accounts={accounts}
+            activeAccountId={activeAccountId}
+            service={service}
+            disabled={accounts.length === 0}
+          />
           <Button
             className="h-9 flex-1 rounded-xl sm:flex-none"
             variant="outline"
@@ -255,7 +265,6 @@ export function AccountsPage({
         <AccountList
           accounts={accounts}
           busyId={busyId}
-          service={service}
           onAction={accountAction}
           onClearRoute={clearRoute}
           routeBlock={routeBlock}

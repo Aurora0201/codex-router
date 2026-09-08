@@ -13,6 +13,9 @@ function Slider({
   return (
     <SliderPrimitive.Root
       data-slot="slider"
+      // At either end a centred thumb hangs half outside the track, which puts
+      // it up against whatever the track is sitting in.
+      thumbAlignment="edge"
       className={cn("w-full data-disabled:opacity-50", className)}
       {...props}
     >
