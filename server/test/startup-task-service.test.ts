@@ -47,16 +47,14 @@ describe("Windows startup task service", () => {
     expect(script).toContain("$env:GATEWAY_LOG_LEVEL = 'info'");
   });
 
-  it("keeps the gateway's own output, because in the foreground the task is what writes it", () => {
+  it("leaves the log file to the gateway rather than redirecting into it", () => {
     const script = startupRuntimeScript(NODE, ENTRY, config);
-    expect(script).toContain("@arguments *>> 'C:\\Users\\Example User\\router''s data\\logs\\gateway.log'");
-    expect(script).not.toContain("*> $null");
-  });
-
-  it("writes the log as UTF-8, since the redirect otherwise uses the code page", () => {
-    expect(startupRuntimeScript(NODE, ENTRY, config)).toContain(
-      "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8",
-    );
+    // PowerShell 5.1 writes `*>>` in UTF-16, and piping through Out-File wraps
+    // anything on stderr in an error record. The gateway is handed the path
+    // and opens it itself, so no shell is in the log's way.
+    expect(script).toContain("$env:GATEWAY_LOG_FILE = 'C:\\Users\\Example User\\router''s data\\logs\\gateway.log'");
+    expect(script).toContain("@arguments *> $null");
+    expect(script).not.toContain("*>>");
   });
 
   it("drops the log level line when there is none to set", () => {

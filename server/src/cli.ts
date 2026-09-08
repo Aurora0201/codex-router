@@ -138,7 +138,10 @@ async function startInBackground(overrides: Partial<GatewayConfig>, logFileOptio
     detached: true,
     stdio: ["ignore", logFd.fd, logFd.fd],
     windowsHide: true,
-    env: { ...process.env, GATEWAY_LOG_FILE: logFile },
+    // Not GATEWAY_LOG_FILE: the child's output is already going to this file
+    // through its stdio, and letting it open the same file again would write
+    // every line twice.
+    env: { ...process.env },
   });
   await logFd.close();
   child.unref();
@@ -821,13 +824,24 @@ async function gatewayIsHealthy(host: string, port: number): Promise<boolean> {
   }
 }
 
+/** Task Scheduler's code for "this task is running right now". */
+const TASK_STILL_RUNNING = 0x41301;
+
+export function startupRunFailed(state: StartupTaskState): boolean {
+  return state.lastResult !== null && state.lastResult !== 0 && state.lastResult !== TASK_STILL_RUNNING;
+}
+
 /** "0" reads as nothing; the number is what tells you a logon start failed. */
 export function describeLastRun(state: StartupTaskState): string {
   if (state.lastRunAt === null) return "never";
   const when = new Date(state.lastRunAt);
   const at = Number.isNaN(when.getTime()) ? state.lastRunAt : when.toLocaleString();
   if (state.lastResult === null) return at;
-  if (state.lastResult === 0) return `${at} (ok)`;
+  // The task runs the gateway itself, so "still running" is what a healthy
+  // one reports all day. Calling that a failure is how this told me the
+  // gateway had failed while it was answering requests.
+  if (state.lastResult === TASK_STILL_RUNNING) return `${at} (running)`;
+  if (state.lastResult === 0) return `${at} (exited cleanly)`;
   return `${at} (failed, result 0x${(state.lastResult >>> 0).toString(16).toUpperCase()})`;
 }
 
@@ -842,7 +856,7 @@ async function actionStartupStatus(options: StartupOptions, service: StartupTask
     out("  trigger:  current user logon");
     out(`  last run: ${describeLastRun(state)}`);
     out(`  gateway:  ${running ? "running" : "stopped"}`);
-    if (state.lastResult !== null && state.lastResult !== 0) {
+    if (startupRunFailed(state)) {
       err("[codex-router] the last logon start failed; check the log file:");
       err(`  ${config.logFile}`);
     }
