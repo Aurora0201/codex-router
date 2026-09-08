@@ -45,20 +45,21 @@ function psLiteral(value: string): string {
 }
 
 /**
- * The task runs the gateway itself rather than the background starter.
+ * The task starts the gateway detached and returns.
  *
- * `codex-router start` without `--foreground` spawns a detached child, waits
- * five seconds for it to answer, and kills it if it does not. Under a task
- * that is three processes deep with its output discarded, every one of those
- * failure modes is invisible — the log file collected seventeen banners with
- * no log line after any of them. Running in the foreground makes the task
- * process the gateway: nothing to race, nothing to kill, and Task Scheduler's
- * own restart policy is the supervisor.
+ * Running it in the foreground instead makes the task's PowerShell live as
+ * long as the gateway, and that PowerShell owns a console. `-WindowStyle
+ * Hidden` is a host preference applied once PowerShell is already up, so
+ * whether the window is ever shown is a matter of timing; the detached shape
+ * has no window to hide, because `start` spawns the gateway with the window
+ * suppressed at creation and the wrapper is gone within a second.
+ *
+ * Losing sight of failures was the reason to move away from this. That is
+ * `startup status`'s job now, which reports the task's own last result.
  */
 function runtimeArguments(config: LaunchMetadata): string[] {
   const args = [
     "start",
-    "--foreground",
     "--host", config.host,
     "--port", String(config.port),
     "--data-dir", config.dataDir,
@@ -76,12 +77,10 @@ export function startupRuntimeScript(nodePath: string, entryPath: string, config
     : "Remove-Item Env:GATEWAY_LOG_LEVEL -ErrorAction SilentlyContinue";
   return [
     "$ErrorActionPreference = 'Stop'",
-    // The gateway opens this itself and writes UTF-8 JSON into it.
-    `$env:GATEWAY_LOG_FILE = ${psLiteral(config.logFile)}`,
     logLevel,
     `$arguments = @(${args})`,
-    // Nothing to capture: the gateway writes the log file, and PowerShell's
-    // own redirection would write it in UTF-16.
+    // Nothing to capture: the detached gateway's output already goes to the
+    // log file, and PowerShell's own redirection would write it in UTF-16.
     `& ${psLiteral(nodePath)} @arguments *> $null`,
     "exit $LASTEXITCODE",
   ].join("\n");

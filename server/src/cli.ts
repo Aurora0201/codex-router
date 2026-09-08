@@ -26,6 +26,18 @@ const require = createRequire(import.meta.url);
 const VERSION = (require("../package.json").version as string) ?? "0.0.0";
 
 const ENTRY_PATH = fileURLToPath(import.meta.url);
+/** How long a background start waits for the gateway to answer before giving up. */
+const START_TIMEOUT_MS = 20_000;
+
+/**
+ * The child's stdio already lands in the log file, so it must not be told to
+ * open that file itself as well — two writers would put every line in twice.
+ */
+function childEnv(): NodeJS.ProcessEnv {
+  const env = { ...process.env };
+  delete env.GATEWAY_LOG_FILE;
+  return env;
+}
 const DEFAULT_HOST = "127.0.0.1";
 const DEFAULT_PORT = 8317;
 
@@ -138,10 +150,7 @@ async function startInBackground(overrides: Partial<GatewayConfig>, logFileOptio
     detached: true,
     stdio: ["ignore", logFd.fd, logFd.fd],
     windowsHide: true,
-    // Not GATEWAY_LOG_FILE: the child's output is already going to this file
-    // through its stdio, and letting it open the same file again would write
-    // every line twice.
-    env: { ...process.env },
+    env: childEnv(),
   });
   await logFd.close();
   child.unref();
@@ -151,7 +160,10 @@ async function startInBackground(overrides: Partial<GatewayConfig>, logFileOptio
     childExited = true;
   });
 
-  const started = await waitForHealth(config.host, config.port, 5_000);
+  // Generous on purpose. A logon is the busiest the disk ever is, and this
+  // budget is what decides whether a gateway that is merely slow gets killed:
+  // a warm start answers in about a second, so twenty is room, not patience.
+  const started = await waitForHealth(config.host, config.port, START_TIMEOUT_MS);
   if (childExited || !started) {
     err("[codex-router] failed to start in the background");
     err("[codex-router] check the log file for details:");
