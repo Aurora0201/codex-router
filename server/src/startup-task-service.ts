@@ -76,15 +76,13 @@ export function startupRuntimeScript(nodePath: string, entryPath: string, config
     : "Remove-Item Env:GATEWAY_LOG_LEVEL -ErrorAction SilentlyContinue";
   return [
     "$ErrorActionPreference = 'Stop'",
-    // Without this the redirect writes in the console's code page and anything
-    // outside ASCII lands in the log as mojibake — the banner already did.
-    "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8",
+    // The gateway opens this itself and writes UTF-8 JSON into it.
     `$env:GATEWAY_LOG_FILE = ${psLiteral(config.logFile)}`,
     logLevel,
     `$arguments = @(${args})`,
-    // In the foreground the gateway logs to stdout, so the task is what puts
-    // them on disk. Discarding them is how the last failure stayed hidden.
-    `& ${psLiteral(nodePath)} @arguments *>> ${psLiteral(config.logFile)}`,
+    // Nothing to capture: the gateway writes the log file, and PowerShell's
+    // own redirection would write it in UTF-16.
+    `& ${psLiteral(nodePath)} @arguments *> $null`,
     "exit $LASTEXITCODE",
   ].join("\n");
 }

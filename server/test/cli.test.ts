@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { accountChoices, createProgram, describeLastRun, isEntryScript, isPortFree, resolveStartupLaunchConfig, restartOptions, startOverrides, stopManagedGateway } from "../src/cli.js";
+import { accountChoices, createProgram, describeLastRun, isEntryScript, isPortFree, resolveStartupLaunchConfig, restartOptions, startOverrides, startupRunFailed, stopManagedGateway } from "../src/cli.js";
 import { GatewayDatabase } from "../src/db/database.js";
 import { launchMetadataPath, parseLaunchMetadata, readLaunchMetadata, writeLaunchMetadata } from "../src/launch-metadata.js";
 
@@ -586,7 +586,17 @@ describe("login startup commands", () => {
 
   it("does not dress a task that has never run as a success", () => {
     expect(describeLastRun({ status: "enabled", lastRunAt: null, lastResult: 0 })).toBe("never");
-    expect(describeLastRun({ status: "enabled", lastRunAt: "2026-09-08T10:31:52.000Z", lastResult: 0 })).toContain("(ok)");
+  });
+
+  it("reads 'still running' as the healthy state, because the task is the gateway", () => {
+    const running = { status: "enabled" as const, lastRunAt: "2026-09-08T11:25:20.000Z", lastResult: 0x41301 };
+    // 0x41301 is Task Scheduler for "running right now", which is what a
+    // long-lived gateway reports all day. Calling it a failure reported the
+    // gateway as broken while it was answering requests.
+    expect(describeLastRun(running)).toContain("(running)");
+    expect(startupRunFailed(running)).toBe(false);
+    expect(startupRunFailed({ ...running, lastResult: 0 })).toBe(false);
+    expect(startupRunFailed({ ...running, lastResult: -1 })).toBe(true);
   });
 
   it("refuses to register a task when it cannot reach Task Scheduler", async () => {

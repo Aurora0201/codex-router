@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import pino from "pino";
 import { access } from "node:fs/promises";
 import Fastify, { type FastifyInstance } from "fastify";
 import fastifyStatic from "@fastify/static";
@@ -75,6 +76,16 @@ export async function buildGateway(overrides: Partial<GatewayConfig> = {}, optio
   const config = loadConfig(overrides);
   const backgroundTasks = options.backgroundTasks ?? true;
   const startedAt = Date.now();
+  // Writing the file here rather than having the caller redirect a stream into
+  // it keeps every shell out of the log's path. A scheduled task redirecting
+  // with `*>>` wrote it in UTF-16, and piping through Out-File wraps anything
+  // on stderr in a PowerShell error record.
+  const logStream = config.logFilePath
+    // Synchronous: a buffered destination loses whatever it was holding when
+    // the process dies, and the lines around a crash are the ones worth having.
+    // This gateway writes a few hundred lines a day.
+    ? pino.destination({ dest: config.logFilePath, append: true, mkdir: true, sync: true })
+    : undefined;
   const app = Fastify({
     bodyLimit: config.requestBodyLimit,
     requestIdHeader: false,
@@ -94,6 +105,7 @@ export async function buildGateway(overrides: Partial<GatewayConfig> = {}, optio
         ],
         censor: "[REDACTED]",
       },
+      ...(logStream ? { stream: logStream } : {}),
     },
   });
   app.removeAllContentTypeParsers();
