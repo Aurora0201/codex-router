@@ -34,27 +34,28 @@ function service(execute: (file: string, args: string[]) => Promise<{ stdout: st
 }
 
 describe("Windows startup task service", () => {
-  it("runs the gateway itself rather than the background starter", () => {
+  it("starts the gateway detached, so the task owns no window to show", () => {
     const script = startupRuntimeScript(NODE, ENTRY, config);
 
-    // `start` without --foreground spawns a child, waits five seconds for it
-    // to answer and kills it otherwise. Three processes deep inside a task
-    // that is not watching, that failure is invisible — which is exactly how
-    // this went unnoticed for weeks.
-    expect(script).toContain("'start', '--foreground'");
+    // In the foreground the task's PowerShell lives as long as the gateway and
+    // owns a console; -WindowStyle Hidden is applied after that console exists,
+    // so whether it is ever seen comes down to timing. Detached, `start`
+    // spawns the gateway with its window suppressed at creation and the
+    // wrapper is gone within a second.
+    expect(script).not.toContain("--foreground");
+    expect(script).toContain("'start', '--host', '127.0.0.1'");
     expect(script).toContain("'--data-dir', 'C:\\Users\\Example User\\router''s data'");
     expect(script).toContain("'--upstream', 'https://chatgpt.com/backend-api/codex'");
     expect(script).toContain("$env:GATEWAY_LOG_LEVEL = 'info'");
   });
 
-  it("leaves the log file to the gateway rather than redirecting into it", () => {
+  it("writes no log of its own, because the detached gateway already does", () => {
     const script = startupRuntimeScript(NODE, ENTRY, config);
     // PowerShell 5.1 writes `*>>` in UTF-16, and piping through Out-File wraps
-    // anything on stderr in an error record. The gateway is handed the path
-    // and opens it itself, so no shell is in the log's way.
-    expect(script).toContain("$env:GATEWAY_LOG_FILE = 'C:\\Users\\Example User\\router''s data\\logs\\gateway.log'");
+    // anything on stderr in an error record.
     expect(script).toContain("@arguments *> $null");
     expect(script).not.toContain("*>>");
+    expect(script).not.toContain("GATEWAY_LOG_FILE");
   });
 
   it("drops the log level line when there is none to set", () => {
