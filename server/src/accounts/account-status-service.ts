@@ -48,17 +48,20 @@ export class AccountStatusService {
   private closed = false;
 
   /**
-   * Called after every reading that lands, whichever path asked for it — the
-   * sweep, a request finding the numbers stale, or a 429. Auto switching
-   * decides on these numbers, so every one of them is a moment to re-decide;
-   * hanging it off the sweep alone made the readings fresh and the decisions
-   * five minutes old.
+   * Called once every attempt settles, whichever path asked for it — the
+   * sweep, a request finding the numbers stale, or a 429 — and whether it
+   * landed or not. Auto switching decides on these readings, so every one of
+   * them is a moment to re-decide; hanging it off the sweep alone made the
+   * readings fresh and the decisions five minutes old. A failure is a moment
+   * too: that is when an account stops being routable.
+   *
+   * Taken at construction rather than assigned afterwards, so a second
+   * assignment cannot quietly replace it.
    */
-  onRefreshed: (accountId: string) => void = () => undefined;
-
   constructor(
     private readonly config: GatewayConfig,
     private readonly database: GatewayDatabase,
+    private readonly onSettled: (accountId: string, ok: boolean) => void = () => undefined,
   ) {}
 
   refresh(accountId: string, options: { refreshToken?: boolean; checking?: boolean } = {}): Promise<AccountStatusRefresh> {
@@ -84,7 +87,7 @@ export class AccountStatusService {
   refreshInBackground(accountId: string): Promise<boolean> {
     if (this.closed) return Promise.resolve(false);
     const task = this.refreshWithRetry(accountId).then((ok) => {
-      if (ok && !this.closed) this.onRefreshed(accountId);
+      if (!this.closed) this.onSettled(accountId, ok);
       return ok;
     });
     this.backgroundTasks.add(task);

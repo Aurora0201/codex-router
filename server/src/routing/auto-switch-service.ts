@@ -142,12 +142,10 @@ export class AutoSwitchService {
     const evidence = (target: AccountRecord): Record<string, unknown> => {
       const worst = current ? tightest(current, settings) : null;
       return {
-        // The window that actually made the call, so the log can say "5 小时"
-        // rather than leaving the reader to guess which number moved.
-        window: worst?.role ?? (settings.switchOn === "short" ? "short" : "long"),
-        thresholdPercent:
-          worst?.threshold ??
-          (settings.switchOn === "short" ? settings.shortThresholdPercent : settings.thresholdPercent),
+        // A 429 or a broken account is its own evidence; naming a window there
+        // would credit a reading that had no part in the decision.
+        window: trigger.kind === "quota" ? (worst?.role ?? null) : null,
+        thresholdPercent: trigger.kind === "quota" ? (worst?.threshold ?? null) : null,
         currentRemainingPercent: worst?.remaining ?? null,
         targetRemainingPercent: tightest(target, settings)?.remaining ?? null,
         trigger: trigger.kind,

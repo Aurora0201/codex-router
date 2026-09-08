@@ -111,9 +111,6 @@ export async function buildGateway(overrides: Partial<GatewayConfig> = {}, optio
   const accounts = new AccountService(config, database, activeAccounts);
   const logins = new AccountLoginService(config, database);
   await logins.cleanupStaleStaging();
-  const accountStatus = new AccountStatusService(config, database);
-  const auth = new AccountAuthService(config, database, accountStatus);
-  const usage = new AccountUsageService(config, database, accountStatus, backgroundTasks);
   const csrf = new CsrfGuard();
   const events = new AdminEventHub();
   const autoSwitch = new AutoSwitchService(database, activeAccounts);
@@ -124,6 +121,18 @@ export async function buildGateway(overrides: Partial<GatewayConfig> = {}, optio
       app.log.warn({ err: error }, "auto_switch_evaluation_failed");
     }
   };
+  // Quota readings only change on a refresh, so that is the moment worth
+  // re-deciding on — and a refresh that failed is the moment an account stops
+  // being able to serve. The switch itself is the same select() a person
+  // clicks.
+  const accountStatus = new AccountStatusService(config, database, (accountId, ok) => {
+    events.invalidate("accounts");
+    const account = database.accounts.get(accountId);
+    const routable = ok && account?.enabled === true && account.authStatus === "ready";
+    reEvaluateRouting(routable ? { kind: "quota" } : { kind: "unavailable", accountId });
+  });
+  const auth = new AccountAuthService(database, accountStatus);
+  const usage = new AccountUsageService(accountStatus, backgroundTasks);
   const proxy = new HttpProxy({
     upstreamBaseUrl: config.upstreamBaseUrl,
     activeAccounts, auth, usage, database,
@@ -136,12 +145,6 @@ export async function buildGateway(overrides: Partial<GatewayConfig> = {}, optio
     events.emitActivity({ type: "connection_updated", connectionId });
     events.invalidate("websocketConnections");
   });
-  // Quota readings only change on a refresh, so that is the moment worth
-  // re-deciding on. The switch itself is the same select() a person clicks.
-  accountStatus.onRefreshed = () => {
-    events.invalidate("accounts");
-    reEvaluateRouting({ kind: "quota" });
-  };
   const rateLimitTimer = backgroundTasks ? startUsageRefreshScheduler(accountStatus) : null;
   const codexProcess = new CodexProcessMonitor(() => events.invalidate("codex"));
   if (backgroundTasks) await codexProcess.start();
@@ -174,6 +177,11 @@ export async function buildGateway(overrides: Partial<GatewayConfig> = {}, optio
   } catch {
     app.get("/admin", async (_request, reply) => reply.code(503).send({ error: "admin_ui_not_built", hint: "Run npm run build" }));
   }
+
+  // Before Fastify begins waiting on connections, not after: an event stream
+  // stays open by design and would otherwise hold the shutdown until the CLI
+  // gave up on it.
+  app.addHook("preClose", async () => events.endStreams());
 
   let closed = false;
   // Fastify runs onClose only after the server has stopped accepting requests;

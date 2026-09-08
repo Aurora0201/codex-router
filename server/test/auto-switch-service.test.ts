@@ -234,6 +234,21 @@ describe("AutoSwitchService", () => {
     expect(decision?.reason).toBe("upstream_rate_limited");
   });
 
+  it("moves off an account that can no longer serve", () => {
+    account("a", { rank: 1 });
+    account("b", { rank: 2 });
+    active.select("a");
+    settings({ triggerOnAuthFailure: true });
+    // The quota is untouched; losing auth is its own evidence.
+    database.accounts.update("a", { authStatus: "relogin_required" });
+
+    const decision = service.decide({ kind: "unavailable", accountId: "a" });
+    expect(decision?.to).toBe("b");
+    expect(decision?.reason).toBe("account_unavailable");
+    // No window decided this, so the log must not name one.
+    expect(decision?.evidence).toMatchObject({ window: null, thresholdPercent: null, trigger: "unavailable" });
+  });
+
   it("honours the triggers that were turned off", () => {
     account("a", { rank: 1 });
     account("b", { rank: 2 });

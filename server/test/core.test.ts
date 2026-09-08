@@ -7,6 +7,7 @@ import { AppServerClient } from "../src/accounts/app-server-client.js";
 import { AccountService } from "../src/accounts/account-service.js";
 import { AccountLoginService } from "../src/accounts/account-login-service.js";
 import { AccountAuthService } from "../src/accounts/account-auth-service.js";
+import { AccountStatusService } from "../src/accounts/account-status-service.js";
 import { AccountUsageService } from "../src/accounts/account-usage-service.js";
 import { CredentialReader } from "../src/accounts/credential-reader.js";
 import { DEFAULT_DATA_DIR, loadConfig } from "../src/config.js";
@@ -496,8 +497,11 @@ describe("Codex app-server adapter", () => {  it("uses isolated CODEX_HOME and J
     const account = database.accounts.get(accountId)!;
     expect(account).toMatchObject({ authStatus: "ready", email: "owner@example.test", planType: "plus", chatgptAccountId: "isolated-account", primaryUsedPercent: 25, secondaryUsedPercent: 10 });
     expect(account.codexHome).toContain(path.join("data", "accounts", accountId, "codex-home"));
-    const auth = new AccountAuthService(config, database);
-    const usage = new AccountUsageService(config, database);
+    // One status service, shared: the lock and the cooldown only work if the
+    // things that refresh an account go through the same instance.
+    const status = new AccountStatusService(config, database);
+    const auth = new AccountAuthService(database, status);
+    const usage = new AccountUsageService(status);
     await auth.refresh(accountId);
     const rpcLog = await readFile(path.join(account.codexHome, "rpc.log"), "utf8");
     expect(rpcLog).toContain('"method":"account/read","params":{"refreshToken":true}');
@@ -523,7 +527,7 @@ describe("Codex app-server adapter", () => {  it("uses isolated CODEX_HOME and J
     const database = new GatewayDatabase(config.databasePath);
     database.accounts.insert({ id: "limited", codexHome: accountHome });
     database.accounts.update("limited", { authStatus: "rate_limited" });
-    const usage = new AccountUsageService(config, database);
+    const usage = new AccountUsageService(new AccountStatusService(config, database));
 
     await Promise.all([
       usage.refresh("limited"),
@@ -586,7 +590,8 @@ describe("Codex app-server adapter", () => {  it("uses isolated CODEX_HOME and J
     const database = new GatewayDatabase(path.join(root, "gateway.db"));
     database.accounts.insert({ id: "account", codexHome: path.join(root, "account") });
     database.accounts.update("account", { authStatus: "ready" });
-    const usage = new AccountUsageService({} as never, database, undefined, false);
+    // Background refresh is off, so nothing ever reaches the status service.
+    const usage = new AccountUsageService(new AccountStatusService({} as never, database), false);
     usage.refreshIfStale("account");
     await expect(usage.refreshInBackground("account")).resolves.toBe(false);
     database.close();
