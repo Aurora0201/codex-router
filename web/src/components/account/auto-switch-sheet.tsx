@@ -111,25 +111,46 @@ function Section({
   title,
   icon: Icon,
   hint,
+  description,
+  control,
   children,
 }: {
   title: string
   icon: typeof GaugeIcon
   hint?: string
-  children: ReactNode
+  description?: string
+  /**
+   * A control for the section as a whole, sitting on the heading. It centres
+   * on the heading block rather than on a row, which is the only way a section
+   * holding nothing else can have even margins above and below it.
+   */
+  control?: ReactNode
+  children?: ReactNode
 }) {
   return (
     <section className="rounded-xl bg-muted p-3">
-      <header className="flex h-6 items-center gap-2">
-        <Icon aria-hidden="true" className="size-4 text-muted-foreground" />
-        <h3 className="flex-1 text-sm font-semibold">{title}</h3>
-        {hint ? (
-          <span className="text-xs text-muted-foreground-subtle">{hint}</span>
-        ) : null}
-      </header>
+      <div className="flex items-center gap-3">
+        <div className="min-w-0 flex-1">
+          <header className="flex h-6 items-center gap-2">
+            <Icon aria-hidden="true" className="size-4 text-muted-foreground" />
+            <h3 className="flex-1 text-sm font-semibold">{title}</h3>
+            {hint ? (
+              <span className="text-xs text-muted-foreground-subtle">
+                {hint}
+              </span>
+            ) : null}
+          </header>
+          {description ? (
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {description}
+            </p>
+          ) : null}
+        </div>
+        {control}
+      </div>
       {/* Matches the section's own padding, so the gap under the header and
           the gap above the bottom edge read as one rhythm. */}
-      <div className="mt-3">{children}</div>
+      {children ? <div className="mt-3">{children}</div> : null}
     </section>
   )
 }
@@ -598,22 +619,25 @@ export function AutoSwitchButton({
             {t("正在载入…")}
           </p>
         ) : (
-          <ScrollArea className="min-h-0 flex-1">
+          <ScrollArea className="min-h-0 flex-1 [&_[data-slot=scroll-area-viewport]]:scroll-fade">
             <div className="flex flex-col gap-3 px-4 pb-6">
-              <Section title={t("运行方式")} icon={PowerIcon}>
-                <div className="grid divide-y divide-border">
-                  <SettingRow
-                    title={t("额度不足时自动换账号")}
-                    hint={t("按下面的顺序换到下一个够用的账号。")}
-                  >
-                    <Switch
-                      aria-label={t("额度不足时自动换账号")}
-                      checked={settings.enabled}
-                      onCheckedChange={(value) => patch({ enabled: value })}
-                    />
-                  </SettingRow>
-                </div>
-              </Section>
+              {/* The master switch is what the other four sections answer to,
+                  so it is the section's own heading rather than a lone row
+                  inside it — a heading that repeated the row underneath it
+                  left the switch centred on the row and 36px of heading
+                  stacked above it, which reads as a lopsided box. */}
+              <Section
+                title={t("额度不足时自动换账号")}
+                icon={PowerIcon}
+                description={t("按下面的顺序换到下一个够用的账号。")}
+                control={
+                  <Switch
+                    aria-label={t("额度不足时自动换账号")}
+                    checked={settings.enabled}
+                    onCheckedChange={(value) => patch({ enabled: value })}
+                  />
+                }
+              />
 
               <Section title={t("按哪个额度切换")} icon={GaugeIcon}>
                 {/* A segmented control on the section's own fill: the

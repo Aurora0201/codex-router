@@ -326,6 +326,13 @@ outline.
 - A fixed height with an inner scroll is right for a list that is unbounded by
   nature — the log table, the account list — where the page has already
   decided how much room it gets.
+- A section heading is a band above its rows, so a control centred on a row is
+  not centred on the section. The auto-switch master switch sat in a one-row
+  section under a 36px heading and measured 65px of air above it against 29px
+  below — a lopsided box, and read as one. A section holding a single setting
+  whose title restates the heading is not a section: make the setting the
+  heading and hang the control off it. `Section`'s `control` prop in
+  `account/auto-switch-sheet` is that shape, and the gaps come out 23.8/23.8.
 
 ## Shared components
 
@@ -413,6 +420,14 @@ decorate, and never to make a fast thing feel slow.
   horizontal scrollbar as soon as anything inside is a pixel too wide. Use the
   shadcn `ScrollArea` for a scrolling region, and build rows out of `Item` so
   the text column clamps and the control wraps instead of pushing.
+- A scrolling region ends in a hard cut that says nothing about whether there
+  is more behind it. shadcn ships `scroll-fade` for that — a mask driven by
+  `animation-timeline: scroll(self y)`, no JS and no surface colour to keep in
+  step with the theme. It goes on the **viewport**, which is the element that
+  scrolls: `[&_[data-slot=scroll-area-viewport]]:scroll-fade`. The band is
+  `min(12%, 2.5rem)` and shows only on the side that has content behind it;
+  `scroll-fade-6` narrows it, which is what the log panels use. Every sheet
+  body carries it.
 - A Base UI control wrapped in a `<label>` takes that label's whole text as its
   accessible name, and `aria-labelledby` beats any `aria-label` you also set. So
   a setting row puts only the title inside the label and leaves the explanatory

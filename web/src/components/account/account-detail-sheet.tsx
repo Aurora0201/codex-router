@@ -87,7 +87,7 @@ export function AccountDetailSheet({
           </SheetDescription>
         </SheetHeader>
         {account ? (
-          <ScrollArea className="min-h-0 flex-1">
+          <ScrollArea className="min-h-0 flex-1 [&_[data-slot=scroll-area-viewport]]:scroll-fade">
             <div className="flex flex-col gap-6 px-4 pb-6">
               <section className="flex flex-col gap-3">
                 <h3 className={SECTION_TITLE}>{t("账号信息")}</h3>

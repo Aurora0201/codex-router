@@ -767,7 +767,6 @@ export const en = {
   "短窗口才是挡住下一个请求的那个，通常设得更紧。":
     "The short window is what actually blocks the next request, so it is usually set tighter.",
   触发与节奏: "Triggers and pacing",
-  运行方式: "How it runs",
   使用中: "Routed",
   未报告邮箱: "No email reported",
   周额度: "Weekly",

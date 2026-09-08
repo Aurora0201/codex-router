@@ -266,7 +266,7 @@ describe("AutoSwitchButton", () => {
     expect(
       sections.map((section) => section.querySelector("h3")?.textContent)
     ).toEqual([
-      "运行方式",
+      "额度不足时自动换账号",
       "按哪个额度切换",
       "优先级",
       "触发与节奏",

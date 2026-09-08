@@ -732,7 +732,7 @@ export function WebSocketConnectionLogsPanel({
                 {t("仅包含握手和关闭元数据。")}
               </SheetDescription>
             </SheetHeader>
-            <ScrollArea className="min-h-0 flex-1">
+            <ScrollArea className="min-h-0 flex-1 [&_[data-slot=scroll-area-viewport]]:scroll-fade">
               <div className="flex flex-col gap-4 p-4 pt-1">
                 <LogDetailGroup
                   title={t("连接诊断")}
