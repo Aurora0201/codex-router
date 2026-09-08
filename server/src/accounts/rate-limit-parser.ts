@@ -18,7 +18,7 @@ export function stringAt(value: unknown, ...keys: string[]): string | null {
   return null;
 }
 
-export function numberAt(value: unknown, ...keys: string[]): number | null {
+function numberAt(value: unknown, ...keys: string[]): number | null {
   const source = object(value);
   for (const key of keys) if (typeof source[key] === "number" && Number.isFinite(source[key])) return source[key] as number;
   return null;
@@ -32,7 +32,7 @@ function booleanAt(value: unknown, ...keys: string[]): boolean | null {
 
 const MILLISECOND_TIMESTAMP_THRESHOLD = 100_000_000_000;
 
-export function normalizeResetTimestamp(value: number | null): number | null {
+function normalizeResetTimestamp(value: number | null): number | null {
   if (value === null) return null;
   return value > 0 && value < MILLISECOND_TIMESTAMP_THRESHOLD ? value * 1000 : value;
 }

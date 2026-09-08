@@ -4,7 +4,7 @@ function bannerLine(text: string, width = 44): string {
   return `│${" ".repeat(left)}${text}${" ".repeat(pad - left)}│`;
 }
 
-export const BANNER = [
+const BANNER = [
   `╔${"═".repeat(44)}╗`,
   bannerLine("codex-router"),
   bannerLine("Transparent identity proxy for Codex"),

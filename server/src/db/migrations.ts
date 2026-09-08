@@ -2,7 +2,7 @@ import type Database from "better-sqlite3";
 
 type SqliteDatabase = Database.Database;
 
-export const SCHEMA_VERSION = 17;
+export const SCHEMA_VERSION = 19;
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -415,6 +415,42 @@ export function migrate(db: SqliteDatabase): void {
     if (!accountColumns.has("billing_cadence")) {
       db.exec("ALTER TABLE accounts ADD COLUMN billing_cadence TEXT");
     }
+  }
+
+  if (version < 18) {
+    const accountColumns = tableColumns(db, "accounts");
+    // Rank is the user's priority order; enrolment lets an account sit in the
+    // pool without taking part. Both are null/1 by default so an existing pool
+    // behaves as "in, unordered" until the user arranges it.
+    if (!accountColumns.has("auto_switch_rank")) {
+      db.exec("ALTER TABLE accounts ADD COLUMN auto_switch_rank INTEGER");
+    }
+    if (!accountColumns.has("auto_switch_enrolled")) {
+      db.exec("ALTER TABLE accounts ADD COLUMN auto_switch_enrolled INTEGER NOT NULL DEFAULT 1");
+    }
+    // Every automatic switch has to leave a trace: the ADR calls this the
+    // compensation for the attribution the feature takes away, so it is part
+    // of the feature rather than an optional log.
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS account_switch_log (
+        id TEXT PRIMARY KEY,
+        switched_at INTEGER NOT NULL,
+        from_account_id TEXT,
+        to_account_id TEXT,
+        reason TEXT NOT NULL,
+        evidence_json TEXT
+      );
+      CREATE INDEX IF NOT EXISTS account_switch_log_at ON account_switch_log(switched_at DESC);
+    `);
+  }
+
+  if (version < 19) {
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_request_log_started_id ON request_log(started_at DESC, id DESC);
+      CREATE INDEX IF NOT EXISTS idx_websocket_connection_started_id ON websocket_connection_log(started_at DESC, id DESC);
+      DROP INDEX IF EXISTS idx_request_log_started;
+      DROP INDEX IF EXISTS idx_websocket_connection_started;
+    `);
   }
 
   db.prepare(

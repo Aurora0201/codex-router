@@ -6,6 +6,7 @@ import { AccountUsageService } from "../../accounts/account-usage-service.js";
 import { AccountStatusService } from "../../accounts/account-status-service.js";
 import { AccountLoginService } from "../../accounts/account-login-service.js";
 import { ActiveAccountService } from "../../routing/active-account-service.js";
+import type { AutoSwitchService } from "../../routing/auto-switch-service.js";
 import type { CsrfGuard } from "../../security/csrf.js";
 import type { AdminEventHub } from "./admin-events.js";
 import type { CodexProcessMonitor } from "../../codex/codex-process.js";
@@ -21,6 +22,9 @@ export interface AdminContext {
   auth: AccountAuthService;
   usage: AccountUsageService;
   accountStatus: AccountStatusService;
+  autoSwitch: AutoSwitchService;
+  /** Ask the router to look at the pool again, the way a refresh would. */
+  reEvaluateRouting(trigger: Parameters<AutoSwitchService["evaluate"]>[0]): void;
   logins: AccountLoginService;
   activeAccounts: ActiveAccountService;
   csrf: CsrfGuard;

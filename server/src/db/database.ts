@@ -6,6 +6,7 @@ import { AccountRepository } from "./repositories/account-repository.js";
 import { SettingsRepository } from "./repositories/settings-repository.js";
 import { RequestLogRepository } from "./repositories/request-log-repository.js";
 import { WebSocketConnectionLogRepository } from "./repositories/websocket-connection-log-repository.js";
+import { AccountSwitchLogRepository } from "./repositories/account-switch-log-repository.js";
 
 type SqliteDatabase = Database.Database;
 
@@ -15,6 +16,7 @@ export class GatewayDatabase {
   readonly settings: SettingsRepository;
   readonly requestLog: RequestLogRepository;
   readonly websocketConnectionLog: WebSocketConnectionLogRepository;
+  readonly accountSwitchLog: AccountSwitchLogRepository;
 
   private activeAccountId: string | null = null;
 
@@ -29,6 +31,7 @@ export class GatewayDatabase {
     this.settings = new SettingsRepository(this.raw);
     this.requestLog = new RequestLogRepository(this.raw, this.settings);
     this.websocketConnectionLog = new WebSocketConnectionLogRepository(this.raw);
+    this.accountSwitchLog = new AccountSwitchLogRepository(this.raw);
     this.requestLog.interruptRunning();
     this.activeAccountId = this.readActiveAccountId();
   }

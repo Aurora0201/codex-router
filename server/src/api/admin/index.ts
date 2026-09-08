@@ -1,9 +1,11 @@
 import type { FastifyInstance } from "fastify";
+import { sendApiError } from "./helpers.js";
 import type { AdminContext } from "./context.js";
 import { registerHealthRoutes } from "./health-routes.js";
 import { registerAccountRoutes } from "./account-routes.js";
 import { registerAccountLoginRoutes } from "./account-login-routes.js";
 import { registerActiveAccountRoutes } from "./active-account-routes.js";
+import { registerAutoSwitchRoutes } from "./auto-switch-routes.js";
 import { registerSettingsRoutes } from "./settings-routes.js";
 import { registerStatsRoutes } from "./stats-routes.js";
 import { registerCodexRoutes } from "./codex-routes.js";
@@ -19,18 +21,22 @@ export async function registerAdminApi(
   ctx: AdminContext,
   codexConfig: CodexConfigService,
 ): Promise<void> {
-  registerHealthRoutes(app, ctx);
-  registerAdminEventRoutes(app, ctx.events);
-  registerAccountRoutes(app, ctx);
-  registerAccountLoginRoutes(app, ctx);
-  registerActiveAccountRoutes(app, ctx);
-  registerSettingsRoutes(app, ctx);
-  registerStatsRoutes(app, ctx);
-  registerRequestLogRoutes(app, ctx);
-  registerCodexRoutes(app, ctx, codexConfig);
-  registerWebSocketConnectionRoutes(app, ctx);
-  registerWebSocketConnectionLogRoutes(app, ctx);
-  registerCodexUsageRoutes(app, ctx);
+  await app.register(async (admin) => {
+    admin.setErrorHandler((error, _request, reply) => sendApiError(reply, error));
+    registerHealthRoutes(admin, ctx);
+    registerAdminEventRoutes(admin, ctx.events);
+    registerAccountRoutes(admin, ctx);
+    registerAccountLoginRoutes(admin, ctx);
+    registerActiveAccountRoutes(admin, ctx);
+    registerSettingsRoutes(admin, ctx);
+    registerAutoSwitchRoutes(admin, ctx);
+    registerStatsRoutes(admin, ctx);
+    registerRequestLogRoutes(admin, ctx);
+    registerCodexRoutes(admin, ctx, codexConfig);
+    registerWebSocketConnectionRoutes(admin, ctx);
+    registerWebSocketConnectionLogRoutes(admin, ctx);
+    registerCodexUsageRoutes(admin, ctx);
+  });
 }
 
 export type { AdminContext } from "./context.js";

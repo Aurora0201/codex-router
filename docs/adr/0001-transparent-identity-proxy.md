@@ -10,7 +10,7 @@
 
 关键设计意图：
 
-- **锚定 Codex 登录账号，后端动态切换请求账号。** Codex 桌面端保持登录一个账号；网关在转发时用另一个（用户手动选中的 active）账号的凭证替换 `Authorization` 与 `chatgpt-account-id`，从而实现"不切换 Codex 登录即可换后端账号"。账号不匹配是设计常态，而非错误。
+- **锚定 Codex 登录账号，后端动态切换请求账号。** Codex 桌面端保持登录一个账号；网关在转发时用另一个 active 账号的凭证替换 `Authorization` 与 `chatgpt-account-id`，从而实现"不切换 Codex 登录即可换后端账号"。账号不匹配是设计常态，而非错误。active 账号默认由用户手动选定；自 v2 起可由用户显式开启的自动切换代为选定，边界见下文「自动切换」。
 - **数据面透明。** 网关不重写 Responses 工具 payload，数据面字节保持不透明；唯一只读例外是从 WebSocket JSON 包络和 `/responses` SSE 事件中提取白名单生命周期元数据，用于安全诊断。
 - **无会话绑定。** HTTP 请求独立使用当前 active 账号；WebSocket 身份固定于握手，因此切换 active 时，空闲旧连接立即正常退役，存在进行中响应的旧连接在协议终态转发完成后退役。Codex 随后的连接使用新账号重新握手，不建立会话/线程粘滞（session binding 机制已移除）。
 - **多账号隔离。** 每个账号有独立 `CODEX_HOME`（`data/accounts/<id>/codex-home`）与 `auth.json`，凭证不落 SQLite、不进日志。
@@ -21,7 +21,7 @@
 ### 通用
 
 - 路由白名单仅限：`POST /responses`、`POST /responses/compact`、`GET /models`、`POST /alpha/search`（Codex `web.run` 工具的独立网页搜索端点，见 `codex-rs/ext/web-search`），以及 `GET /responses` 的 WebSocket Upgrade。其余 `backend-api/codex/*` 一律 `501`。
-- 每个请求优先从 `active_account` 解析账号，经 `auth.getCredential()` 取得其 access token。仅当账号数据库完全为空时，网关进入 `client_passthrough`：保留 Codex 客户端自带的 `Authorization` 与 `chatgpt-account-id`，不替换身份。账号池非空但未选择、禁用或失效时仍拒绝请求，不自动回退。
+- 每个请求优先从 `active_account` 解析账号，经 `auth.getCredential()` 取得其 access token。仅当账号数据库完全为空时，网关进入 `client_passthrough`：保留 Codex 客户端自带的 `Authorization` 与 `chatgpt-account-id`，不替换身份。账号池非空但未选择、禁用或失效时仍拒绝请求，不做隐式回退：只有用户显式开启的自动切换才会改写 `active_account`，且它是在请求之外做决定，不在请求路径上兜底。
 - 认证替换由 `buildUpstreamHeaders` 完成：设置 `Authorization: Bearer <token>` 与 `chatgpt-account-id`；剥离 `cookie`、`host`、`connection`、`content-length` 等请求头（由网关重建）。
 - 响应头经 `copyResponseHeaders` 转发，剥离 `set-cookie`、`connection` 等传输层头。
 - 浏览器 Origin 请求（`hasBrowserOrigin`）一律拒绝（数据面仅服务本地 Codex 客户端）。
@@ -50,6 +50,23 @@
 - 客户端早于上游连接就绪的消息进入**有界缓冲区**（`MAX_PENDING_FRAMES` / `MAX_PENDING_BYTES`），上游 `open` 后按序补发。
 - ping / pong 双向转发；close code / reason 按合法范围桥接（非法码直接 `terminate`）。
 - 保留上游 Upgrade 响应头（`x-codex-turn-state`、`x-models-etag`、`x-reasoning-included`、`openai-model`）。
+
+### 自动切换（v2 新增）
+
+原始决策是"账号只能由人手动选定"。它保护的是两件事：用户始终知道自己在消耗哪个账号，以及失败永远能归因到一个明确的账号。自动切换会削弱这两点，因此放开的边界写在这里，**没有列进来的一律仍旧禁止**。
+
+- **默认关闭。** 开启是用户的一次显式决定，关闭后立即回到完全手动，不保留任何自动行为。
+- **只改写 `active_account`，不改任何别的东西。** 自动切换调用与手动切换同一条 `ActiveAccountService.select()`，因此连接退役、身份替换、证据记录的行为完全一致。**它不在请求路径上运行**：决定发生在额度刷新、429 标记或认证状态变化之后，而不是在某个请求即将失败时临时改道。
+- **不打断进行中的请求。** 沿用既有退役语义：空闲旧连接立即退役，有进行中响应的在协议终态转发完成后退役。
+- **数据面仍然不透明。** 决定只使用额度窗口、认证状态和请求结果归因，**不得读取 payload**，也不得把只读诊断元数据引入路由决策。
+- **仍然无会话绑定。** 自动切换不得为了"让一个会话留在同一账号"而延后或抑制切换。
+- **每一次自动切换都必须留痕**：时间、来源账号、目标账号、触发原因、当时的判据。这是对"失去归因"的补偿，不是可选的日志。
+- **账号可退出。** 每个账号可以在池中但不参与自动切换。
+
+### 代价
+
+- 用户不再总能立刻说出"这次请求用的是哪个账号"。切换记录是唯一的补偿，因此它属于功能本身而非附属日志。
+- 失败的归因变难：同一段时间的失败可能分布在多个账号上。诊断视图必须能按账号聚合，否则这个功能会让排障退步。
 
 ### 请求与连接证据模型
 

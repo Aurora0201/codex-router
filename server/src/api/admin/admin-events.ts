@@ -1,3 +1,4 @@
+import type { ServerResponse } from "node:http";
 import type { FastifyInstance } from "fastify";
 
 export type AdminResource = "accounts" | "stats" | "settings" | "codex" | "logs" | "websocketConnections" | "usage";
@@ -9,7 +10,19 @@ export class AdminEventHub {
   private readonly listeners = new Set<Listener>();
   private readonly activityListeners = new Set<ActivityListener>();
   private readonly pending = new Set<AdminResource>();
+  /**
+   * The open event streams. An SSE response never ends on its own, and Fastify
+   * waits for connections that are not idle, so an admin console left open
+   * would hold `app.close()` until the CLI gave up on it after ten seconds.
+   */
+  private readonly streams = new Set<ServerResponse>();
   private flushTimer: NodeJS.Timeout | null = null;
+
+  /** Registers an open stream and returns the function that forgets it. */
+  attach(stream: ServerResponse): () => void {
+    this.streams.add(stream);
+    return () => this.streams.delete(stream);
+  }
 
   subscribe(listener: Listener): () => void {
     this.listeners.add(listener);
@@ -26,12 +39,23 @@ export class AdminEventHub {
     this.flushTimer.unref();
   }
 
+  /**
+   * Ends the open streams. Has to run in `preClose`, before Fastify starts
+   * waiting: an onClose hook is too late, because by then it is already
+   * waiting on the very connections this would have ended.
+   */
+  endStreams(): void {
+    for (const stream of this.streams) if (!stream.writableEnded) stream.end();
+    this.streams.clear();
+  }
+
   close(): void {
     if (this.flushTimer) clearTimeout(this.flushTimer);
     this.flushTimer = null;
     this.pending.clear();
     this.listeners.clear();
     this.activityListeners.clear();
+    this.endStreams();
   }
 
   private flush(): void {
@@ -54,6 +78,7 @@ export function registerAdminEventRoutes(app: FastifyInstance, events: AdminEven
     });
     reply.raw.write(": connected\n\n");
 
+    const detach = events.attach(reply.raw);
     const unsubscribe = events.subscribe((resources) => {
       if (!reply.raw.writableEnded) {
         reply.raw.write(`event: invalidate\ndata: ${JSON.stringify({ resources })}\n\n`);
@@ -69,6 +94,7 @@ export function registerAdminEventRoutes(app: FastifyInstance, events: AdminEven
 
     request.raw.once("close", () => {
       clearInterval(heartbeat);
+      detach();
       unsubscribe();
       unsubscribeActivity();
     });

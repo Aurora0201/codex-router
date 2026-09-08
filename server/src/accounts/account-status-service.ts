@@ -6,7 +6,12 @@ import { object, parseRateLimitResponse, stringAt } from "./rate-limit-parser.js
 import type { CredentialSnapshot, GatewayConfig, RateLimitSnapshot } from "../types.js";
 import { GatewayDatabase } from "../db/database.js";
 
-const REFRESH_COOLDOWN_MS = 60_000;
+/**
+ * How stale a reading may be before a request triggers a fresh read. Auto
+ * switching decides on these numbers, so a reading a minute old is already too
+ * old to act on: half a minute is the floor everywhere, on every path.
+ */
+const REFRESH_COOLDOWN_MS = 30_000;
 const BACKGROUND_RETRY_DELAY_MS = 2_000;
 const REFRESH_CONCURRENCY = 2;
 
@@ -34,27 +39,40 @@ function accountMetadata(result: unknown): { mode: string | null; email: string 
 }
 
 export class AccountStatusService {
-  private readonly lock = new AccountOperationLock();
-  private readonly inFlight = new Map<string, Promise<AccountStatusRefresh>>();
+  private readonly inFlight = new Map<string, { promise: Promise<AccountStatusRefresh>; refreshToken: boolean }>();
   private readonly backgroundTasks = new Set<Promise<boolean>>();
   private readonly lastAttemptAt = new Map<string, number>();
   private readonly reader = new CredentialReader();
   private readonly shutdownController = new AbortController();
   private closed = false;
 
+  /**
+   * Called once every attempt settles, whichever path asked for it — the
+   * sweep, a request finding the numbers stale, or a 429 — and whether it
+   * landed or not. Auto switching decides on these readings, so every one of
+   * them is a moment to re-decide; hanging it off the sweep alone made the
+   * readings fresh and the decisions five minutes old. A failure is a moment
+   * too: that is when an account stops being routable.
+   *
+   * Taken at construction rather than assigned afterwards, so a second
+   * assignment cannot quietly replace it.
+   */
   constructor(
     private readonly config: GatewayConfig,
     private readonly database: GatewayDatabase,
+    private readonly onSettled: (accountId: string, ok: boolean) => void = () => undefined,
+    private readonly lock = new AccountOperationLock(),
   ) {}
 
   refresh(accountId: string, options: { refreshToken?: boolean; checking?: boolean } = {}): Promise<AccountStatusRefresh> {
     if (this.closed) return Promise.reject(new Error("account_status_service_closed"));
     const current = this.inFlight.get(accountId);
-    if (current) return current;
+    if (current && (!options.refreshToken || current.refreshToken)) return current.promise;
+    // A forced refresh must run after a weaker read, even if that read fails.
     const operation = this.lock.run(accountId, () => this.refreshOnce(accountId, options));
-    this.inFlight.set(accountId, operation);
+    this.inFlight.set(accountId, { promise: operation, refreshToken: options.refreshToken ?? false });
     void operation.finally(() => {
-      if (this.inFlight.get(accountId) === operation) this.inFlight.delete(accountId);
+      if (this.inFlight.get(accountId)?.promise === operation) this.inFlight.delete(accountId);
     }).catch(() => undefined);
     return operation;
   }
@@ -69,7 +87,10 @@ export class AccountStatusService {
 
   refreshInBackground(accountId: string): Promise<boolean> {
     if (this.closed) return Promise.resolve(false);
-    const task = this.refreshWithRetry(accountId);
+    const task = this.refreshWithRetry(accountId).then((ok) => {
+      if (!this.closed) this.onSettled(accountId, ok);
+      return ok;
+    });
     this.backgroundTasks.add(task);
     void task.finally(() => this.backgroundTasks.delete(task));
     return task;
@@ -90,15 +111,13 @@ export class AccountStatusService {
     });
   }
 
-  async refreshAll(onRefreshed: () => void = () => undefined): Promise<void> {
+  async refreshAll(): Promise<void> {
     if (this.closed) return;
     const ids = this.database.accounts.list().filter((account) => account.enabled).map((account) => account.id);
     let cursor = 0;
     const worker = async () => {
       while (!this.closed && cursor < ids.length) {
-        const id = ids[cursor++];
-        await this.refreshInBackground(id);
-        if (!this.closed) onRefreshed();
+        await this.refreshInBackground(ids[cursor++]);
       }
     };
     await Promise.all(Array.from({ length: Math.min(REFRESH_CONCURRENCY, ids.length) }, worker));
@@ -107,10 +126,12 @@ export class AccountStatusService {
   async close(): Promise<void> {
     this.closed = true;
     this.shutdownController.abort();
-    await Promise.allSettled([...this.backgroundTasks, ...this.inFlight.values()]);
+    await Promise.allSettled(this.backgroundTasks);
+    await this.lock.drain();
   }
 
   consumeResetCredit(accountId: string, idempotencyKey: string, creditId?: string): Promise<ResetCreditOutcome> {
+    if (this.closed) return Promise.reject(new Error("account_status_service_closed"));
     return this.lock.run(accountId, async () => {
       const account = this.database.accounts.get(accountId);
       if (!account) throw new Error("account_not_found");
@@ -179,7 +200,7 @@ export class AccountStatusService {
       email: official.email ?? credential.email,
       planType: official.planType ?? limits.planType ?? credential.planType,
       authMode: official.mode,
-      authStatus: limits.rateLimitReachedType ? "rate_limited" : "ready",
+      authStatus: !this.database.accounts.get(accountId)?.enabled ? "disabled" : limits.rateLimitReachedType ? "rate_limited" : "ready",
       authCheckedAt: now,
       authLastSuccessfulAt: now,
       authErrorCode: null,

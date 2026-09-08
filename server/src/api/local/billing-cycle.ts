@@ -51,7 +51,3 @@ export function nextBillingAt(
   }
   return candidate;
 }
-
-export function billingDaysRemaining(nextAt: number, now = Date.now()): number {
-  return Math.max(0, Math.round((nextAt - utcDay(now)) / DAY_MS));
-}

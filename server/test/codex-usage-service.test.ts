@@ -1,4 +1,5 @@
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { SCHEMA_VERSION } from "../src/db/migrations.js";
 import os from "node:os";
 import path from "node:path";
 import { zstdCompressSync } from "node:zlib";
@@ -278,7 +279,9 @@ ${tokens("2026-08-22T17:00:01.000Z", 8, 1, 4, 1)}
     legacy.close();
     const migrated = new GatewayDatabase(databasePath);
     expect((migrated.raw.prepare("SELECT COUNT(*) AS count FROM codex_usage_rollout").get() as { count: number }).count).toBe(0);
-    expect((migrated.raw.prepare("SELECT MAX(version) AS version FROM schema_migrations").get() as { version: number }).version).toBe(17);
+    // Assert against the constant, not a literal: naming the version of the day
+    // here turns every future migration into a spurious failure.
+    expect((migrated.raw.prepare("SELECT MAX(version) AS version FROM schema_migrations").get() as { version: number }).version).toBe(SCHEMA_VERSION);
     expect((migrated.raw.prepare("SELECT COUNT(*) AS count FROM sqlite_master WHERE type='table' AND name LIKE 'codex_usage_retained_%'").get() as { count: number }).count).toBe(2);
     migrated.close();
   });

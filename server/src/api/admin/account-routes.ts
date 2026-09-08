@@ -34,7 +34,8 @@ export function registerAccountRoutes(app: FastifyInstance, ctx: AdminContext): 
   });
 
   app.post("/api/accounts/refresh-status", { preHandler: protect }, async (_request, reply) => {
-    void ctx.accountStatus.refreshAll(() => ctx.events.invalidate("accounts")).catch(() => undefined);
+    // Invalidating per account is the service's own onRefreshed hook now.
+    void ctx.accountStatus.refreshAll().catch(() => undefined);
     await reply.code(202).send({ started: true });
   });
 
@@ -72,8 +73,8 @@ export function registerAccountRoutes(app: FastifyInstance, ctx: AdminContext): 
 
   app.delete<{ Params: { id: string } }>("/api/accounts/:id", { preHandler: protect }, async (request, reply) => {
     await apiAction(reply, async () => {
-      await ctx.accounts.remove(request.params.id);
-      ctx.events.invalidate("accounts", "stats");
+      try { await ctx.accounts.remove(request.params.id); }
+      finally { ctx.events.invalidate("accounts", "stats"); }
     });
   });
 

@@ -7,6 +7,7 @@ import { AppServerClient } from "../src/accounts/app-server-client.js";
 import { AccountService } from "../src/accounts/account-service.js";
 import { AccountLoginService } from "../src/accounts/account-login-service.js";
 import { AccountAuthService } from "../src/accounts/account-auth-service.js";
+import { AccountStatusService } from "../src/accounts/account-status-service.js";
 import { AccountUsageService } from "../src/accounts/account-usage-service.js";
 import { CredentialReader } from "../src/accounts/credential-reader.js";
 import { DEFAULT_DATA_DIR, loadConfig } from "../src/config.js";
@@ -255,7 +256,10 @@ describe("database migration v16", () => {
       subscriptionExpiresAt: null,
       subscriptionExpirySource: null,
     });
-    database.raw.prepare("UPDATE schema_migrations SET version = 15 WHERE version = 17").run();
+    // Wind the schema back below v16 whatever the current version is; naming
+    // the current one here means this test quietly stops migrating on the next
+    // schema bump instead of failing.
+    database.raw.prepare("UPDATE schema_migrations SET version = 15").run();
     database.close();
 
     const migrated = new GatewayDatabase(dbPath);
@@ -493,8 +497,11 @@ describe("Codex app-server adapter", () => {  it("uses isolated CODEX_HOME and J
     const account = database.accounts.get(accountId)!;
     expect(account).toMatchObject({ authStatus: "ready", email: "owner@example.test", planType: "plus", chatgptAccountId: "isolated-account", primaryUsedPercent: 25, secondaryUsedPercent: 10 });
     expect(account.codexHome).toContain(path.join("data", "accounts", accountId, "codex-home"));
-    const auth = new AccountAuthService(config, database);
-    const usage = new AccountUsageService(config, database);
+    // One status service, shared: the lock and the cooldown only work if the
+    // things that refresh an account go through the same instance.
+    const status = new AccountStatusService(config, database);
+    const auth = new AccountAuthService(database, status);
+    const usage = new AccountUsageService(status);
     await auth.refresh(accountId);
     const rpcLog = await readFile(path.join(account.codexHome, "rpc.log"), "utf8");
     expect(rpcLog).toContain('"method":"account/read","params":{"refreshToken":true}');
@@ -520,7 +527,7 @@ describe("Codex app-server adapter", () => {  it("uses isolated CODEX_HOME and J
     const database = new GatewayDatabase(config.databasePath);
     database.accounts.insert({ id: "limited", codexHome: accountHome });
     database.accounts.update("limited", { authStatus: "rate_limited" });
-    const usage = new AccountUsageService(config, database);
+    const usage = new AccountUsageService(new AccountStatusService(config, database));
 
     await Promise.all([
       usage.refresh("limited"),
@@ -540,6 +547,41 @@ describe("Codex app-server adapter", () => {  it("uses isolated CODEX_HOME and J
     await new Promise((resolve) => setTimeout(resolve, 50));
     const throttledLog = await readFile(path.join(accountHome, "rpc.log"), "utf8");
     expect(throttledLog.match(/account\/rateLimits\/read/g)).toHaveLength(1);
+
+    // The cooldown is 30 seconds, everywhere and on every path: auto
+    // switching decides on these readings, and a minute-old one is already
+    // too old to act on. 29 seconds is still too soon; 31 is not.
+    const reads = async (home: string) => {
+      const log = await readFile(path.join(home, "rpc.log"), "utf8").catch(() => "");
+      return log.match(/account\/rateLimits\/read/g)?.length ?? 0;
+    };
+    const homes: Record<string, string> = {};
+    for (const [id, age] of [
+      ["fresh", 29_000],
+      ["stale", 31_000],
+    ] as const) {
+      homes[id] = path.join(root, id);
+      await mkdir(homes[id], { recursive: true });
+      database.accounts.insert({ id, codexHome: homes[id] });
+      database.accounts.update(id, { authStatus: "ready" });
+      // lastLimitsRefreshAt is only ever written by a reading, so age it the
+      // way a reading would.
+      database.accounts.updateRateLimits(id, {
+        primary: null,
+        secondary: null,
+        rateLimitReachedType: null,
+        planType: null,
+        buckets: [],
+        defaultBucketKey: null,
+        resetCredits: null,
+        loadedAt: Date.now() - age,
+      });
+      usage.refreshIfStale(id);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(await reads(homes.fresh)).toBe(0);
+    expect(await reads(homes.stale)).toBe(1);
+
     database.close();
   });
 
@@ -548,7 +590,8 @@ describe("Codex app-server adapter", () => {  it("uses isolated CODEX_HOME and J
     const database = new GatewayDatabase(path.join(root, "gateway.db"));
     database.accounts.insert({ id: "account", codexHome: path.join(root, "account") });
     database.accounts.update("account", { authStatus: "ready" });
-    const usage = new AccountUsageService({} as never, database, undefined, false);
+    // Background refresh is off, so nothing ever reaches the status service.
+    const usage = new AccountUsageService(new AccountStatusService({} as never, database), false);
     usage.refreshIfStale("account");
     await expect(usage.refreshInBackground("account")).resolves.toBe(false);
     database.close();

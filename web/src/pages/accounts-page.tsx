@@ -255,6 +255,7 @@ export function AccountsPage({
         <AccountList
           accounts={accounts}
           busyId={busyId}
+          service={service}
           onAction={accountAction}
           onClearRoute={clearRoute}
           routeBlock={routeBlock}
