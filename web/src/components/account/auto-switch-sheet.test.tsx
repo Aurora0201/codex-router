@@ -18,6 +18,8 @@ const SETTINGS: AutoSwitchSettingsView = {
   enabled: true,
   dryRun: true,
   thresholdPercent: 25,
+  watchShortWindow: false,
+  shortThresholdPercent: 15,
   minDwellMs: 5 * 60_000,
   switchBackToHigherPriority: false,
   onAllBelow: "highest",
@@ -191,8 +193,57 @@ describe("AutoSwitchButton", () => {
     expect(screen.queryByText("网关没有回应这个设置")).toBeNull()
   })
 
-  it("reads the threshold back in the words the setting is written in", async () => {
+  it("groups every setting under a named section, none left floating", async () => {
     await open({})
-    expect(await screen.findByText("周额度低于 25%")).toBeInTheDocument()
+    await waitFor(() => expect(rows()).toHaveLength(3))
+    const sections = Array.from(
+      document.querySelectorAll<HTMLElement>("[role=dialog] section")
+    )
+    expect(
+      sections.map((section) => section.querySelector("h3")?.textContent)
+    ).toEqual(["运行方式", "切换阈值", "优先级", "触发与节奏", "切换记录"])
+    // Every control sits inside one of them: a row on the bare sheet reads as
+    // unanchored next to five filled blocks.
+    for (const control of document.querySelectorAll(
+      "[role=dialog] [data-slot=switch], [role=dialog] [data-slot=slider]"
+    )) {
+      expect(control.closest("section")).not.toBeNull()
+    }
+  })
+
+  it("gives each window its own threshold, and its own switch", async () => {
+    await open({})
+    // Both windows are named and read back; only the week is armed by default.
+    expect(await screen.findByRole("slider", { name: "周额度" })).toBeEnabled()
+    expect(screen.getAllByText("低于 25%")).toHaveLength(1)
+    expect(screen.getByText("低于 15%")).toBeInTheDocument()
+    expect(screen.getByRole("slider", { name: "5 小时额度" })).toBeDisabled()
+  })
+
+  it("arms the 5-hour window on its own", async () => {
+    const service = await open({})
+    const save = vi.spyOn(service, "saveAutoSwitch")
+    await userEvent.click(
+      await screen.findByRole("switch", { name: "5 小时额度" })
+    )
+    expect(save).toHaveBeenCalledWith({ watchShortWindow: true })
+    expect(screen.getByRole("slider", { name: "5 小时额度" })).toBeEnabled()
+  })
+
+  it("names the window that decided a switch, not just the reason code", async () => {
+    await open({
+      recent: [
+        {
+          id: "log-1",
+          switchedAt: Date.now() - 60_000,
+          fromAccountId: "account-1",
+          toAccountId: "account-2",
+          reason: "quota_below_threshold",
+          dryRun: false,
+          evidence: { window: "short", thresholdPercent: 15 },
+        },
+      ],
+    })
+    expect(await screen.findByText("5 小时额度低于阈值")).toBeInTheDocument()
   })
 })

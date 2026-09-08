@@ -16,7 +16,13 @@ const WEEK = 10080;
 
 function account(
   id: string,
-  opts: { weeklyUsed?: number | null; rank?: number | null; enrolled?: boolean; ready?: boolean } = {},
+  opts: {
+    weeklyUsed?: number | null;
+    shortUsed?: number | null;
+    rank?: number | null;
+    enrolled?: boolean;
+    ready?: boolean;
+  } = {},
 ) {
   database.accounts.insert({ id, codexHome: path.join(root, id) });
   database.accounts.update(id, {
@@ -30,7 +36,7 @@ function account(
       ? { usedPercent: 0, resetsAt: null, windowDurationMins: WEEK }
       : { usedPercent: opts.weeklyUsed, resetsAt: null, windowDurationMins: WEEK };
   database.accounts.updateRateLimits(id, {
-    primary: { usedPercent: 0, resetsAt: null, windowDurationMins: 300 },
+    primary: { usedPercent: opts.shortUsed ?? 0, resetsAt: null, windowDurationMins: 300 },
     secondary: weekly,
     rateLimitReachedType: null,
     planType: "plus",
@@ -138,6 +144,61 @@ describe("AutoSwitchService", () => {
     account("c", { weeklyUsed: 90, rank: 3 });
     active.select("a");
     settings({ thresholdPercent: 25, onAllBelow: "highest" });
+    expect(service.decide({ kind: "quota" })?.to).toBe("b");
+  });
+
+  it("ignores the 5-hour window until it is asked to watch it", () => {
+    account("a", { shortUsed: 98, rank: 1 });
+    account("b", { rank: 2 });
+    active.select("a");
+    settings({ thresholdPercent: 25 });
+    // The week is untouched, and the week is all it was told to watch.
+    expect(service.decide({ kind: "quota" })).toBeNull();
+  });
+
+  it("moves off an account whose 5-hour window ran out", () => {
+    account("a", { shortUsed: 95, rank: 1 });
+    account("b", { rank: 2 });
+    active.select("a");
+    settings({ thresholdPercent: 25, watchShortWindow: true, shortThresholdPercent: 15 });
+
+    const decision = service.decide({ kind: "quota" });
+    expect(decision?.to).toBe("b");
+    // The log has to say which of the two numbers moved.
+    expect(decision?.evidence).toMatchObject({ window: "short", thresholdPercent: 15, currentRemainingPercent: 5 });
+  });
+
+  it("keeps the two windows on their own thresholds", () => {
+    // 20% left on the short window clears its 15% bar; the same 20% on the
+    // week would not clear the week's 25%.
+    account("a", { shortUsed: 80, rank: 1 });
+    account("b", { rank: 2 });
+    active.select("a");
+    settings({ thresholdPercent: 25, watchShortWindow: true, shortThresholdPercent: 15 });
+    expect(service.decide({ kind: "quota" })).toBeNull();
+  });
+
+  it("will not land on an account whose 5-hour window is also spent", () => {
+    account("a", { shortUsed: 95, rank: 1 });
+    account("alsoSpent", { shortUsed: 92, rank: 2 });
+    account("c", { rank: 3 });
+    active.select("a");
+    settings({ thresholdPercent: 25, watchShortWindow: true, shortThresholdPercent: 15 });
+    expect(service.decide({ kind: "quota" })?.to).toBe("c");
+  });
+
+  it("ranks the fallback by whichever window is closest to its own threshold", () => {
+    // b is worse on the week; c is worse against the bar it has to clear.
+    account("a", { weeklyUsed: 95, rank: 1 });
+    account("b", { weeklyUsed: 80, rank: 2 });
+    account("c", { weeklyUsed: 78, shortUsed: 90, rank: 3 });
+    active.select("a");
+    settings({
+      thresholdPercent: 25,
+      watchShortWindow: true,
+      shortThresholdPercent: 15,
+      onAllBelow: "highest",
+    });
     expect(service.decide({ kind: "quota" })?.to).toBe("b");
   });
 

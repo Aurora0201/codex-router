@@ -1,4 +1,5 @@
 import type { GatewayDatabase } from "../db/database.js";
+import type { AutoSwitchSettings } from "../db/repositories/settings-repository.js";
 import type { SwitchReason } from "../db/repositories/account-switch-log-repository.js";
 import type { AccountRecord } from "../types.js";
 import type { ActiveAccountService } from "./active-account-service.js";
@@ -20,17 +21,74 @@ export interface SwitchDecision {
   evidence: Record<string, unknown>;
 }
 
-/** Percent of the weekly window still available, or null when unreported. */
-function weeklyRemaining(account: AccountRecord): number | null {
-  const windows = [
+/** A day, in minutes: the line between the long window and the short one. */
+const DAY_MINS = 24 * 60;
+
+export type QuotaWindowRole = "long" | "short";
+
+interface WatchedWindow {
+  role: QuotaWindowRole;
+  /** Percent still available, or null when upstream has not reported it. */
+  remaining: number | null;
+  threshold: number;
+}
+
+/**
+ * The windows this account is judged on. Which slot upstream puts the week in
+ * has changed before, so the role is read from the duration rather than from
+ * the position.
+ */
+function watchedWindows(account: AccountRecord, settings: AutoSwitchSettings): WatchedWindow[] {
+  const slots = [
     { used: account.primaryUsedPercent, mins: account.primaryWindowMinutes },
     { used: account.secondaryUsedPercent, mins: account.secondaryWindowMinutes },
-  ];
-  // Which slot upstream puts the long window in has changed before, so it is
-  // found by duration rather than by position.
-  const weekly = windows.filter((w) => w.mins !== null).sort((a, b) => (b.mins ?? 0) - (a.mins ?? 0))[0];
-  if (!weekly || weekly.used === null) return null;
-  return Math.max(0, 100 - weekly.used);
+  ].filter((slot) => slot.mins !== null);
+  const remaining = (used: number | null) => (used === null ? null : Math.max(0, 100 - used));
+  const pick = (want: QuotaWindowRole) => {
+    const matches = slots.filter((slot) =>
+      want === "long" ? (slot.mins ?? 0) >= DAY_MINS : (slot.mins ?? 0) < DAY_MINS,
+    );
+    // Longest of the long ones, shortest of the short ones: the tightest read
+    // of each role rather than whichever came first.
+    matches.sort((a, b) => (want === "long" ? (b.mins ?? 0) - (a.mins ?? 0) : (a.mins ?? 0) - (b.mins ?? 0)));
+    return matches[0];
+  };
+
+  const windows: WatchedWindow[] = [];
+  const long = pick("long");
+  if (long) windows.push({ role: "long", remaining: remaining(long.used), threshold: settings.thresholdPercent });
+  if (settings.watchShortWindow) {
+    const short = pick("short");
+    if (short) {
+      windows.push({ role: "short", remaining: remaining(short.used), threshold: settings.shortThresholdPercent });
+    }
+  }
+  return windows;
+}
+
+/**
+ * The window that is closest to its own threshold, which is what makes two
+ * windows on different scales comparable. Null when nothing was reported —
+ * not having read an account yet is not evidence that it is spent.
+ */
+function tightest(account: AccountRecord, settings: AutoSwitchSettings): WatchedWindow | null {
+  const reported = watchedWindows(account, settings).filter((window) => window.remaining !== null);
+  if (reported.length === 0) return null;
+  return reported.sort(
+    (a, b) => (a.remaining as number) - a.threshold - ((b.remaining as number) - b.threshold),
+  )[0];
+}
+
+/** Every reported window is at or above its own threshold. */
+function meetsThresholds(account: AccountRecord, settings: AutoSwitchSettings): boolean {
+  const worst = tightest(account, settings);
+  return worst === null || (worst.remaining as number) >= worst.threshold;
+}
+
+/** How much room is left before the first threshold is crossed. */
+function headroom(account: AccountRecord, settings: AutoSwitchSettings): number {
+  const worst = tightest(account, settings);
+  return worst === null ? Number.POSITIVE_INFINITY : (worst.remaining as number) - worst.threshold;
 }
 
 function isRoutable(account: AccountRecord): boolean {
@@ -76,24 +134,27 @@ export class AutoSwitchService {
 
     const healthy = ranked.filter((account) => {
       if (trigger.kind !== "quota" && account.id === trigger.accountId) return false;
-      const remaining = weeklyRemaining(account);
-      // An unreported window is not evidence of exhaustion; treat it as usable
-      // rather than skipping an account the gateway simply has not read yet.
-      return remaining === null || remaining >= settings.thresholdPercent;
+      return meetsThresholds(account, settings);
     });
 
-    const evidence = (target: AccountRecord): Record<string, unknown> => ({
-      thresholdPercent: settings.thresholdPercent,
-      currentRemainingPercent: current ? weeklyRemaining(current) : null,
-      targetRemainingPercent: weeklyRemaining(target),
-      trigger: trigger.kind,
-    });
+    const evidence = (target: AccountRecord): Record<string, unknown> => {
+      const worst = current ? tightest(current, settings) : null;
+      return {
+        // The window that actually made the call, so the log can say "5 小时"
+        // rather than leaving the reader to guess which number moved.
+        window: worst?.role ?? "long",
+        thresholdPercent: worst?.threshold ?? settings.thresholdPercent,
+        currentRemainingPercent: worst?.remaining ?? null,
+        targetRemainingPercent: tightest(target, settings)?.remaining ?? null,
+        trigger: trigger.kind,
+      };
+    };
 
     if (healthy.length === 0) {
       if (settings.onAllBelow !== "highest") return null;
       const best = [...ranked]
         .filter((account) => trigger.kind === "quota" || account.id !== trigger.accountId)
-        .sort((a, b) => (weeklyRemaining(b) ?? 0) - (weeklyRemaining(a) ?? 0))[0];
+        .sort((a, b) => headroom(b, settings) - headroom(a, settings))[0];
       if (!best || best.id === current?.id) return null;
       return { reason: this.reasonFor(trigger), from: current?.id ?? null, to: best.id, evidence: evidence(best) };
     }
@@ -102,9 +163,7 @@ export class AutoSwitchService {
     if (current && target.id === current.id) return null;
 
     if (trigger.kind === "quota" && current && isRoutable(current)) {
-      const remaining = weeklyRemaining(current);
-      const currentIsFine = remaining === null || remaining >= settings.thresholdPercent;
-      if (currentIsFine) {
+      if (meetsThresholds(current, settings)) {
         // The current account still serves. Only move for a better-ranked one,
         // and only when the user asked for that.
         if (!settings.switchBackToHigherPriority) return null;

@@ -12,8 +12,16 @@ export interface AutoSwitchSettings {
   enabled: boolean;
   /** Record what would have happened without doing it. */
   dryRun: boolean;
-  /** Switch when the routed account's weekly window drops below this. */
+  /** Switch when the routed account's long (weekly) window drops below this. */
   thresholdPercent: number;
+  /**
+   * The short (5-hour) window is what actually stops the next request, so it
+   * gets to trigger a switch too — but only when asked, and on its own
+   * threshold, because a five-hour window at 25% is far more urgent than a
+   * week at 25%.
+   */
+  watchShortWindow: boolean;
+  shortThresholdPercent: number;
   /** Quota hovers around a threshold; without this it would flap. */
   minDwellMs: number;
   switchBackToHigherPriority: boolean;
@@ -30,6 +38,8 @@ export const AUTO_SWITCH_DEFAULTS: AutoSwitchSettings = {
   enabled: false,
   dryRun: true,
   thresholdPercent: 25,
+  watchShortWindow: false,
+  shortThresholdPercent: 15,
   minDwellMs: 5 * 60_000,
   switchBackToHigherPriority: false,
   onAllBelow: "highest",
@@ -46,10 +56,11 @@ function parseAutoSwitch(value: unknown): AutoSwitchSettings {
     if (typeof raw !== "boolean") throw new Error("invalid_setting");
     return raw;
   };
-  const threshold = input.thresholdPercent ?? AUTO_SWITCH_DEFAULTS.thresholdPercent;
-  if (typeof threshold !== "number" || !Number.isFinite(threshold) || threshold < 0 || threshold > 100) {
-    throw new Error("invalid_setting");
-  }
+  const percent = (key: "thresholdPercent" | "shortThresholdPercent"): number => {
+    const raw = input[key] ?? AUTO_SWITCH_DEFAULTS[key];
+    if (typeof raw !== "number" || !Number.isFinite(raw) || raw < 0 || raw > 100) throw new Error("invalid_setting");
+    return Math.round(raw);
+  };
   const dwell = input.minDwellMs ?? AUTO_SWITCH_DEFAULTS.minDwellMs;
   if (typeof dwell !== "number" || !Number.isSafeInteger(dwell) || dwell < 0 || dwell > 6 * 3_600_000) {
     throw new Error("invalid_setting");
@@ -60,7 +71,9 @@ function parseAutoSwitch(value: unknown): AutoSwitchSettings {
   return {
     enabled: bool("enabled"),
     dryRun: bool("dryRun"),
-    thresholdPercent: Math.round(threshold),
+    thresholdPercent: percent("thresholdPercent"),
+    watchShortWindow: bool("watchShortWindow"),
+    shortThresholdPercent: percent("shortThresholdPercent"),
     minDwellMs: dwell,
     switchBackToHigherPriority: bool("switchBackToHigherPriority"),
     onAllBelow: onAllBelow as AllBelowBehaviour,

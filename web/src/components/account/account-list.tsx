@@ -32,6 +32,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty"
 import { RadioGroup } from "@/components/ui/radio-group"
+import { Separator } from "@/components/ui/separator"
 import {
   isDisabled,
   isRoutable,
@@ -226,9 +227,12 @@ export function AccountList({
               ) : null}
             </div>
           </div>
-          <div className="flex items-center gap-5 text-right text-xs">
+          {/* Readings on the left of the rule, the things you can do on the
+              right of it. They used to share one gap, which sat two buttons in
+              the same rhythm as two label-and-value stacks. */}
+          <div className="flex items-center gap-4">
             {active ? (
-              <>
+              <div className="flex items-center gap-5 text-right text-xs">
                 <div>
                   <p className="text-muted-foreground-subtle">
                     {t("认证状态")}
@@ -247,6 +251,16 @@ export function AccountList({
                       : t("{{value}}%", { value: Math.round(activeRemaining) })}
                   </p>
                 </div>
+              </div>
+            ) : null}
+            {active ? (
+              <Separator
+                orientation="vertical"
+                className="h-8 bg-foreground/10"
+              />
+            ) : null}
+            <div className="flex items-center gap-1">
+              {active ? (
                 <Button
                   variant="ghost"
                   size="sm"
@@ -256,14 +270,14 @@ export function AccountList({
                   <RouteOffIcon data-icon="inline-start" />
                   {t("清除路由")}
                 </Button>
-              </>
-            ) : null}
-            <AutoSwitchButton
-              accounts={accounts}
-              activeAccountId={active?.id ?? null}
-              service={service}
-              disabled={busyId !== null}
-            />
+              ) : null}
+              <AutoSwitchButton
+                accounts={accounts}
+                activeAccountId={active?.id ?? null}
+                service={service}
+                disabled={busyId !== null}
+              />
+            </div>
           </div>
         </div>
       </section>

@@ -39,6 +39,8 @@ const AUTO_SWITCH: AutoSwitchSettingsView = {
   enabled: false,
   dryRun: true,
   thresholdPercent: 25,
+  watchShortWindow: false,
+  shortThresholdPercent: 15,
   minDwellMs: 5 * 60_000,
   switchBackToHigherPriority: false,
   onAllBelow: "highest",

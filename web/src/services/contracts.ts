@@ -128,7 +128,11 @@ export type AllBelowBehaviour = "highest" | "stay" | "pause"
 export interface AutoSwitchSettingsView {
   enabled: boolean
   dryRun: boolean
+  /** The long (weekly) window's threshold. */
   thresholdPercent: number
+  /** The 5-hour window gets a say too, on its own tighter threshold. */
+  watchShortWindow: boolean
+  shortThresholdPercent: number
   minDwellMs: number
   switchBackToHigherPriority: boolean
   onAllBelow: AllBelowBehaviour
