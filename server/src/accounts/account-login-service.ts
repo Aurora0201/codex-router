@@ -32,13 +32,24 @@ export class AccountLoginService {
   private readonly reader = new CredentialReader();
   private readonly logins = new Map<string, LoginSession>();
   private readonly cleanupTasks = new Map<string, Promise<void>>();
+  private readonly starting = new Set<Promise<LoginSessionView>>();
+  private closed = false;
+  private closing: Promise<void> | null = null;
 
   constructor(
     private readonly config: GatewayConfig,
     private readonly database: GatewayDatabase,
   ) {}
 
-  async start(): Promise<LoginSessionView> {
+  start(): Promise<LoginSessionView> {
+    if (this.closed) return Promise.reject(new Error("account_login_service_closed"));
+    const operation = this.startSession();
+    this.starting.add(operation);
+    void operation.finally(() => this.starting.delete(operation)).catch(() => undefined);
+    return operation;
+  }
+
+  private async startSession(): Promise<LoginSessionView> {
     const stagingUuid = randomUUID();
     const stagingRoot = path.join(this.config.loginStagingDir, stagingUuid);
     const stagingHome = path.join(stagingRoot, "codex-home");
@@ -52,7 +63,9 @@ export class AccountLoginService {
     const client = new AppServerClient(this.config.codexCliPath, stagingHome, this.config.codexCliArgs);
     try {
       await client.start();
+      if (this.closed) throw new Error("account_login_service_closed");
       const result = await client.call("account/login/start", { type: "chatgpt" }, 30_000);
+      if (this.closed) throw new Error("account_login_service_closed");
       const loginId = stringAt(result, "loginId", "login_id") ?? randomUUID();
       const authUrl = stringAt(result, "authUrl", "auth_url", "url");
       if (!authUrl) throw new Error("codex_app_server_missing_auth_url");
@@ -66,13 +79,16 @@ export class AccountLoginService {
         client,
       };
       client.on("notification", (method: string, params: unknown) => {
-        if (method === "account/login/completed") {
+        if (method === "account/login/completed" && session.status === "waiting") {
           const completedId = stringAt(params, "loginId", "login_id");
           if (!completedId || completedId === loginId) {
             if (object(params).success === false) {
               session.status = "failed";
               session.error = "oauth_login_failed";
-              void client.close().then(() => this.scheduleStagingCleanup(session)).catch(() => undefined);
+              void client.close().then(async () => {
+                await session.completing;
+                this.scheduleStagingCleanup(session);
+              }).catch(() => undefined);
             } else {
               void this.completeLogin(session);
             }
@@ -96,7 +112,7 @@ export class AccountLoginService {
         await this.reader.read(session.stagingHome);
         await this.completeLogin(session);
       } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+        if (session.status === "waiting" && (error as NodeJS.ErrnoException).code !== "ENOENT") {
           session.status = "failed";
           session.error = "credential_read_failed";
           await session.client.close();
@@ -110,13 +126,17 @@ export class AccountLoginService {
   async cancel(loginId: string): Promise<void> {
     const session = this.logins.get(loginId);
     if (!session) throw new Error("login_not_found");
+    if (session.status !== "waiting") return;
+    // Cancellation wins until the synchronous database commit. Never overwrite
+    // an already completed login, and never clean staging while promotion runs.
+    session.status = "cancelled";
     try {
       await session.client.call("account/login/cancel", { loginId }, 10_000);
     } catch {
       // Cancellation is best-effort; the staging workspace still gets removed.
     } finally {
-      session.status = "cancelled";
       await session.client.close();
+      await session.completing;
       this.scheduleStagingCleanup(session);
     }
   }
@@ -125,16 +145,31 @@ export class AccountLoginService {
     return [...this.logins.values()].map((session) => this.view(session));
   }
 
-  async close(): Promise<void> {
+  close(): Promise<void> {
+    if (this.closing) return this.closing;
+    this.closed = true;
+    this.closing = this.closeSessions();
+    return this.closing;
+  }
+
+  private async closeSessions(): Promise<void> {
+    await Promise.allSettled(this.starting);
     const sessions = [...this.logins.values()];
+    for (const session of sessions) {
+      if (session.status === "waiting") session.status = "cancelled";
+    }
     await Promise.all(sessions.map((session) => session.client.close()));
+    await Promise.allSettled(sessions.map((session) => session.completing));
     for (const session of sessions) this.scheduleStagingCleanup(session);
     this.logins.clear();
     if (this.cleanupTasks.size > 0) {
-      await Promise.race([
-        Promise.allSettled([...this.cleanupTasks.values()]),
-        new Promise((resolve) => setTimeout(resolve, 1_000)),
-      ]);
+      let timer: NodeJS.Timeout | undefined;
+      try {
+        await Promise.race([
+          Promise.allSettled([...this.cleanupTasks.values()]),
+          new Promise<void>((resolve) => { timer = setTimeout(resolve, 1_000); }),
+        ]);
+      } finally { clearTimeout(timer); }
     }
   }
 
@@ -158,7 +193,7 @@ export class AccountLoginService {
   }
 
   private completeLogin(session: LoginSession): Promise<void> {
-    if (session.status !== "waiting") return Promise.resolve();
+    if (this.closed || session.status !== "waiting") return Promise.resolve();
     if (!session.completing) {
       session.completing = this.completeLoginInner(session).finally(() => {
         session.completing = undefined;
@@ -171,6 +206,7 @@ export class AccountLoginService {
     let promoted = false;
     try {
       const credential = await this.reader.read(session.stagingHome);
+      if (this.closed || session.status !== "waiting") return;
       if (credential.fedRamp) {
         session.status = "failed";
         session.error = "fedramp_accounts_not_supported";
@@ -207,8 +243,10 @@ export class AccountLoginService {
       // Child processes can retain Windows handles below CODEX_HOME after the
       // app-server exits, so login success must not depend on deleting staging.
       await session.client.close();
+      if (this.closed || session.status !== "waiting") return;
       await this.promoteStagingToAccount(session, credential.accountId);
       promoted = true;
+      if (this.closed || session.status !== "waiting") return;
       this.database.raw.transaction(() => {
         this.database.accounts.insert({ id: session.stagingUuid, codexHome: session.accountCodexHome });
         this.database.accounts.update(session.stagingUuid, {
@@ -225,13 +263,16 @@ export class AccountLoginService {
       session.status = "complete";
       this.scheduleStagingCleanup(session);
     } catch (error) {
-      session.status = "failed";
-      session.error = this.loginErrorCode(error);
-      await session.client.close();
-      if (promoted) await this.removeTree(path.dirname(session.accountCodexHome)).catch(() => undefined);
-      this.scheduleStagingCleanup(session);
+      if (session.status === "waiting") {
+        session.status = "failed";
+        session.error = this.loginErrorCode(error);
+      }
     } finally {
       await session.client.close();
+      if (promoted && session.status !== "complete") {
+        await this.removeTree(path.dirname(session.accountCodexHome)).catch(() => undefined);
+      }
+      this.scheduleStagingCleanup(session);
     }
   }
 

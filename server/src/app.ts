@@ -4,6 +4,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 import fastifyStatic from "@fastify/static";
 import type { GatewayConfig } from "./types.js";
 import { loadConfig } from "./config.js";
+import { AccountOperationLock } from "./accounts/account-lock.js";
 import { AccountService } from "./accounts/account-service.js";
 import { AccountLoginService } from "./accounts/account-login-service.js";
 import { AccountAuthService } from "./accounts/account-auth-service.js";
@@ -108,7 +109,8 @@ export async function buildGateway(overrides: Partial<GatewayConfig> = {}, optio
   }
   await backfillChatgptAccountIds(database);
   const activeAccounts = new ActiveAccountService(database);
-  const accounts = new AccountService(config, database, activeAccounts);
+  const accountOperations = new AccountOperationLock();
+  const accounts = new AccountService(config, database, activeAccounts, accountOperations);
   const logins = new AccountLoginService(config, database);
   await logins.cleanupStaleStaging();
   const csrf = new CsrfGuard();
@@ -130,7 +132,7 @@ export async function buildGateway(overrides: Partial<GatewayConfig> = {}, optio
     const account = database.accounts.get(accountId);
     const routable = ok && account?.enabled === true && account.authStatus === "ready";
     reEvaluateRouting(routable ? { kind: "quota" } : { kind: "unavailable", accountId });
-  });
+  }, accountOperations);
   const auth = new AccountAuthService(database, accountStatus);
   const usage = new AccountUsageService(accountStatus, backgroundTasks);
   const proxy = new HttpProxy({

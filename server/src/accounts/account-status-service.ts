@@ -39,8 +39,7 @@ function accountMetadata(result: unknown): { mode: string | null; email: string 
 }
 
 export class AccountStatusService {
-  private readonly lock = new AccountOperationLock();
-  private readonly inFlight = new Map<string, Promise<AccountStatusRefresh>>();
+  private readonly inFlight = new Map<string, { promise: Promise<AccountStatusRefresh>; refreshToken: boolean }>();
   private readonly backgroundTasks = new Set<Promise<boolean>>();
   private readonly lastAttemptAt = new Map<string, number>();
   private readonly reader = new CredentialReader();
@@ -62,16 +61,18 @@ export class AccountStatusService {
     private readonly config: GatewayConfig,
     private readonly database: GatewayDatabase,
     private readonly onSettled: (accountId: string, ok: boolean) => void = () => undefined,
+    private readonly lock = new AccountOperationLock(),
   ) {}
 
   refresh(accountId: string, options: { refreshToken?: boolean; checking?: boolean } = {}): Promise<AccountStatusRefresh> {
     if (this.closed) return Promise.reject(new Error("account_status_service_closed"));
     const current = this.inFlight.get(accountId);
-    if (current) return current;
+    if (current && (!options.refreshToken || current.refreshToken)) return current.promise;
+    // A forced refresh must run after a weaker read, even if that read fails.
     const operation = this.lock.run(accountId, () => this.refreshOnce(accountId, options));
-    this.inFlight.set(accountId, operation);
+    this.inFlight.set(accountId, { promise: operation, refreshToken: options.refreshToken ?? false });
     void operation.finally(() => {
-      if (this.inFlight.get(accountId) === operation) this.inFlight.delete(accountId);
+      if (this.inFlight.get(accountId)?.promise === operation) this.inFlight.delete(accountId);
     }).catch(() => undefined);
     return operation;
   }
@@ -125,10 +126,12 @@ export class AccountStatusService {
   async close(): Promise<void> {
     this.closed = true;
     this.shutdownController.abort();
-    await Promise.allSettled([...this.backgroundTasks, ...this.inFlight.values()]);
+    await Promise.allSettled(this.backgroundTasks);
+    await this.lock.drain();
   }
 
   consumeResetCredit(accountId: string, idempotencyKey: string, creditId?: string): Promise<ResetCreditOutcome> {
+    if (this.closed) return Promise.reject(new Error("account_status_service_closed"));
     return this.lock.run(accountId, async () => {
       const account = this.database.accounts.get(accountId);
       if (!account) throw new Error("account_not_found");
@@ -197,7 +200,7 @@ export class AccountStatusService {
       email: official.email ?? credential.email,
       planType: official.planType ?? limits.planType ?? credential.planType,
       authMode: official.mode,
-      authStatus: limits.rateLimitReachedType ? "rate_limited" : "ready",
+      authStatus: !this.database.accounts.get(accountId)?.enabled ? "disabled" : limits.rateLimitReachedType ? "rate_limited" : "ready",
       authCheckedAt: now,
       authLastSuccessfulAt: now,
       authErrorCode: null,
