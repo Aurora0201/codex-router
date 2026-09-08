@@ -109,8 +109,33 @@ OpenAI Codex upstream
 | `codex-router restart` | 使用上次成功启动参数优雅重启。 |
 | `codex-router logs [--tail]` | 查看或持续跟随日志文件。 |
 | `codex-router config status/apply/restore` | 查看、注入或还原 Codex 的本地 Router 配置。 |
+| `codex-router startup enable/disable/status` | 启用、关闭或查看当前用户登录自启动（仅 Windows）。 |
 
 常用启动参数包括 `--host`、`--port`、`--data-dir`、`--log-level` 和 `--log-file`。自定义 `--upstream` 必须同时启用 `--dev`，避免将认证意外发送到不可信服务。
+
+### Windows 登录自启动
+
+通过任务计划程序在当前用户登录后自动启动，不需要管理员权限：
+
+```powershell
+codex-router startup enable
+codex-router startup status
+```
+
+任务复用最近一次成功启动保存的 host、port、data-dir 和日志参数，所以自启动的网关和你手动启动的是同一个。**修改启动参数、升级或移动安装路径后要重新运行 `startup enable`**——任务里记的是绝对路径。
+
+`startup status` 会报告任务上一次运行的结果。这一条是有来历的：任务状态显示 "Ready" 并不代表它启动成功，只有 `LastTaskResult` 知道真相，而它曾经连续几周每次登录都失败而无人察觉。
+
+任务运行的是前台模式的网关——任务进程本身就是网关，由任务计划程序负责失败重启。日志追加到 data-dir 下的 `logs/gateway.log`。
+
+关闭自启动不会停止正在运行的网关：
+
+```powershell
+codex-router startup disable
+codex-router stop
+```
+
+这是**用户登录自启动**，不是 Windows 系统服务：无人登录时 Router 不运行。
 
 ## 管理后台
 

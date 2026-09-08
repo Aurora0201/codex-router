@@ -15,6 +15,11 @@ import { GatewayDatabase } from "./db/database.js";
 import { printBanner } from "./banner.js";
 import { isProcessAlive, readPidFile, removePidFile } from "./pid.js";
 import { readLaunchMetadata, writeLaunchMetadata, type LaunchMetadata } from "./launch-metadata.js";
+import {
+  STARTUP_TASK_NAME,
+  StartupTaskService,
+  type StartupTaskState,
+} from "./startup-task-service.js";
 import type { AccountRecord, GatewayConfig } from "./types.js";
 
 const require = createRequire(import.meta.url);
@@ -725,9 +730,152 @@ function registerConfigCommand(program: Command): void {
     });
 }
 
+// --- startup ---------------------------------------------------------------
+
+interface StartupOptions {
+  dataDir?: string;
+}
+
+type StartupTaskController = Pick<StartupTaskService, "enable" | "disable" | "status">;
+
+function createStartupTaskService(): StartupTaskService {
+  return new StartupTaskService({ nodePath: process.execPath, entryPath: ENTRY_PATH });
+}
+
+/**
+ * What the task should launch. A gateway that has been started once saved its
+ * options, and reusing them is the point: the task then starts the same
+ * gateway the user starts by hand, on the same port and data directory.
+ */
+export async function resolveStartupLaunchConfig(dataDir: string): Promise<LaunchMetadata> {
+  const saved = await readLaunchMetadata(dataDir);
+  if (saved) return saved;
+  const config = loadConfig({ dataDir });
+  return {
+    version: 1,
+    host: config.host,
+    port: config.port,
+    dataDir: config.dataDir,
+    upstream: config.upstreamBaseUrl,
+    dev: config.developerMode,
+    logFile: path.join(config.dataDir, "logs", "gateway.log"),
+  };
+}
+
+export async function enableStartup(
+  options: StartupOptions,
+  service: StartupTaskController = createStartupTaskService(),
+): Promise<LaunchMetadata> {
+  const config = await resolveStartupLaunchConfig(resolveDataDir(options.dataDir));
+  await access(process.execPath);
+  await access(ENTRY_PATH);
+  await mkdir(path.dirname(config.logFile), { recursive: true });
+  await service.enable(config);
+  return config;
+}
+
+function startupFailure(action: string, error: unknown): void {
+  const code = error instanceof Error ? error.message : String(error);
+  if (code === "startup_windows_only") err(`[codex-router] startup ${action} failed: Windows only`);
+  else if (code === "startup_task_command_failed")
+    err(`[codex-router] startup ${action} failed: Windows Task Scheduler is unavailable or access was denied`);
+  else err(`[codex-router] startup ${action} failed: ${code}`);
+  process.exitCode = 1;
+}
+
+async function actionStartupEnable(options: StartupOptions, service: StartupTaskController): Promise<void> {
+  try {
+    const config = await enableStartup(options, service);
+    out("[codex-router] login startup enabled");
+    out(`  task:    ${STARTUP_TASK_NAME}`);
+    out("  trigger: current user logon");
+    out(`  url:     ${gatewayBaseUrl(config.host, config.port)}`);
+    out(`  data:    ${config.dataDir}`);
+    out(`  log:     ${config.logFile}`);
+    out("[codex-router] run this again after changing launch options or moving the installation");
+  } catch (error) {
+    startupFailure("enable", error);
+  }
+}
+
+async function actionStartupDisable(service: StartupTaskController): Promise<void> {
+  try {
+    const state = await service.status();
+    if (state.status === "not_registered") {
+      out("[codex-router] login startup is not registered");
+      return;
+    }
+    await service.disable();
+    out("[codex-router] login startup disabled");
+    out("[codex-router] the running gateway was not stopped; use: codex-router stop");
+  } catch (error) {
+    startupFailure("disable", error);
+  }
+}
+
+async function gatewayIsHealthy(host: string, port: number): Promise<boolean> {
+  try {
+    return (await fetch(`${gatewayBaseUrl(host, port)}/api/health`, { signal: AbortSignal.timeout(800) })).ok;
+  } catch {
+    return false;
+  }
+}
+
+/** "0" reads as nothing; the number is what tells you a logon start failed. */
+export function describeLastRun(state: StartupTaskState): string {
+  if (state.lastRunAt === null) return "never";
+  const when = new Date(state.lastRunAt);
+  const at = Number.isNaN(when.getTime()) ? state.lastRunAt : when.toLocaleString();
+  if (state.lastResult === null) return at;
+  if (state.lastResult === 0) return `${at} (ok)`;
+  return `${at} (failed, result 0x${(state.lastResult >>> 0).toString(16).toUpperCase()})`;
+}
+
+async function actionStartupStatus(options: StartupOptions, service: StartupTaskController): Promise<void> {
+  try {
+    const config = await resolveStartupLaunchConfig(resolveDataDir(options.dataDir));
+    const state = await service.status();
+    const running = await gatewayIsHealthy(config.host, config.port);
+    out("[codex-router] login startup:");
+    out(`  task:     ${STARTUP_TASK_NAME}`);
+    out(`  status:   ${state.status.replace("_", " ")}`);
+    out("  trigger:  current user logon");
+    out(`  last run: ${describeLastRun(state)}`);
+    out(`  gateway:  ${running ? "running" : "stopped"}`);
+    if (state.lastResult !== null && state.lastResult !== 0) {
+      err("[codex-router] the last logon start failed; check the log file:");
+      err(`  ${config.logFile}`);
+    }
+  } catch (error) {
+    startupFailure("status", error);
+  }
+}
+
+function registerStartupCommand(program: Command, serviceFactory: () => StartupTaskController): void {
+  const startup = program
+    .command("startup")
+    .description("Manage automatic gateway startup when the current user logs on");
+  startup
+    .command("enable")
+    .description("Enable login startup using Windows Task Scheduler")
+    .option("--data-dir <path>", "data directory containing saved launch options")
+    .action((options: StartupOptions) => actionStartupEnable(options, serviceFactory()));
+  startup
+    .command("disable")
+    .description("Disable login startup without stopping the running gateway")
+    .action(() => actionStartupDisable(serviceFactory()));
+  startup
+    .command("status")
+    .description("Show login startup registration, the last run's result and gateway state")
+    .option("--data-dir <path>", "data directory containing saved launch options")
+    .action((options: StartupOptions) => actionStartupStatus(options, serviceFactory()));
+}
+
 // --- entry -----------------------------------------------------------------
 
-export function createProgram(): Command {
+export function createProgram(
+  dependencies: { startupService?: () => StartupTaskController } = {},
+): Command {
   const program = new Command();
   program.name("codex-router").description("Local transparent identity proxy for the Codex CLI").version(VERSION).showHelpAfterError();
 
@@ -787,6 +935,7 @@ export function createProgram(): Command {
     .action(actionLogs);
 
   registerConfigCommand(program);
+  registerStartupCommand(program, dependencies.startupService ?? createStartupTaskService);
 
   return program;
 }

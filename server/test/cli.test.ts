@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { accountChoices, createProgram, isEntryScript, isPortFree, restartOptions, startOverrides, stopManagedGateway } from "../src/cli.js";
+import { accountChoices, createProgram, describeLastRun, isEntryScript, isPortFree, resolveStartupLaunchConfig, restartOptions, startOverrides, stopManagedGateway } from "../src/cli.js";
 import { GatewayDatabase } from "../src/db/database.js";
 import { launchMetadataPath, parseLaunchMetadata, readLaunchMetadata, writeLaunchMetadata } from "../src/launch-metadata.js";
 
@@ -26,10 +26,12 @@ afterEach(() => {
   return Promise.all(temporary.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
-async function runCli(args: string[]): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+async function runCli(
+  args: string[],
+  program = createProgram(),
+): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
   const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
-  const program = createProgram();
   await program.parseAsync(args, { from: "user" });
   const out = stdout.mock.calls.map((call) => String(call[0])).join("");
   const err = stderr.mock.calls.map((call) => String(call[0])).join("");
@@ -503,5 +505,103 @@ describe("logs command", () => {
     const { stderr, exitCode } = await runCli(["logs", "--data-dir", dataDir]);
     expect(exitCode).toBe(1);
     expect(stderr).toContain("no log file");
+  });
+});
+
+describe("login startup commands", () => {
+  it("registers enable, disable and status without touching the start command", () => {
+    const startup = createProgram().commands.find((command) => command.name() === "startup");
+    expect(startup?.commands.map((command) => command.name())).toEqual(["enable", "disable", "status"]);
+  });
+
+  it("launches whatever the gateway was last started as, and falls back to the defaults", async () => {
+    const dataDir = await tempDir();
+    const saved = {
+      version: 1 as const,
+      host: "::1" as const,
+      port: 9444,
+      dataDir,
+      upstream: "https://example.test/backend-api/codex",
+      dev: true,
+      logLevel: "warn",
+      logFile: path.join(dataDir, "custom.log"),
+    };
+    await writeLaunchMetadata(dataDir, saved);
+    // The point of reusing the saved options: the task starts the same gateway
+    // the person starts by hand, on the same port and data directory.
+    expect(await resolveStartupLaunchConfig(dataDir)).toEqual(saved);
+
+    const fresh = await tempDir();
+    vi.stubEnv("NODE_ENV", "production");
+    expect(await resolveStartupLaunchConfig(fresh)).toMatchObject({
+      host: "127.0.0.1",
+      port: 8317,
+      dataDir: fresh,
+      dev: false,
+      logFile: path.join(fresh, "logs", "gateway.log"),
+    });
+  });
+
+  it("says what happened without printing the encoded task action", async () => {
+    const dataDir = await tempDir();
+    vi.stubEnv("NODE_ENV", "production");
+    const service = {
+      enable: vi.fn().mockResolvedValue(undefined),
+      disable: vi.fn().mockResolvedValue(undefined),
+      status: vi.fn().mockResolvedValue({ status: "enabled" as const, lastRunAt: null, lastResult: null }),
+    };
+    const program = () => createProgram({ startupService: () => service });
+
+    const enabled = await runCli(["startup", "enable", "--data-dir", dataDir], program());
+    expect(enabled.stdout).toContain("login startup enabled");
+    expect(enabled.stdout).toContain("current user logon");
+    expect(enabled.stdout).not.toContain("EncodedCommand");
+
+    const disabled = await runCli(["startup", "disable"], program());
+    expect(disabled.stdout).toContain("login startup disabled");
+    expect(disabled.stdout).toContain("was not stopped");
+    expect(service.disable).toHaveBeenCalledOnce();
+  });
+
+  it("surfaces a logon start that failed, which is what stayed hidden before", async () => {
+    const dataDir = await tempDir();
+    vi.stubEnv("NODE_ENV", "production");
+    const service = {
+      enable: vi.fn(),
+      disable: vi.fn(),
+      status: vi.fn().mockResolvedValue({
+        status: "enabled" as const,
+        lastRunAt: "2026-09-08T10:31:52.000Z",
+        lastResult: -1,
+      }),
+    };
+    const status = await runCli(
+      ["startup", "status", "--data-dir", dataDir],
+      createProgram({ startupService: () => service }),
+    );
+    expect(status.stdout).toContain("status:   enabled");
+    expect(status.stdout).toContain("failed, result 0xFFFFFFFF");
+    expect(status.stderr).toContain("the last logon start failed");
+  });
+
+  it("does not dress a task that has never run as a success", () => {
+    expect(describeLastRun({ status: "enabled", lastRunAt: null, lastResult: 0 })).toBe("never");
+    expect(describeLastRun({ status: "enabled", lastRunAt: "2026-09-08T10:31:52.000Z", lastResult: 0 })).toContain("(ok)");
+  });
+
+  it("refuses to register a task when it cannot reach Task Scheduler", async () => {
+    const dataDir = await tempDir();
+    vi.stubEnv("NODE_ENV", "production");
+    const service = {
+      enable: vi.fn().mockRejectedValue(new Error("startup_task_command_failed")),
+      disable: vi.fn(),
+      status: vi.fn(),
+    };
+    const failed = await runCli(
+      ["startup", "enable", "--data-dir", dataDir],
+      createProgram({ startupService: () => service }),
+    );
+    expect(failed.stderr).toContain("Windows Task Scheduler is unavailable");
+    expect(failed.exitCode).toBe(1);
   });
 });
