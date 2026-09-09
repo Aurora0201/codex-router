@@ -49,6 +49,8 @@ export interface AccountRecord {
   /** Priority for automatic switching; null sorts after every ranked account. */
   autoSwitchRank: number | null;
   autoSwitchEnrolled: boolean;
+  /** Whether this account takes part in warm-up at all. */
+  warmupEnrolled: boolean;
   createdAt: number;
   updatedAt: number;
 }

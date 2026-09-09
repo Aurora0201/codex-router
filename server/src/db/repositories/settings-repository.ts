@@ -3,7 +3,7 @@ import type Database from "better-sqlite3";
 type SqliteDatabase = Database.Database;
 
 export const LOG_LEVELS = ["debug", "info", "warn", "error"] as const;
-const ALLOWED_KEYS = new Set(["requestMetadataLogging", "theme", "logLevel", "autoSwitch"]);
+const ALLOWED_KEYS = new Set(["requestMetadataLogging", "theme", "logLevel", "autoSwitch", "warmup"]);
 
 export const ALL_BELOW_BEHAVIOURS = ["highest", "stay", "pause"] as const;
 export type AllBelowBehaviour = (typeof ALL_BELOW_BEHAVIOURS)[number];
@@ -92,6 +92,69 @@ function parseAutoSwitch(value: unknown): AutoSwitchSettings {
   };
 }
 
+/**
+ * A quota window only starts counting once something is spent on it, so an
+ * account nobody has touched today has a five-hour window that has not begun.
+ * Warm-up spends the smallest amount that starts one: one turn, one sentence.
+ */
+export interface WarmupSettings {
+  /**
+   * The gateway warming accounts up by itself, which means spending the user's
+   * quota without being asked. Off unless it is turned on, deliberately.
+   */
+  auto: boolean;
+  /** Empty means "whatever this account's default model is". */
+  model: string | null;
+  message: string;
+  /**
+   * How long an account is left alone after an attempt. An upstream that has
+   * not published the new window yet would otherwise be warmed again and again.
+   */
+  cooldownMs: number;
+  /** A five-hour window resets at most five times a day; more than this is a bug. */
+  dailyLimit: number;
+}
+
+export const WARMUP_DEFAULTS: WarmupSettings = {
+  auto: false,
+  model: null,
+  message: "回复 OK 即可，不要解释。",
+  cooldownMs: 15 * 60_000,
+  dailyLimit: 6,
+};
+
+/** Long enough to say anything useful, short enough that it stays a warm-up. */
+const MAX_WARMUP_MESSAGE = 500;
+
+function parseWarmup(value: unknown): WarmupSettings {
+  if (typeof value !== "object" || value === null) throw new Error("invalid_setting");
+  const input = value as Record<string, unknown>;
+
+  const auto = input.auto ?? WARMUP_DEFAULTS.auto;
+  if (typeof auto !== "boolean") throw new Error("invalid_setting");
+
+  const model = input.model ?? WARMUP_DEFAULTS.model;
+  if (model !== null && (typeof model !== "string" || model.length > 200)) throw new Error("invalid_setting");
+
+  // A blank box means the default rather than an empty turn, which the
+  // upstream would refuse anyway.
+  const rawMessage = input.message ?? WARMUP_DEFAULTS.message;
+  if (typeof rawMessage !== "string" || rawMessage.length > MAX_WARMUP_MESSAGE) throw new Error("invalid_setting");
+  const message = rawMessage.trim() === "" ? WARMUP_DEFAULTS.message : rawMessage;
+
+  const cooldownMs = input.cooldownMs ?? WARMUP_DEFAULTS.cooldownMs;
+  if (typeof cooldownMs !== "number" || !Number.isSafeInteger(cooldownMs) || cooldownMs < 60_000 || cooldownMs > 6 * 3_600_000) {
+    throw new Error("invalid_setting");
+  }
+
+  const dailyLimit = input.dailyLimit ?? WARMUP_DEFAULTS.dailyLimit;
+  if (typeof dailyLimit !== "number" || !Number.isSafeInteger(dailyLimit) || dailyLimit < 1 || dailyLimit > 48) {
+    throw new Error("invalid_setting");
+  }
+
+  return { auto, model: model === "" ? null : (model as string | null), message, cooldownMs, dailyLimit };
+}
+
 export class SettingsRepository {
   constructor(private readonly db: SqliteDatabase) {}
 
@@ -108,7 +171,8 @@ export class SettingsRepository {
         if (key === "requestMetadataLogging" && typeof value !== "boolean") throw new Error("invalid_setting");
         if (key === "theme" && !["system", "light", "dark"].includes(String(value))) throw new Error("invalid_setting");
         if (key === "logLevel" && !LOG_LEVELS.includes(value as (typeof LOG_LEVELS)[number])) throw new Error("invalid_setting");
-        statement.run(key, JSON.stringify(key === "autoSwitch" ? parseAutoSwitch(value) : value));
+        const parsed = key === "autoSwitch" ? parseAutoSwitch(value) : key === "warmup" ? parseWarmup(value) : value;
+        statement.run(key, JSON.stringify(parsed));
       }
     })();
     return this.get();
@@ -138,6 +202,21 @@ export class SettingsRepository {
       // A row written by a newer build must not take the gateway down; the
       // safe reading of an unreadable setting is "off".
       return { ...AUTO_SWITCH_DEFAULTS };
+    }
+  }
+
+  patchWarmup(patch: Partial<WarmupSettings>): WarmupSettings {
+    const next = { ...this.warmup(), ...patch };
+    return this.update({ warmup: next }).warmup as WarmupSettings;
+  }
+
+  warmup(): WarmupSettings {
+    const stored = this.get().warmup;
+    if (stored === undefined) return { ...WARMUP_DEFAULTS };
+    try {
+      return parseWarmup(stored);
+    } catch {
+      return { ...WARMUP_DEFAULTS };
     }
   }
 }

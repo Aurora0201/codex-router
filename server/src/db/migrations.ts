@@ -2,7 +2,7 @@ import type Database from "better-sqlite3";
 
 type SqliteDatabase = Database.Database;
 
-export const SCHEMA_VERSION = 19;
+export const SCHEMA_VERSION = 20;
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -450,6 +450,34 @@ export function migrate(db: SqliteDatabase): void {
       CREATE INDEX IF NOT EXISTS idx_websocket_connection_started_id ON websocket_connection_log(started_at DESC, id DESC);
       DROP INDEX IF EXISTS idx_request_log_started;
       DROP INDEX IF EXISTS idx_websocket_connection_started;
+    `);
+  }
+
+  if (version < 20) {
+    const warmupColumns = tableColumns(db, "accounts");
+    if (!warmupColumns.has("warmup_enrolled")) {
+      db.exec("ALTER TABLE accounts ADD COLUMN warmup_enrolled INTEGER NOT NULL DEFAULT 1");
+    }
+    // Warm-up spends the user's quota, and the automatic mode spends it
+    // without being asked each time. Same reasoning as the switch log: the
+    // trace is part of the feature, not an optional log. It also carries the
+    // window before and after, because "did it succeed" is not the question —
+    // "did the window actually start" is.
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS account_warmup_log (
+        id TEXT PRIMARY KEY,
+        started_at INTEGER NOT NULL,
+        account_id TEXT NOT NULL,
+        trigger TEXT NOT NULL,
+        outcome TEXT NOT NULL,
+        model TEXT,
+        duration_ms INTEGER,
+        error_code TEXT,
+        window_before_resets_at INTEGER,
+        window_after_resets_at INTEGER
+      );
+      CREATE INDEX IF NOT EXISTS account_warmup_log_at ON account_warmup_log(started_at DESC);
+      CREATE INDEX IF NOT EXISTS account_warmup_log_account ON account_warmup_log(account_id, started_at DESC);
     `);
   }
 

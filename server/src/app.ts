@@ -8,6 +8,7 @@ import { loadConfig } from "./config.js";
 import { AccountOperationLock } from "./accounts/account-lock.js";
 import { AccountService } from "./accounts/account-service.js";
 import { AccountLoginService } from "./accounts/account-login-service.js";
+import { AccountWarmupService } from "./accounts/account-warmup-service.js";
 import { AccountAuthService } from "./accounts/account-auth-service.js";
 import { AccountUsageService } from "./accounts/account-usage-service.js";
 import { AccountStatusService } from "./accounts/account-status-service.js";
@@ -139,6 +140,12 @@ export async function buildGateway(overrides: Partial<GatewayConfig> = {}, optio
       app.log.warn({ err: error }, "auto_switch_evaluation_failed");
     }
   };
+  /**
+   * Assigned once the warm-up service exists. The cycle is real: the status
+   * refresh is what reveals a lapsed window, and warming one needs the status
+   * service to read the new window back.
+   */
+  let autoWarm: () => void = () => undefined;
   // Quota readings only change on a refresh, so that is the moment worth
   // re-deciding on — and a refresh that failed is the moment an account stops
   // being able to serve. The switch itself is the same select() a person
@@ -148,7 +155,48 @@ export async function buildGateway(overrides: Partial<GatewayConfig> = {}, optio
     const account = database.accounts.get(accountId);
     const routable = ok && account?.enabled === true && account.authStatus === "ready";
     reEvaluateRouting(routable ? { kind: "quota" } : { kind: "unavailable", accountId });
+    autoWarm();
   }, accountOperations);
+  const warmup = new AccountWarmupService(config, database, accountStatus, () => events.invalidate("warmup"));
+  /**
+   * A warm-up pass plus the reporting the service itself does not do. Quota
+   * moves during a run, so the router is asked to look again once it is over —
+   * otherwise routing could sit on an account the warm-up just pushed under a
+   * threshold.
+   */
+  const runWarmup = async (options: { trigger: "manual" | "auto"; force?: boolean; accountIds?: string[] }): Promise<void> => {
+    try {
+      const result = await warmup.run(options);
+      const warmed = result.results.filter((entry) => entry.outcome === "warmed").length;
+      const failed = result.results.filter((entry) => entry.outcome === "failed").length;
+      app.log.info({ trigger: options.trigger, warmed, failed, total: result.results.length }, "warmup_run_finished");
+    } catch (error) {
+      // A second run asked for while one is going is the caller's answer to
+      // give, not something the gateway should fall over on.
+      if ((error as Error).message !== "warmup_already_running") {
+        app.log.warn({ err: error }, "warmup_run_failed");
+      }
+    } finally {
+      events.invalidate("accounts", "warmup");
+      reEvaluateRouting({ kind: "quota" });
+    }
+  };
+  /**
+   * A window that has lapsed is the moment worth warming, and a status refresh
+   * is when that becomes visible — including the first refresh after a logon,
+   * which is the case this exists for: the machine was off all night, so every
+   * five-hour window expired long ago.
+   *
+   * It stays off unless it is turned on. This is the gateway spending the
+   * user's quota without being asked each time, so the guards inside the
+   * service — a per-account cooldown and a daily ceiling counted from the log
+   * — are what keep a wrong decision from becoming an expensive one.
+   */
+  autoWarm = () => {
+    if (!backgroundTasks || !database.settings.warmup().auto) return;
+    if (warmup.isRunning() || warmup.autoTargets().length === 0) return;
+    void runWarmup({ trigger: "auto" });
+  };
   const auth = new AccountAuthService(database, accountStatus);
   const usage = new AccountUsageService(accountStatus, backgroundTasks);
   const proxy = new HttpProxy({
@@ -170,7 +218,7 @@ export async function buildGateway(overrides: Partial<GatewayConfig> = {}, optio
   database.requestLog.onFinished = (id) => { events.emitActivity({ type: "request_finished", id }); events.invalidate("stats", "logs"); };
   database.websocketConnectionLog.onUpdated = (connectionId) => { events.emitActivity({ type: "connection_updated", connectionId }); events.invalidate("logs"); };
 
-  const adminContext = { config, database, accounts, auth, usage, accountStatus, autoSwitch, reEvaluateRouting, logins, activeAccounts, csrf, startedAt, events, codexProcess, websocketConnections, codexUsage };
+  const adminContext = { config, database, accounts, auth, usage, accountStatus, autoSwitch, reEvaluateRouting, warmup, runWarmup, logins, activeAccounts, csrf, startedAt, events, codexProcess, websocketConnections, codexUsage };
   registerLocalStatusRoutes(app, adminContext);
   await registerAdminApi(app, adminContext, codexConfig);
   await registerWebSocketProxy(app, { upstreamBaseUrl: config.upstreamBaseUrl, activeAccounts, auth, usage, database, websocketConnections });
