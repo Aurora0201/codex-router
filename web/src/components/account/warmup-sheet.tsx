@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   FlameIcon,
   HistoryIcon,
@@ -183,12 +183,15 @@ export function WarmupButton({
   }, [open, models, service])
 
   const settings = state?.settings ?? null
-  const byId = useRef(new Map<string, string>())
-  byId.current = new Map(
-    accounts.map((account) => [
-      account.id,
-      shortAccountId(account.chatgptAccountId),
-    ])
+  const byId = useMemo(
+    () =>
+      new Map(
+        accounts.map((account) => [
+          account.id,
+          shortAccountId(account.chatgptAccountId),
+        ])
+      ),
+    [accounts]
   )
 
   const pending = (state?.accounts ?? []).filter(
@@ -362,7 +365,10 @@ export function WarmupButton({
                           patch({ model: value === "" ? null : String(value) })
                         }
                       >
-                        <SelectTrigger id="warmup-model" aria-label={t("使用模型")}>
+                        <SelectTrigger
+                          id="warmup-model"
+                          aria-label={t("使用模型")}
+                        >
                           <SelectValue>
                             {settings.model === null
                               ? t("跟随账号默认")
@@ -431,7 +437,7 @@ export function WarmupButton({
                       >
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-sm font-medium">
-                            {byId.current.get(account.id) ?? account.id}
+                            {byId.get(account.id) ?? account.id}
                           </span>
                           <span className="block truncate text-xs text-muted-foreground-subtle">
                             {!account.eligible
@@ -449,7 +455,7 @@ export function WarmupButton({
                             toggleAccount(account.id, value)
                           }
                           aria-label={t("{{account}} 参与预热", {
-                            account: byId.current.get(account.id) ?? account.id,
+                            account: byId.get(account.id) ?? account.id,
                           })}
                         />
                       </li>
@@ -486,9 +492,7 @@ export function WarmupButton({
                         <LogRow
                           key={entry.id}
                           entry={entry}
-                          label={
-                            byId.current.get(entry.accountId) ?? entry.accountId
-                          }
+                          label={byId.get(entry.accountId) ?? entry.accountId}
                         />
                       ))}
                     </ul>
