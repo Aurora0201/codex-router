@@ -786,8 +786,12 @@ export const en = {
   不可用: "Unavailable",
   "窗口计时中 · {{time}} 重置": "Counting · resets {{time}}",
   窗口未开始: "Window not started",
-  "预热直接用账号自己的身份发送，不经过路由，因此不会出现在请求日志里。":
-    "Warm-up sends on the account's own identity rather than through routing, so these turns never appear in the request log.",
+  "预热直接用账号自己的身份发送，不经过路由，因此不会出现在请求日志里。强制预热会给正在计时的窗口也发一条，但那不会重启或延长它。":
+    "Warm-up sends on the account's own identity rather than through routing, so these turns never appear in the request log. Forcing one sends on a window that is already counting too, which neither restarts nor extends it.",
+  "上次 {{time}} · 下个窗口 {{next}} 到期":
+    "Last {{time}} · next window ends {{next}}",
+  "下个窗口 {{next}} 到期": "Next window ends {{next}}",
+  待命中: "Armed",
   全部强制预热: "Warm up all anyway",
   预热记录: "Warm-up history",
   还没有预热记录: "No warm-ups yet",

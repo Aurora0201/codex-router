@@ -244,7 +244,7 @@ export class AccountWarmupService {
     if (options.trigger === "manual" && options.force) return null;
     const last = this.database.warmupLog.lastAttemptAt(account.id);
     if (last !== null && Date.now() - last < settings.cooldownMs) return "cooldown";
-    if (this.database.warmupLog.countSince(account.id, Date.now() - DAY_MS) >= settings.dailyLimit) return "daily_limit";
+    if (this.database.warmupLog.countSince(account.id, Date.now() - DAY_MS, "auto") >= settings.dailyLimit) return "daily_limit";
     return null;
   }
 

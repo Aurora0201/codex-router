@@ -95,15 +95,23 @@ export class WarmupLogRepository {
   }
 
   /**
-   * Attempts on one account since a moment. The daily cap reads this, so a bug
-   * that keeps deciding an account needs warming cannot drain it: the ceiling
-   * survives a restart because it is counted from the log rather than held in
-   * memory.
+   * Attempts on one account since a moment, optionally only the ones with a
+   * given trigger. The daily cap reads this, so a bug that keeps deciding an
+   * account needs warming cannot drain it: the ceiling survives a restart
+   * because it is counted from the log rather than held in memory.
+   *
+   * The cap counts automatic attempts only. It exists to bound what the gateway
+   * spends on its own; a person warming an account by hand is not the gateway
+   * deciding anything, and should not use up its allowance.
    */
-  countSince(accountId: string, since: number): number {
+  countSince(accountId: string, since: number, trigger?: WarmupTrigger): number {
     const row = this.db
-      .prepare("SELECT COUNT(*) AS n FROM account_warmup_log WHERE account_id = ? AND started_at >= ? AND outcome != 'skipped'")
-      .get(accountId, since) as { n: number };
+      .prepare(
+        `SELECT COUNT(*) AS n FROM account_warmup_log
+         WHERE account_id = ? AND started_at >= ? AND outcome != 'skipped'
+           AND (? IS NULL OR trigger = ?)`,
+      )
+      .get(accountId, since, trigger ?? null, trigger ?? null) as { n: number };
     return Number(row.n);
   }
 

@@ -214,6 +214,29 @@ export function WarmupButton({
       : models?.find((model) => model.id === settings.model)
     )?.efforts ?? []
 
+  /**
+   * What the automatic pass has done and when it can next matter. Without it
+   * "nothing happened" and "it looked and there was nothing to do" are the
+   * same sight — which is what sent someone to force a run that turned out to
+   * change nothing.
+   */
+  const lastAuto = state?.recent.find((entry) => entry.trigger === "auto")
+  const nextDue = (state?.accounts ?? [])
+    .filter((account) => account.enrolled && account.eligible)
+    .map((account) => account.windowResetsAt)
+    .filter((resetsAt): resetsAt is number => resetsAt !== null)
+    .sort((a, b) => a - b)[0]
+  const autoHint = !settings?.auto
+    ? undefined
+    : lastAuto
+      ? t("上次 {{time}} · 下个窗口 {{next}} 到期", {
+          time: resetClock(lastAuto.startedAt),
+          next: nextDue === undefined ? "—" : resetClock(nextDue),
+        })
+      : nextDue === undefined
+        ? t("待命中")
+        : t("下个窗口 {{next}} 到期", { next: resetClock(nextDue) })
+
   const pending = (state?.accounts ?? []).filter(
     (account) => account.enrolled && account.eligible && !account.windowRunning
   )
@@ -354,6 +377,7 @@ export function WarmupButton({
                 <Section
                   title={t("窗口重置后自动预热")}
                   icon={TimerResetIcon}
+                  hint={autoHint}
                   description={t(
                     "网关看到某个账号的 5 小时窗口过期就补一条。开机后的第一次状态刷新也算，所以早上开机会自动补齐。"
                   )}
@@ -531,10 +555,12 @@ export function WarmupButton({
                   </ul>
                   <div className="mt-3 flex items-center justify-between gap-3">
                     <p className="text-xs text-muted-foreground">
-                      {/* Said here because it is the one surprising thing:
-                          these turns never appear in the request log. */}
+                      {/* Two surprising things, both worth saying once: these
+                          turns never reach the request log, and forcing one on
+                          a window that is already counting spends quota
+                          without moving anything. */}
                       {t(
-                        "预热直接用账号自己的身份发送，不经过路由，因此不会出现在请求日志里。"
+                        "预热直接用账号自己的身份发送，不经过路由，因此不会出现在请求日志里。强制预热会给正在计时的窗口也发一条，但那不会重启或延长它。"
                       )}
                     </p>
                     <Button

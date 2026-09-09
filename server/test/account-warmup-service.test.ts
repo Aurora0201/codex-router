@@ -150,6 +150,23 @@ describe("account warm-up", () => {
     expect(run.results[0]).toMatchObject({ outcome: "skipped", skipped: "daily_limit" })
   })
 
+  it("does not let a hand-run warm-up eat the automatic allowance", async () => {
+    const { database, warmup } = await fixture(1)
+    setShortWindow(database, "account-1", null)
+    const settings = database.settings.warmup()
+    for (let i = 0; i < settings.dailyLimit; i += 1) {
+      database.warmupLog.record({
+        startedAt: Date.now() - settings.cooldownMs - 1000 * (i + 1), accountId: "account-1",
+        trigger: "manual", outcome: "warmed", model: "m", durationMs: 1, errorCode: null,
+        windowBeforeResetsAt: null, windowAfterResetsAt: null,
+      })
+    }
+    // The ceiling bounds what the gateway spends on its own. A person warming
+    // an account by hand is not the gateway deciding anything.
+    const run = await warmup.run({ trigger: "auto" })
+    expect(run.results[0]).toMatchObject({ outcome: "warmed" })
+  })
+
   it("records a failed turn as a classified code, never the upstream message", async () => {
     const { database, warmup, homes } = await fixture(1)
     setShortWindow(database, "account-1", null)
