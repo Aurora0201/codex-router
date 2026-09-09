@@ -125,6 +125,10 @@ export async function buildGateway(overrides: Partial<GatewayConfig> = {}, optio
   const accounts = new AccountService(config, database, activeAccounts, accountOperations);
   const logins = new AccountLoginService(config, database);
   await logins.cleanupStaleStaging();
+  // Credentials a half-finished login left behind. Swept here because no login
+  // can be in flight yet, which is what makes "has no row" mean "is garbage".
+  const orphans = await accounts.cleanupOrphanDirectories();
+  if (orphans.length > 0) app.log.info({ count: orphans.length }, "orphan_account_directories_removed");
   const csrf = new CsrfGuard();
   const events = new AdminEventHub();
   const autoSwitch = new AutoSwitchService(database, activeAccounts);
