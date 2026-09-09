@@ -59,6 +59,7 @@ import { accountWindowSlots, remainingPercent } from "@/lib/account-state"
 import { formatRelativeTime, shortAccountId } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type {
+  AccountsResponse,
   AccountView,
   AllBelowBehaviour,
   AutoSwitchSettingsView,
@@ -344,17 +345,20 @@ function PriorityRow({
  * armed, and the sheet holding everything behind it.
  */
 export function AutoSwitchButton({
-  accounts,
-  activeAccountId,
+  routing,
   service,
-  disabled,
 }: {
-  accounts: AccountView[]
-  activeAccountId: string | null
+  /**
+   * The accounts and the routed one, exactly as the gateway last reported
+   * them. A new object arrives on every gateway tick, and that identity is
+   * the beat this button re-reads its own state on — see `beat` below.
+   */
+  routing: AccountsResponse
   service: GatewayService
-  disabled?: boolean
 }) {
   const { t } = useTranslation()
+  const { accounts, activeAccountId } = routing
+  const disabled = accounts.length === 0
   const [open, setOpen] = useState(false)
   const [state, setState] = useState<AutoSwitchView | null>(null)
   const [order, setOrder] = useState<string[]>([])
@@ -370,8 +374,22 @@ export function AutoSwitchButton({
     accountsRef.current = accounts
   }, [accounts])
 
-  // Read once so the button can say whether switching is armed, and again on
-  // every open so the ranking and the log are the gateway's, not a stale copy.
+  /**
+   * Auto-switch state is not part of the page's snapshot, so nothing else
+   * refreshes it. Without a beat the one read at mount is the only one there
+   * is, and a read that loses the race with a gateway coming back up leaves
+   * the button saying "off" for as long as the page stays open — the only
+   * way back was to open the sheet, which reads again.
+   *
+   * So it re-reads whenever the gateway hands the page a new set of accounts,
+   * which also keeps the armed/paused badge honest while the sheet is shut.
+   * Not while it is open, though: there its own state leads, and a re-read
+   * mid-drag re-seats the list under the hand moving it.
+   */
+  const beat = open ? null : routing
+
+  // Read on that beat, and again on every open so the ranking and the log are
+  // the gateway's rather than a stale copy.
   useEffect(() => {
     let cancelled = false
     void service
@@ -404,7 +422,7 @@ export function AutoSwitchButton({
     return () => {
       cancelled = true
     }
-  }, [open, service, attempt])
+  }, [open, service, attempt, beat])
 
   // FLIP: where each row sat before the order changed, so it can be played
   // back from there into its new seat instead of teleporting.

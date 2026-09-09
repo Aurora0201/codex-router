@@ -233,12 +233,7 @@ export function AccountsPage({
           {/* Routing policy is a page-level control, not a trailing action on
               the route band — and being on is worth seeing without opening
               anything. */}
-          <AutoSwitchButton
-            accounts={accounts}
-            activeAccountId={activeAccountId}
-            service={service}
-            disabled={accounts.length === 0}
-          />
+          <AutoSwitchButton routing={snapshot.accounts} service={service} />
           <Button
             className="h-9 flex-1 rounded-xl sm:flex-none"
             variant="outline"
