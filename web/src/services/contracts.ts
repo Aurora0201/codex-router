@@ -171,6 +171,8 @@ export interface WarmupSettingsView {
   auto: boolean
   /** null means "whatever this account's own default model is". */
   model: string | null
+  /** How hard the model thinks; null leaves the model's own default. */
+  effort: string | null
   message: string
   cooldownMs: number
   dailyLimit: number
@@ -180,6 +182,9 @@ export interface WarmupModelView {
   id: string
   displayName: string
   isDefault: boolean
+  /** Which efforts this model takes, in the catalog's own order. */
+  efforts: { id: string; description: string }[]
+  defaultEffort: string | null
 }
 
 export type WarmupSkipReason =

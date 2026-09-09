@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
@@ -41,6 +41,14 @@ async function fixture(count = 2) {
   services.push(status)
   const warmup = new AccountWarmupService(config, database, status)
   return { root, config, database, status, warmup, homes }
+}
+
+/** What the fake app-server was actually asked, in order. */
+function rpcCalls(log: string): { method: string; params: Record<string, unknown> }[] {
+  return log
+    .split(/\r?\n/)
+    .filter((line) => line.trim().length > 0)
+    .map((line) => JSON.parse(line) as { method: string; params: Record<string, unknown> })
 }
 
 /** Put an account's short window where the test needs it. */
@@ -187,10 +195,51 @@ describe("account warm-up", () => {
 
   it("offers the account's model catalog for the picker", async () => {
     const { warmup } = await fixture(1)
+    // The efforts come with the model, because which ones a model takes is a
+    // property of the model rather than something this gateway can hardcode.
     expect(await warmup.models()).toEqual([
-      { id: "gpt-fake-default", displayName: "Fake Default", isDefault: true },
-      { id: "gpt-fake-mini", displayName: "Fake Mini", isDefault: false },
+      {
+        id: "gpt-fake-default",
+        displayName: "Fake Default",
+        isDefault: true,
+        defaultEffort: "medium",
+        efforts: [
+          { id: "low", description: "Fast" },
+          { id: "medium", description: "Balanced" },
+        ],
+      },
+      {
+        id: "gpt-fake-mini",
+        displayName: "Fake Mini",
+        isDefault: false,
+        defaultEffort: "low",
+        efforts: [{ id: "low", description: "Fast" }],
+      },
     ])
+  })
+
+  it("sends the chosen reasoning effort with the turn", async () => {
+    const { database, warmup, homes } = await fixture(1)
+    setShortWindow(database, "account-1", null)
+    database.settings.patchWarmup({ effort: "low" })
+
+    await warmup.run({ trigger: "manual" })
+    const log = rpcCalls(await readFile(path.join(homes[0], "rpc.log"), "utf8"))
+    const turn = log.find((entry) => entry.method === "turn/start")
+    // Warm-up should think as little as the model allows: it only has to
+    // acknowledge one sentence.
+    expect(turn.params.effort).toBe("low")
+  })
+
+  it("leaves the effort off entirely when none is chosen", async () => {
+    const { database, warmup, homes } = await fixture(1)
+    setShortWindow(database, "account-1", null)
+
+    await warmup.run({ trigger: "manual" })
+    const log = rpcCalls(await readFile(path.join(homes[0], "rpc.log"), "utf8"))
+    const turn = log.find((entry) => entry.method === "turn/start")
+    // Omitted means the model's own default, not some value picked here.
+    expect(turn.params).not.toHaveProperty("effort")
   })
 
   it("keeps accounts that opted out of warm-up out of the run", async () => {

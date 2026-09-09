@@ -192,9 +192,23 @@ export function AccountList({
             >
               <RouteIcon aria-hidden="true" className="size-[18px]" />
             </span>
-            <div className="min-w-0">
-              <p className="text-xs text-muted-foreground-subtle">
-                {t("当前请求路由")}
+            <div data-slot="route-identity" className="min-w-0">
+              {/* The condition takes the caption's line rather than adding a
+                  third one. A band that grows when something goes wrong moves
+                  the whole page, and "当前请求路由" is the line worth losing:
+                  the icon and the position already say what the id below is,
+                  while the condition is the thing that has to be read. */}
+              <p
+                className={cn(
+                  "truncate text-xs",
+                  !routeBlock
+                    ? "text-muted-foreground-subtle"
+                    : routeBlock.kind === "unavailable"
+                      ? "font-medium text-destructive"
+                      : "font-medium text-warning"
+                )}
+              >
+                {routeBlock ? routeBlock.detail : t("当前请求路由")}
               </p>
               <p
                 className={cn(
@@ -206,21 +220,6 @@ export function AccountList({
                   ? shortAccountId(active.chatgptAccountId)
                   : t("尚未选择路由账号 · 请求使用 Codex 当前登录账号透传")}
               </p>
-              {/* The band is where the reader already looks for the routed
-                  account's condition, so the condition is said here rather
-                  than in a banner that pushed the whole page down. */}
-              {routeBlock ? (
-                <p
-                  className={cn(
-                    "mt-0.5 truncate text-xs font-medium",
-                    routeBlock.kind === "unavailable"
-                      ? "text-destructive"
-                      : "text-warning"
-                  )}
-                >
-                  {routeBlock.detail}
-                </p>
-              ) : null}
             </div>
           </div>
           {/* Readings on the left of the rule, the things you can do on the

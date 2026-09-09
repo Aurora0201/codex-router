@@ -51,6 +51,18 @@ import type {
   WarmupView,
 } from "@/services/contracts"
 
+/** The catalog's effort ids, said in the user's terms. */
+const EFFORT_LABEL: Record<string, string> = {
+  none: "不思考",
+  minimal: "极低",
+  low: "低",
+  medium: "中",
+  high: "高",
+  xhigh: "很高",
+  max: "最高",
+  ultra: "极高",
+}
+
 /** Codes the gateway classifies a failure into, said in the user's terms. */
 const ERROR_LABEL: Record<string, string> = {
   relogin_required: "需要重新登录",
@@ -193,6 +205,14 @@ export function WarmupButton({
       ),
     [accounts]
   )
+
+  // Which efforts are on offer belongs to the model, so the list follows the
+  // picker above it rather than being a fixed set this console invented.
+  const efforts =
+    (settings?.model === null || settings?.model === undefined
+      ? (models?.find((model) => model.isDefault) ?? models?.[0])
+      : models?.find((model) => model.id === settings.model)
+    )?.efforts ?? []
 
   const pending = (state?.accounts ?? []).filter(
     (account) => account.enrolled && account.eligible && !account.windowRunning
@@ -391,6 +411,47 @@ export function WarmupButton({
                           </SelectGroup>
                         </SelectContent>
                       </Select>
+                    </div>
+                    <div className="grid gap-1.5">
+                      <label
+                        className="text-sm font-medium"
+                        htmlFor="warmup-effort"
+                      >
+                        {t("思考强度")}
+                      </label>
+                      <Select
+                        value={settings.effort ?? ""}
+                        onValueChange={(value) =>
+                          patch({ effort: value === "" ? null : String(value) })
+                        }
+                      >
+                        <SelectTrigger
+                          id="warmup-effort"
+                          aria-label={t("思考强度")}
+                        >
+                          <SelectValue>
+                            {settings.effort === null
+                              ? t("跟随模型默认")
+                              : (EFFORT_LABEL[settings.effort] ??
+                                settings.effort)}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectGroup>
+                            <SelectItem value="">
+                              {t("跟随模型默认")}
+                            </SelectItem>
+                            {efforts.map((effort) => (
+                              <SelectItem key={effort.id} value={effort.id}>
+                                {EFFORT_LABEL[effort.id] ?? effort.id}
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        {t("一句问候不需要想太久，越低越省额度。")}
+                      </p>
                     </div>
                     <div className="grid gap-1.5">
                       <label

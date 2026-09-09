@@ -767,6 +767,18 @@ export const en = {
   所有账号相同: "Same for every account",
   使用模型: "Model",
   跟随账号默认: "Each account's own default",
+  思考强度: "Reasoning effort",
+  跟随模型默认: "The model's own default",
+  "一句问候不需要想太久，越低越省额度。":
+    "One sentence does not need much thought, and lower costs less.",
+  不思考: "None",
+  极低: "Minimal",
+  低: "Low",
+  中: "Medium",
+  高: "High",
+  很高: "Extra high",
+  最高: "Max",
+  极高: "Ultra",
   发送内容: "Message",
   "留空恢复默认。越短越省额度。":
     "Leave it empty for the default. Shorter costs less.",

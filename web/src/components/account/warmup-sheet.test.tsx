@@ -21,6 +21,7 @@ function mount(view?: Partial<WarmupView>) {
       settings: {
         auto: false,
         model: null,
+        effort: null,
         message: "回复 OK 即可，不要解释。",
         cooldownMs: 15 * 60_000,
         dailyLimit: 6,
@@ -37,9 +38,7 @@ function mount(view?: Partial<WarmupView>) {
       ...view,
     })
   }
-  render(
-    <WarmupButton routing={service.snapshot.accounts} service={service} />
-  )
+  render(<WarmupButton routing={service.snapshot.accounts} service={service} />)
   return service
 }
 
@@ -69,6 +68,7 @@ describe("WarmupButton", () => {
       settings: {
         auto: false,
         model: null,
+        effort: null,
         message: "hi",
         cooldownMs: 15 * 60_000,
         dailyLimit: 6,
@@ -97,6 +97,7 @@ describe("WarmupButton", () => {
       settings: {
         auto: false,
         model: null,
+        effort: null,
         message: "hi",
         cooldownMs: 15 * 60_000,
         dailyLimit: 6,
@@ -213,6 +214,27 @@ describe("WarmupButton", () => {
     expect(
       await screen.findByRole("combobox", { name: "使用模型" })
     ).toHaveTextContent("跟随账号默认")
+  })
+
+  it("offers the efforts the chosen model takes, and the model's own default", async () => {
+    const service = mount({})
+    const save = vi.spyOn(service, "saveWarmup")
+    await userEvent.click(screen.getByRole("button", { name: "预热设置" }))
+
+    const effort = await screen.findByRole("combobox", { name: "思考强度" })
+    expect(effort).toHaveTextContent("跟随模型默认")
+    await userEvent.click(effort)
+    // Which efforts exist belongs to the model, not to this console; the
+    // fixture's default model takes low and medium.
+    const options = await screen.findAllByRole("option")
+    expect(options.map((option) => option.textContent)).toEqual([
+      "跟随模型默认",
+      "低",
+      "中",
+    ])
+
+    await userEvent.click(screen.getByRole("option", { name: "低" }))
+    expect(save).toHaveBeenCalledWith({ effort: "low" })
   })
 
   it("explains the gateway that does not know the route, and retries", async () => {

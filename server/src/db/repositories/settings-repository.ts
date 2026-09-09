@@ -105,6 +105,12 @@ export interface WarmupSettings {
   auto: boolean;
   /** Empty means "whatever this account's default model is". */
   model: string | null;
+  /**
+   * How hard the model thinks about a sentence it only has to acknowledge.
+   * null leaves the model's own default; the point of warm-up is to spend the
+   * least that still starts the window, so lower is usually right.
+   */
+  effort: string | null;
   message: string;
   /**
    * How long an account is left alone after an attempt. An upstream that has
@@ -118,6 +124,7 @@ export interface WarmupSettings {
 export const WARMUP_DEFAULTS: WarmupSettings = {
   auto: false,
   model: null,
+  effort: null,
   message: "回复 OK 即可，不要解释。",
   cooldownMs: 15 * 60_000,
   dailyLimit: 6,
@@ -136,6 +143,11 @@ function parseWarmup(value: unknown): WarmupSettings {
   const model = input.model ?? WARMUP_DEFAULTS.model;
   if (model !== null && (typeof model !== "string" || model.length > 200)) throw new Error("invalid_setting");
 
+  // Not validated against a fixed list: the catalog says which efforts a model
+  // takes, and it grows without this gateway being rebuilt.
+  const effort = input.effort ?? WARMUP_DEFAULTS.effort;
+  if (effort !== null && (typeof effort !== "string" || effort.length > 40)) throw new Error("invalid_setting");
+
   // A blank box means the default rather than an empty turn, which the
   // upstream would refuse anyway.
   const rawMessage = input.message ?? WARMUP_DEFAULTS.message;
@@ -152,7 +164,14 @@ function parseWarmup(value: unknown): WarmupSettings {
     throw new Error("invalid_setting");
   }
 
-  return { auto, model: model === "" ? null : (model as string | null), message, cooldownMs, dailyLimit };
+  return {
+    auto,
+    model: model === "" ? null : (model as string | null),
+    effort: effort === "" ? null : (effort as string | null),
+    message,
+    cooldownMs,
+    dailyLimit,
+  };
 }
 
 export class SettingsRepository {

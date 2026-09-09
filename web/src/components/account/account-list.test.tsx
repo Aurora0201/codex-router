@@ -413,4 +413,37 @@ describe("AccountList", () => {
       creditId: "credit-1",
     })
   })
+  it("says the routed account's condition without growing the band", () => {
+    const routed = account({ id: "acct-1", isActive: true })
+    const lines = () =>
+      Array.from(
+        document
+          .querySelector("[data-slot=route-identity]")!
+          .querySelectorAll("p")
+      ).map((line) => line.textContent)
+
+    const { rerender } = renderList([routed])
+    expect(lines()).toEqual(["当前请求路由", "acct-alpha"])
+
+    // A band that grew a third line when something went wrong moved the whole
+    // page down. The condition takes the caption's line instead: the icon and
+    // the position already say what the id below it is.
+    rerender(
+      <TooltipProvider>
+        <AccountList
+          accounts={[routed]}
+          activeAccountId="acct-1"
+          busyId={null}
+          onSelect={vi.fn()}
+          onClearRoute={vi.fn()}
+          onAction={vi.fn()}
+          routeBlock={{
+            kind: "exhausted",
+            detail: "额度已耗尽 · 4 小时后恢复",
+          }}
+        />
+      </TooltipProvider>
+    )
+    expect(lines()).toEqual(["额度已耗尽 · 4 小时后恢复", "acct-alpha"])
+  })
 })

@@ -12,6 +12,9 @@ export interface WarmupModel {
   id: string;
   displayName: string;
   isDefault: boolean;
+  /** Which reasoning efforts this model takes, in the catalog's own order. */
+  efforts: { id: string; description: string }[];
+  defaultEffort: string | null;
 }
 
 export type WarmupSkipReason = "window_running" | "cooldown" | "daily_limit" | "not_enrolled" | "not_ready";
@@ -154,10 +157,19 @@ export class AccountWarmupService {
       return data.map((entry) => {
         const model = object(entry);
         const id = typeof model.id === "string" ? model.id : "";
+        const efforts = Array.isArray(model.supportedReasoningEfforts) ? model.supportedReasoningEfforts : [];
         return {
           id,
           displayName: typeof model.displayName === "string" ? model.displayName : id,
           isDefault: model.isDefault === true,
+          efforts: efforts.map((value) => {
+            const effort = object(value);
+            return {
+              id: typeof effort.reasoningEffort === "string" ? effort.reasoningEffort : "",
+              description: typeof effort.description === "string" ? effort.description : "",
+            };
+          }).filter((effort) => effort.id.length > 0),
+          defaultEffort: typeof model.defaultReasoningEffort === "string" ? model.defaultReasoningEffort : null,
         };
       }).filter((model) => model.id.length > 0);
     });
@@ -249,7 +261,7 @@ export class AccountWarmupService {
 
     try {
       model = await withAppServerClient(this.config, account.codexHome, (client) =>
-        this.sendTurn(client, settings.model, settings.message, work));
+        this.sendTurn(client, settings, work));
     } catch (error) {
       errorCode = safeWarmupError(error);
     }
@@ -275,7 +287,12 @@ export class AccountWarmupService {
   }
 
   /** thread/start, then one turn, then wait for the turn to come back. */
-  private async sendTurn(client: AppServerClient, model: string | null, message: string, cwd: string): Promise<string | null> {
+  private async sendTurn(
+    client: AppServerClient,
+    settings: { model: string | null; effort: string | null; message: string },
+    cwd: string,
+  ): Promise<string | null> {
+    const { model, effort, message } = settings;
     const thread = object(await client.call("thread/start", {
       ...(model ? { model } : {}),
       // A model this subscription cannot use falls back to the account's own
@@ -293,6 +310,9 @@ export class AccountWarmupService {
       const started = object(await client.call("turn/start", {
         threadId,
         input: [{ type: "text", text: message }],
+        // Overrides the thread's effort for this turn. Omitted leaves the
+        // model's own default, which is what "跟随模型默认" means.
+        ...(effort ? { effort } : {}),
       }, 60_000));
       const usedModel = typeof started.model === "string" ? started.model : null;
       await completed;

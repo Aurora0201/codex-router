@@ -39,6 +39,7 @@ const account = (id: string, isActive = false): AccountView => ({
 const WARMUP: WarmupSettingsView = {
   auto: false,
   model: null,
+  effort: null,
   message: "回复 OK 即可，不要解释。",
   cooldownMs: 15 * 60_000,
   dailyLimit: 6,
@@ -318,11 +319,18 @@ export function createGatewayServiceFixture({
             id: "gpt-fixture-default",
             displayName: "Fixture Default",
             isDefault: true,
+            defaultEffort: "medium",
+            efforts: [
+              { id: "low", description: "Fast" },
+              { id: "medium", description: "Balanced" },
+            ],
           },
           {
             id: "gpt-fixture-mini",
             displayName: "Fixture Mini",
             isDefault: false,
+            defaultEffort: "low",
+            efforts: [{ id: "low", description: "Fast" }],
           },
         ],
       }
