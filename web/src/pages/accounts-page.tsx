@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next"
 
 import { AccountList } from "@/components/account/account-list"
 import { AutoSwitchButton } from "@/components/account/auto-switch-sheet"
+import { WarmupButton } from "@/components/account/warmup-sheet"
 import { BillingDialog } from "@/components/account/billing-dialog"
 import { OAuthDialog } from "@/components/account/oauth-dialog"
 import {
@@ -234,6 +235,7 @@ export function AccountsPage({
               the route band — and being on is worth seeing without opening
               anything. */}
           <AutoSwitchButton routing={snapshot.accounts} service={service} />
+          <WarmupButton routing={snapshot.accounts} service={service} />
           <Button
             className="h-9 flex-1 rounded-xl sm:flex-none"
             variant="outline"
