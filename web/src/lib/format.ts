@@ -96,7 +96,6 @@ export function authStatusLabel(status: AuthStatus): string {
       checking: "正在检查",
       ready: "认证就绪",
       refreshing: "正在刷新",
-      rate_limited: "额度受限",
       relogin_required: "需要重新登录",
       unsupported_fedramp: "不支持 FedRAMP",
       disabled: "已停用",

@@ -200,7 +200,11 @@ export class AccountStatusService {
       email: official.email ?? credential.email,
       planType: official.planType ?? limits.planType ?? credential.planType,
       authMode: official.mode,
-      authStatus: !this.database.accounts.get(accountId)?.enabled ? "disabled" : limits.rateLimitReachedType ? "rate_limited" : "ready",
+      // Being over a limit is a fact about quota, not about the credentials.
+      // It rides on `rateLimitReachedType`, which `updateRateLimits` above has
+      // just written from the upstream's own report; putting it here as well
+      // made an account with working credentials unselectable.
+      authStatus: !this.database.accounts.get(accountId)?.enabled ? "disabled" : "ready",
       authCheckedAt: now,
       authLastSuccessfulAt: now,
       authErrorCode: null,

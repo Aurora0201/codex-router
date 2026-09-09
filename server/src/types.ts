@@ -3,7 +3,6 @@ export type AuthStatus =
   | "checking"
   | "ready"
   | "refreshing"
-  | "rate_limited"
   | "relogin_required"
   | "unsupported_fedramp"
   | "disabled"

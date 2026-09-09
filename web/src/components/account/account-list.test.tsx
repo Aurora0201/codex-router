@@ -175,13 +175,13 @@ describe("AccountList", () => {
         authStatus: "disabled",
       }),
       account({
-        id: "limited",
-        chatgptAccountId: "acct-limited",
-        authStatus: "rate_limited",
+        id: "broken",
+        chatgptAccountId: "acct-broken",
+        authStatus: "relogin_required",
       }),
     ])
 
-    for (const id of ["acct-off", "acct-limited"]) {
+    for (const id of ["acct-off", "acct-broken"]) {
       expect(
         screen.getByRole("radio", { name: `路由到 ${id}` })
       ).toHaveAttribute("aria-disabled", "true")
@@ -189,6 +189,26 @@ describe("AccountList", () => {
     expect(
       screen.getByRole("radio", { name: "路由到 acct-ready" })
     ).not.toHaveAttribute("aria-disabled", "true")
+  })
+
+  it("still lets you route to an account that is over a quota limit", () => {
+    // Being over a limit says nothing about the credentials, and it used to
+    // arrive as an auth status — so one account reading 0% was selectable and
+    // another reading 0% was not, depending only on whether upstream had said
+    // so yet. Quota never blocks the choice now.
+    renderList([
+      account({
+        id: "limited",
+        chatgptAccountId: "acct-limited",
+        rateLimitReachedType: "primary",
+        limits: quota([bucket({ primary: window(100, 300) })]),
+      }),
+    ])
+
+    expect(
+      screen.getByRole("radio", { name: "路由到 acct-limited" })
+    ).not.toHaveAttribute("aria-disabled", "true")
+    expect(screen.getByText("额度受限")).toBeInTheDocument()
   })
 
   it("keeps the order the server gave, whatever the accounts are doing", () => {
@@ -432,11 +452,11 @@ describe("AccountList", () => {
       <TooltipProvider>
         <AccountList
           accounts={[routed]}
-          activeAccountId="acct-1"
           busyId={null}
           onSelect={vi.fn()}
           onClearRoute={vi.fn()}
           onAction={vi.fn()}
+          onConsumeReset={vi.fn()}
           routeBlock={{
             kind: "exhausted",
             detail: "额度已耗尽 · 4 小时后恢复",

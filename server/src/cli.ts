@@ -430,7 +430,6 @@ function accountUnavailableReason(account: AccountSummary): string | undefined {
     case "unsupported_fedramp": return "FedRAMP accounts are not supported";
     case "login_pending": return "login pending";
     case "refreshing": return "credentials refreshing";
-    case "rate_limited": return "rate limited";
     default: return `unavailable (${account.authStatus})`;
   }
 }

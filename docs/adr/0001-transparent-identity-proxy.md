@@ -22,6 +22,7 @@
 
 - 路由白名单仅限：`POST /responses`、`POST /responses/compact`、`GET /models`、`POST /alpha/search`（Codex `web.run` 工具的独立网页搜索端点，见 `codex-rs/ext/web-search`），以及 `GET /responses` 的 WebSocket Upgrade。其余 `backend-api/codex/*` 一律 `501`。
 - 每个请求优先从 `active_account` 解析账号，经 `auth.getCredential()` 取得其 access token。仅当账号数据库完全为空时，网关进入 `client_passthrough`：保留 Codex 客户端自带的 `Authorization` 与 `chatgpt-account-id`，不替换身份。账号池非空但未选择、禁用或失效时仍拒绝请求，不做隐式回退：只有用户显式开启的自动切换才会改写 `active_account`，且它是在请求之外做决定，不在请求路径上兜底。
+- **账号能不能被选中只看身份**：启用，且凭据就绪。额度受限是配额事实，写在 `rate_limit_reached_type` 上，不写进 `auth_status`，也不阻止手动选定。它曾经写在 `auth_status` 里，于是同样读到 0% 的两个账号一个能选一个不能，区别只在于上游有没有把「已达上限」报回来过。手动选定是这份 ADR 的前提，配额不该替用户否决它。
 - 认证替换由 `buildUpstreamHeaders` 完成：设置 `Authorization: Bearer <token>` 与 `chatgpt-account-id`；剥离 `cookie`、`host`、`connection`、`content-length` 等请求头（由网关重建）。
 - 响应头经 `copyResponseHeaders` 转发，剥离 `set-cookie`、`connection` 等传输层头。
 - 浏览器 Origin 请求（`hasBrowserOrigin`）一律拒绝（数据面仅服务本地 Codex 客户端）。

@@ -2,7 +2,7 @@ import type Database from "better-sqlite3";
 
 type SqliteDatabase = Database.Database;
 
-export const SCHEMA_VERSION = 20;
+export const SCHEMA_VERSION = 21;
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -479,6 +479,15 @@ export function migrate(db: SqliteDatabase): void {
       CREATE INDEX IF NOT EXISTS account_warmup_log_at ON account_warmup_log(started_at DESC);
       CREATE INDEX IF NOT EXISTS account_warmup_log_account ON account_warmup_log(account_id, started_at DESC);
     `);
+  }
+
+  if (version < 21) {
+    // `rate_limited` used to live in auth_status, where it also blocked manual
+    // selection: an account with perfectly good credentials could not be routed
+    // to because it was over a quota window. Quota rides on
+    // rate_limit_reached_type, which the limits refresh already writes, so the
+    // rows that carry the old value go back to what they actually are.
+    db.exec("UPDATE accounts SET auth_status = 'ready' WHERE auth_status = 'rate_limited'");
   }
 
   db.prepare(
