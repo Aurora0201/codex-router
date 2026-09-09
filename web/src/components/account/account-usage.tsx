@@ -92,7 +92,6 @@ export function QuotaMeter({
     )
   }
 
-  const empty = remaining <= 0
   const critical = remaining <= QUOTA_CRITICAL_PERCENT
   const tight = !critical && remaining <= QUOTA_TIGHT_PERCENT
 
@@ -130,13 +129,11 @@ export function QuotaMeter({
         </ProgressValue>
       </div>
       {/* Progress appends its own track last, so the caption is ordered past it. */}
-      <span
-        className={cn(
-          "order-3",
-          CAPTION,
-          empty && "font-medium text-foreground"
-        )}
-      >
+      {/* Plain in every state. An empty window already says so twice over —
+          the reading turns destructive and so does the bar — and a third
+          emphasis on the reset line only made cards holding the same numbers
+          look unlike each other. */}
+      <span className={cn("order-3", CAPTION)}>
         {t("{{time}}重置", { time: formatCountdown(window.resetsAt) })}
       </span>
     </Progress>

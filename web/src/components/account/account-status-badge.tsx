@@ -9,6 +9,7 @@ import {
 
 import { Spinner } from "@/components/ui/spinner"
 import i18n from "@/i18n"
+import { isQuotaExhausted } from "@/lib/account-state"
 import { authStatusLabel } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { AccountView } from "@/services/contracts"
@@ -18,8 +19,7 @@ export function AccountStatus({ account }: { account: AccountView }) {
   // no longer lives in the auth status — and it no longer stops the account
   // being routed to. It still takes the badge, because on a healthy account
   // "额度受限" is the more useful of the two things to say.
-  const limited =
-    account.authStatus === "ready" && account.rateLimitReachedType !== null
+  const limited = account.authStatus === "ready" && isQuotaExhausted(account)
   const label = limited
     ? i18n.t("额度受限")
     : authStatusLabel(account.authStatus)

@@ -769,8 +769,6 @@ export const en = {
   跟随账号默认: "Each account's own default",
   思考强度: "Reasoning effort",
   跟随模型默认: "The model's own default",
-  "一句问候不需要想太久，越低越省额度。":
-    "One sentence does not need much thought, and lower costs less.",
   不思考: "None",
   极低: "Minimal",
   低: "Low",

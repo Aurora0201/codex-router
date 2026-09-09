@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react"
+import { render, screen, within } from "@testing-library/react"
 import { describe, expect, it } from "vitest"
 
 import type { AccountView, AuthStatus } from "@/services/contracts"
@@ -81,6 +81,51 @@ describe("AccountStatus", () => {
       expect(screen.getByText(label).closest("span")).toHaveClass(tone)
     }
   )
+  it("says the same thing about two accounts reading the same numbers", () => {
+    // The upstream's own flag only appears once it has refused a request, so
+    // one account at 100% carried it and its neighbour at 100% did not — and
+    // the two cards disagreed about what was going on.
+    const spent = {
+      buckets: [
+        {
+          key: "codex",
+          limitId: null,
+          limitName: "Codex",
+          primary: {
+            usedPercent: 100,
+            resetsAt: Date.now() + 3_600_000,
+            windowDurationMins: 300,
+          },
+          secondary: null,
+          credits: null,
+          individualLimit: null,
+          spendControlReached: false,
+          planType: "plus",
+          rateLimitReachedType: null,
+        },
+      ],
+      defaultBucketKey: "codex",
+      resetCredits: null,
+      checkedAt: Date.now(),
+    }
+    const base = accountWithStatus("ready")
+
+    const flagged = render(
+      <AccountStatus
+        account={{
+          ...base,
+          limits: spent,
+          rateLimitReachedType: "rate_limit_reached",
+        }}
+      />
+    )
+    const unflagged = render(
+      <AccountStatus account={{ ...base, limits: spent }} />
+    )
+    expect(within(flagged.container).getByText("额度受限")).toBeInTheDocument()
+    expect(within(unflagged.container).getByText("额度受限")).toBeInTheDocument()
+  })
+
   it("says 额度受限 over 认证就绪, without saying the credentials are bad", () => {
     // Quota moved out of the auth status, but it is still the more useful of
     // the two things to say on a healthy account that is over a limit.

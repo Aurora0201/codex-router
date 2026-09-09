@@ -28,7 +28,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty"
 import { toast } from "@/components/ui/toast"
-import { accountWindows } from "@/lib/account-state"
+import { accountWindows, isQuotaExhausted } from "@/lib/account-state"
 import { authStatusLabel, formatCountdown, shortAccountId } from "@/lib/format"
 import type {
   AccountView,
@@ -177,23 +177,7 @@ export function AccountsPage({
 
   const activeUnavailable =
     active !== null && (!active.enabled || active.auth.status !== "ready")
-  // Upstream saying "you are over a limit" counts as exhausted even when the
-  // percentages have not caught up yet — it used to arrive as an auth status,
-  // which made the band say the account was unusable rather than out of quota.
-  const activeExhausted =
-    active?.rateLimitReachedType !== null &&
-    active?.rateLimitReachedType !== undefined
-      ? true
-      : (active?.limits.buckets.some(
-          (bucket) =>
-            bucket.spendControlReached ||
-            [bucket.primary, bucket.secondary].some(
-              (window) =>
-                window?.usedPercent !== null &&
-                window?.usedPercent !== undefined &&
-                window.usedPercent >= 100
-            )
-        ) ?? false)
+  const activeExhausted = active !== null && isQuotaExhausted(active)
 
   // A blocked route is a fact about the routed account, so it is said on the
   // band that already reports that account rather than in a banner above it.

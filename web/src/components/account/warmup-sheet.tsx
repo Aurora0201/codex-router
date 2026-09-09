@@ -372,86 +372,93 @@ export function WarmupButton({
                   hint={t("所有账号相同")}
                 >
                   <div className="grid gap-3">
-                    <div className="grid gap-1.5">
-                      <label
-                        className="text-sm font-medium"
-                        htmlFor="warmup-model"
-                      >
-                        {t("使用模型")}
-                      </label>
-                      <Select
-                        value={settings.model ?? ""}
-                        onValueChange={(value) =>
-                          patch({ model: value === "" ? null : String(value) })
-                        }
-                      >
-                        <SelectTrigger
-                          id="warmup-model"
-                          aria-label={t("使用模型")}
+                    {/* Two short pickers side by side: each holds one word, and a
+                        row apiece left the section mostly air. */}
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="grid gap-1.5">
+                        <label
+                          className="text-sm font-medium"
+                          htmlFor="warmup-model"
                         >
-                          <SelectValue>
-                            {settings.model === null
-                              ? t("跟随账号默认")
-                              : (models?.find((m) => m.id === settings.model)
-                                  ?.displayName ?? settings.model)}
-                          </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectGroup>
-                            {/* Not every subscription has every model, so the
+                          {t("使用模型")}
+                        </label>
+                        <Select
+                          value={settings.model ?? ""}
+                          onValueChange={(value) =>
+                            patch({
+                              model: value === "" ? null : String(value),
+                            })
+                          }
+                        >
+                          <SelectTrigger
+                            id="warmup-model"
+                            className="w-full"
+                            aria-label={t("使用模型")}
+                          >
+                            <SelectValue>
+                              {settings.model === null
+                                ? t("跟随账号默认")
+                                : (models?.find((m) => m.id === settings.model)
+                                    ?.displayName ?? settings.model)}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectGroup>
+                              {/* Not every subscription has every model, so the
                                 safe choice is each account's own default. */}
-                            <SelectItem value="">
-                              {t("跟随账号默认")}
-                            </SelectItem>
-                            {(models ?? []).map((model) => (
-                              <SelectItem key={model.id} value={model.id}>
-                                {model.displayName}
+                              <SelectItem value="">
+                                {t("跟随账号默认")}
                               </SelectItem>
-                            ))}
-                          </SelectGroup>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="grid gap-1.5">
-                      <label
-                        className="text-sm font-medium"
-                        htmlFor="warmup-effort"
-                      >
-                        {t("思考强度")}
-                      </label>
-                      <Select
-                        value={settings.effort ?? ""}
-                        onValueChange={(value) =>
-                          patch({ effort: value === "" ? null : String(value) })
-                        }
-                      >
-                        <SelectTrigger
-                          id="warmup-effort"
-                          aria-label={t("思考强度")}
+                              {(models ?? []).map((model) => (
+                                <SelectItem key={model.id} value={model.id}>
+                                  {model.displayName}
+                                </SelectItem>
+                              ))}
+                            </SelectGroup>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="grid gap-1.5">
+                        <label
+                          className="text-sm font-medium"
+                          htmlFor="warmup-effort"
                         >
-                          <SelectValue>
-                            {settings.effort === null
-                              ? t("跟随模型默认")
-                              : (EFFORT_LABEL[settings.effort] ??
-                                settings.effort)}
-                          </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectGroup>
-                            <SelectItem value="">
-                              {t("跟随模型默认")}
-                            </SelectItem>
-                            {efforts.map((effort) => (
-                              <SelectItem key={effort.id} value={effort.id}>
-                                {EFFORT_LABEL[effort.id] ?? effort.id}
+                          {t("思考强度")}
+                        </label>
+                        <Select
+                          value={settings.effort ?? ""}
+                          onValueChange={(value) =>
+                            patch({
+                              effort: value === "" ? null : String(value),
+                            })
+                          }
+                        >
+                          <SelectTrigger
+                            id="warmup-effort"
+                            className="w-full"
+                            aria-label={t("思考强度")}
+                          >
+                            <SelectValue>
+                              {settings.effort === null
+                                ? t("跟随模型默认")
+                                : (EFFORT_LABEL[settings.effort] ??
+                                  settings.effort)}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectGroup>
+                              <SelectItem value="">
+                                {t("跟随模型默认")}
                               </SelectItem>
-                            ))}
-                          </SelectGroup>
-                        </SelectContent>
-                      </Select>
-                      <p className="text-xs text-muted-foreground">
-                        {t("一句问候不需要想太久，越低越省额度。")}
-                      </p>
+                              {efforts.map((effort) => (
+                                <SelectItem key={effort.id} value={effort.id}>
+                                  {EFFORT_LABEL[effort.id] ?? effort.id}
+                                </SelectItem>
+                              ))}
+                            </SelectGroup>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                     <div className="grid gap-1.5">
                       <label

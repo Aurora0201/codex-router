@@ -24,6 +24,29 @@ export function isRoutable(account: AccountView) {
   return account.enabled && account.auth.status === "ready"
 }
 
+/**
+ * Out of quota: either the upstream said so outright, or a window it reports
+ * has nothing left. Both readings have to count, because the upstream's own
+ * flag only appears once it has refused a request — so two accounts sitting on
+ * identical numbers would otherwise say different things, and did.
+ *
+ * This is not a routing question. An account out of quota can still be chosen;
+ * it just says so.
+ */
+export function isQuotaExhausted(account: AccountView): boolean {
+  if (account.rateLimitReachedType !== null) return true
+  return account.limits.buckets.some(
+    (bucket) =>
+      bucket.spendControlReached ||
+      [bucket.primary, bucket.secondary].some(
+        (window) =>
+          window?.usedPercent !== null &&
+          window?.usedPercent !== undefined &&
+          window.usedPercent >= 100
+      )
+  )
+}
+
 export function needsAttention(account: AccountView) {
   if (isDisabled(account)) return false
   return !isRoutable(account)
