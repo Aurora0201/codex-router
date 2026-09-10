@@ -706,6 +706,7 @@ export const en = {
   "使用额度重置券？": "Use this reset credit?",
   "此操作会立即尝试重置服务端额度。结果以 Codex 返回为准，客户端不会自行推断额度变化。":
     "This immediately asks Codex to reset the server-side limit. The client will use the returned result and will not infer a change.",
+  "正在使用…": "Using…",
   确认使用: "Use credit",
   设置订阅到期日: "Set subscription expiration",
   设置自动续订周期: "Set automatic renewal cycle",

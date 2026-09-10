@@ -29,7 +29,11 @@ function ToastViewport({ className, ...props }: ToastPrimitive.Viewport.Props) {
     <ToastPrimitive.Viewport
       data-slot="toast-viewport"
       className={cn(
-        "pointer-events-none fixed inset-x-4 bottom-4 z-50 mx-auto w-auto max-w-sm outline-none sm:right-4 sm:left-auto sm:mx-0 sm:w-full",
+        // Above dialogs and sheets, which are all z-50. A toast fired from inside
+        // an open sheet lands in the same bottom-right corner the sheet occupies,
+        // and being earlier in the DOM it was painted underneath — so the one
+        // piece of feedback the action produced could not be seen.
+        "pointer-events-none fixed inset-x-4 bottom-4 z-60 mx-auto w-auto max-w-sm outline-none sm:right-4 sm:left-auto sm:mx-0 sm:w-full",
         className
       )}
       {...props}

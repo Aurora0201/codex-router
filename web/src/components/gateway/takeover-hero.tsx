@@ -247,24 +247,33 @@ export function TakeoverHero({
       <div className="flex flex-1 flex-col rounded-xl bg-emphasis-surface p-3">
         {series.length ? (
           <div
-            className="flex h-20 items-end gap-1"
+            className="flex h-20 items-stretch gap-px"
             role="img"
             aria-label={t("{{range}}每小时经 Router 转发的请求数", {
               range: rangeLabel,
             })}
           >
             {series.map((bucket) => (
+              // One width whatever the range divides into, with the leftover
+              // going to spacing. This panel is much narrower than the
+              // availability strip, so it caps lower — the point is that a bar
+              // here does not change size when the range does, not that the two
+              // strips share a number.
               <span
-                data-slot="request-volume-bucket"
-                className={cn(
-                  "min-w-0 flex-1 rounded-[2px]",
-                  bucket.requests ? "bg-chart-3" : "bg-emphasis-muted/25"
-                )}
-                style={{
-                  height: `${Math.max((bucket.requests / peak) * 100, 3)}%`,
-                }}
+                className="flex min-w-0 flex-1 items-end justify-center"
                 key={bucket.startedAt}
-              />
+              >
+                <span
+                  data-slot="request-volume-bucket"
+                  className={cn(
+                    "w-full max-w-1 rounded-[2px]",
+                    bucket.requests ? "bg-chart-3" : "bg-emphasis-muted/25"
+                  )}
+                  style={{
+                    height: `${Math.max((bucket.requests / peak) * 100, 3)}%`,
+                  }}
+                />
+              </span>
             ))}
           </div>
         ) : (

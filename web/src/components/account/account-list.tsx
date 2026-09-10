@@ -12,6 +12,7 @@ import {
   TabsTab,
 } from "@/components/animate-ui/components/base/tabs"
 import { Button } from "@/components/ui/button"
+import { Spinner } from "@/components/ui/spinner"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -89,6 +90,8 @@ export function AccountList({
     credit: RateLimitResetCreditView
     key: string
   } | null>(null)
+  /** The redemption is a round trip to the upstream, not an instant. */
+  const [redeeming, setRedeeming] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const [fades, setFades] = useState({ top: false, bottom: false })
   useEffect(() => {
@@ -394,7 +397,9 @@ export function AccountList({
 
       <AlertDialog
         open={resetting !== null}
-        onOpenChange={(open) => !open && setResetting(null)}
+        // Not dismissable mid-flight: the request is already with the upstream,
+        // and closing here would leave the outcome with nowhere to land.
+        onOpenChange={(open) => !open && !redeeming && setResetting(null)}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -406,19 +411,31 @@ export function AccountList({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>{t("取消")}</AlertDialogCancel>
+            <AlertDialogCancel disabled={redeeming}>
+              {t("取消")}
+            </AlertDialogCancel>
+            {/* It takes seconds, and the dialog used to sit there saying
+                nothing until it closed — long enough to wonder whether the
+                click had registered at all. */}
             <AlertDialogAction
-              onClick={() => {
-                if (!resetting) return
+              disabled={redeeming}
+              onClick={(event) => {
+                event.preventDefault()
+                if (!resetting || redeeming) return
+                setRedeeming(true)
                 void onConsumeReset(resetting.account, {
                   idempotencyKey: resetting.key,
                   creditId: resetting.credit.id,
                 })
-                  .then(() => setResetting(null))
                   .catch(() => undefined)
+                  .finally(() => {
+                    setRedeeming(false)
+                    setResetting(null)
+                  })
               }}
             >
-              {t("确认使用")}
+              {redeeming ? <Spinner data-icon="inline-start" /> : null}
+              {redeeming ? t("正在使用…") : t("确认使用")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

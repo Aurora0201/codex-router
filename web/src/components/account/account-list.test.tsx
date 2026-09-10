@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react"
+import { render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { describe, expect, it, vi } from "vitest"
 
@@ -385,6 +385,56 @@ describe("AccountList", () => {
     expect(cards()).toHaveLength(1)
     expect(screen.getByText("acct-off")).toBeInTheDocument()
     expect(screen.queryByText("acct-ready")).not.toBeInTheDocument()
+  })
+
+  it("says the redemption is under way instead of sitting silent", async () => {
+    const user = userEvent.setup()
+    let settle: () => void = () => undefined
+    const onConsumeReset = vi.fn(
+      () => new Promise<void>((resolve) => (settle = resolve))
+    )
+    const value = account({
+      limits: {
+        buckets: [bucket({ primary: window(20, 300) })],
+        defaultBucketKey: "codex",
+        checkedAt: Date.now(),
+        resetCredits: {
+          availableCount: 1,
+          credits: [
+            {
+              id: "credit-1",
+              resetType: "weekly",
+              status: "available",
+              grantedAt: Date.now(),
+              expiresAt: Date.UTC(2026, 7, 31),
+              title: "Weekly reset",
+              description: null,
+            },
+          ],
+        },
+      },
+    })
+    renderList([value], { onConsumeReset })
+
+    await user.click(screen.getByRole("button", { name: /acct-alpha/ }))
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: "使用重置券",
+      })
+    )
+    await user.click(screen.getByRole("button", { name: "确认使用" }))
+
+    // It is a round trip to the upstream. The dialog used to sit unchanged
+    // until it closed, which was long enough to wonder whether the click had
+    // registered at all.
+    const busy = await screen.findByRole("button", { name: /正在使用/ })
+    expect(busy).toBeDisabled()
+    expect(screen.getByRole("button", { name: "取消" })).toBeDisabled()
+
+    settle()
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: /正在使用/ })).toBeNull()
+    )
   })
 
   it("opens the detail sheet from the account id and spends a reset credit once", async () => {

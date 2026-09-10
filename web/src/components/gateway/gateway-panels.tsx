@@ -227,17 +227,25 @@ export function AvailabilityPanel({
                       ? "mixed"
                       : "success"
               const cell = (
+                // The column is the hit area so a narrow bar stays easy to
+                // hover; the bar is capped so it keeps one width whatever the
+                // range divides into, and the leftover becomes spacing. The
+                // strip still spans the panel, so its right edge stays "now".
                 <span
                   data-slot="availability-bucket"
                   data-availability-state={state}
-                  className={cn(
-                    "h-6 min-w-0 rounded-sm",
-                    state === "empty" && "bg-foreground/[0.08]",
-                    state === "success" && "bg-chart-3",
-                    state === "mixed" && "bg-warning",
-                    state === "error" && "bg-destructive"
-                  )}
-                />
+                  className="grid h-6 min-w-0 place-items-center"
+                >
+                  <span
+                    className={cn(
+                      "h-full w-full max-w-2 rounded-sm",
+                      state === "empty" && "bg-foreground/[0.08]",
+                      state === "success" && "bg-chart-3",
+                      state === "mixed" && "bg-warning",
+                      state === "error" && "bg-destructive"
+                    )}
+                  />
+                </span>
               )
               // An empty bucket has nothing to report, so only buckets with
               // traffic carry a tooltip.
