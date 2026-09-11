@@ -4,7 +4,7 @@ import path from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
 
 import { AccountStatusService } from "../src/accounts/account-status-service.js"
-import { AccountWarmupService, shortWindowRunning } from "../src/accounts/account-warmup-service.js"
+import { AccountWarmupService, longWindowExhausted, shortWindowRunning } from "../src/accounts/account-warmup-service.js"
 import { loadConfig } from "../src/config.js"
 import { GatewayDatabase } from "../src/db/database.js"
 
@@ -56,6 +56,24 @@ function setShortWindow(database: GatewayDatabase, id: string, resetsAt: number 
   database.accounts.updateRateLimits(id, {
     primary: { usedPercent: 0, resetsAt, windowDurationMins: 300 },
     secondary: { usedPercent: 0, resetsAt: Date.now() + 7 * 86_400_000, windowDurationMins: 10080 },
+    credits: null,
+    individualLimit: null,
+    spendControlReached: null,
+    resetCredits: null,
+    buckets: [],
+    defaultBucketKey: null,
+  })
+}
+
+/** Both windows at once, for the cases where the week matters. */
+function setWindows(
+  database: GatewayDatabase,
+  id: string,
+  windows: { shortResetsAt: number | null; weeklyUsed: number; weeklyResetsAt: number | null },
+) {
+  database.accounts.updateRateLimits(id, {
+    primary: { usedPercent: 0, resetsAt: windows.shortResetsAt, windowDurationMins: 300 },
+    secondary: { usedPercent: windows.weeklyUsed, resetsAt: windows.weeklyResetsAt, windowDurationMins: 10080 },
     credits: null,
     individualLimit: null,
     spendControlReached: null,
@@ -257,6 +275,36 @@ describe("account warm-up", () => {
     const turn = log.find((entry) => entry.method === "turn/start")
     // Omitted means the model's own default, not some value picked here.
     expect(turn.params).not.toHaveProperty("effort")
+  })
+
+  it("leaves out an account whose week is spent, even when forced", async () => {
+    const { database, warmup, homes } = await fixture(2)
+    // The five-hour window has lapsed, so on its own it would read as warmable.
+    setWindows(database, "account-1", { shortResetsAt: null, weeklyUsed: 100, weeklyResetsAt: Date.now() + 3 * 86_400_000 })
+    setWindows(database, "account-2", { shortResetsAt: null, weeklyUsed: 40, weeklyResetsAt: Date.now() + 3 * 86_400_000 })
+
+    expect(warmup.candidates().map((a) => a.id)).toEqual(["account-2"])
+    expect(warmup.autoTargets().map((a) => a.id)).toEqual(["account-2"])
+
+    // Forcing means "spend even if the window may already be counting", not
+    // "send what the account is certain to refuse".
+    const run = await warmup.run({ trigger: "manual", force: true })
+    expect(run.results.map((r) => r.accountId)).toEqual(["account-2"])
+    const asked = rpcCalls(await readFile(path.join(homes[0], "rpc.log"), "utf8").catch(() => ""))
+    expect(asked.some((call) => call.method === "turn/start")).toBe(false)
+  })
+
+  it("takes a spent week whose reset has passed as turned over", () => {
+    const now = Date.now()
+    const account = {
+      primaryWindowMinutes: 300, primaryUsedPercent: 0, primaryResetsAt: null,
+      secondaryWindowMinutes: 10080, secondaryUsedPercent: 100, secondaryResetsAt: now - 60_000,
+    } as never
+    // The reading is from before the week turned over. The next refresh brings
+    // the fresh number, and warms the lapsed window on that same refresh.
+    expect(longWindowExhausted(account, now)).toBe(false)
+    const current = { ...(account as object), secondaryResetsAt: now + 60_000 } as never
+    expect(longWindowExhausted(current, now)).toBe(true)
   })
 
   it("keeps accounts that opted out of warm-up out of the run", async () => {

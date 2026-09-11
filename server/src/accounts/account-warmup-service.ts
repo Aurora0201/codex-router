@@ -91,6 +91,38 @@ export function shortWindowRunning(account: AccountRecord, now = Date.now()): bo
 }
 
 /**
+ * The reading of the account's long (weekly) window, when there is one.
+ */
+function longWindow(account: AccountRecord): { usedPercent: number | null; resetsAt: number | null } | null {
+  const windows = [
+    { mins: account.primaryWindowMinutes, usedPercent: account.primaryUsedPercent, resetsAt: account.primaryResetsAt },
+    { mins: account.secondaryWindowMinutes, usedPercent: account.secondaryUsedPercent, resetsAt: account.secondaryResetsAt },
+  ];
+  return windows.find((w) => typeof w.mins === "number" && w.mins >= SHORT_WINDOW_MAX_MINS) ?? null;
+}
+
+export function longWindowResetsAt(account: AccountRecord): number | null {
+  return longWindow(account)?.resetsAt ?? null;
+}
+
+/**
+ * The week is spent, so the account cannot serve anything until it turns over.
+ * The five-hour window still lapses and reads as warmable in the meantime, but
+ * starting it buys nothing — and the turn that would start it is refused by
+ * the same limit, so it is certain to fail as well as pointless.
+ *
+ * A reset time already behind us means the reading is from before the week
+ * turned over, not that it is still spent: the next status refresh brings the
+ * fresh number, and on that same refresh the lapsed five-hour window gets
+ * warmed, which is exactly the moment it becomes worth doing.
+ */
+export function longWindowExhausted(account: AccountRecord, now = Date.now()): boolean {
+  const week = longWindow(account);
+  if (!week || week.usedPercent === null || week.usedPercent < 100) return false;
+  return week.resetsAt === null || week.resetsAt > now;
+}
+
+/**
  * Sends one small turn on an account so its five-hour window starts counting.
  *
  * The turn runs on the account's own `CODEX_HOME`, which means it goes straight
@@ -119,16 +151,22 @@ export class AccountWarmupService {
     return { ...this.progress };
   }
 
-  /** Enrolled, enabled and authenticated: the accounts warm-up may touch at all. */
-  candidates(): AccountRecord[] {
+  /**
+   * Enrolled, enabled, authenticated, and with a week left to spend: the
+   * accounts warm-up may touch at all. Not even a forced run sends to an
+   * account whose week is gone — forcing means "spend even if the window may
+   * already be counting", not "send what the account is certain to refuse".
+   */
+  candidates(now = Date.now()): AccountRecord[] {
     return this.database.accounts
       .list()
-      .filter((account) => account.warmupEnrolled && account.enabled && account.authStatus === "ready");
+      .filter((account) =>
+        account.warmupEnrolled && account.enabled && account.authStatus === "ready" && !longWindowExhausted(account, now));
   }
 
   /** Of those, the ones whose short window is not already counting. */
   pending(now = Date.now()): AccountRecord[] {
-    return this.candidates().filter((account) => !shortWindowRunning(account, now));
+    return this.candidates(now).filter((account) => !shortWindowRunning(account, now));
   }
 
   /**

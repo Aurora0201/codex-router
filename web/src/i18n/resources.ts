@@ -786,6 +786,7 @@ export const en = {
   "{{account}} 参与预热": "{{account}} takes part in warm-up",
   不可用: "Unavailable",
   "窗口计时中 · {{time}} 重置": "Counting · resets {{time}}",
+  "周额度已用完 · {{time}}恢复": "Weekly limit spent · back {{time}}",
   窗口未开始: "Window not started",
   "预热直接用账号自己的身份发送，不经过路由，因此不会出现在请求日志里。强制预热会给正在计时的窗口也发一条，但那不会重启或延长它。":
     "Warm-up sends on the account's own identity rather than through routing, so these turns never appear in the request log. Forcing one sends on a window that is already counting too, which neither restarts nor extends it.",

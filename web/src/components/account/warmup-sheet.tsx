@@ -41,7 +41,11 @@ import {
 import { Switch } from "@/components/ui/switch"
 import { toast } from "@/components/ui/toast"
 import { Section } from "@/components/account/sheet-section"
-import { formatRelativeTime, shortAccountId } from "@/lib/format"
+import {
+  formatCountdown,
+  formatRelativeTime,
+  shortAccountId,
+} from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type {
   AccountsResponse,
@@ -222,7 +226,12 @@ export function WarmupButton({
    */
   const lastAuto = state?.recent.find((entry) => entry.trigger === "auto")
   const nextDue = (state?.accounts ?? [])
-    .filter((account) => account.enrolled && account.eligible)
+    // A spent week's five-hour window lapsing is not something the automatic
+    // pass will act on, so it is not "next" either.
+    .filter(
+      (account) =>
+        account.enrolled && account.eligible && !account.weeklyExhausted
+    )
     .map((account) => account.windowResetsAt)
     .filter((resetsAt): resetsAt is number => resetsAt !== null)
     .sort((a, b) => a - b)[0]
@@ -238,7 +247,11 @@ export function WarmupButton({
         : t("下个窗口 {{next}} 到期", { next: resetClock(nextDue) })
 
   const pending = (state?.accounts ?? []).filter(
-    (account) => account.enrolled && account.eligible && !account.windowRunning
+    (account) =>
+      account.enrolled &&
+      account.eligible &&
+      !account.weeklyExhausted &&
+      !account.windowRunning
   )
 
   const patch = (values: Parameters<GatewayService["saveWarmup"]>[0]) => {
@@ -523,7 +536,9 @@ export function WarmupButton({
                         data-slot="warmup-row"
                         className={cn(
                           "flex items-center gap-3 rounded-lg bg-card px-2.5 py-2",
-                          (!account.enrolled || !account.eligible) &&
+                          (!account.enrolled ||
+                            !account.eligible ||
+                            account.weeklyExhausted) &&
                             "opacity-55"
                         )}
                       >
@@ -534,11 +549,20 @@ export function WarmupButton({
                           <span className="block truncate text-xs text-muted-foreground-subtle">
                             {!account.eligible
                               ? t("不可用")
-                              : account.windowRunning
-                                ? t("窗口计时中 · {{time}} 重置", {
-                                    time: resetClock(account.windowResetsAt),
+                              : account.weeklyExhausted
+                                ? t("周额度已用完 · {{time}}恢复", {
+                                    time:
+                                      account.weeklyResetsAt === null
+                                        ? "—"
+                                        : formatCountdown(
+                                            account.weeklyResetsAt
+                                          ),
                                   })
-                                : t("窗口未开始")}
+                                : account.windowRunning
+                                  ? t("窗口计时中 · {{time}} 重置", {
+                                      time: resetClock(account.windowResetsAt),
+                                    })
+                                  : t("窗口未开始")}
                           </span>
                         </span>
                         <Switch

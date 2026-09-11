@@ -118,4 +118,17 @@ describe("warm-up API", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ started: true, total: 1 });
   });
+  it("says which accounts have spent their week, and when it turns over", async () => {
+    const weekEnds = Date.now() + 3 * 86_400_000;
+    gateway.database.accounts.updateRateLimits("first", {
+      primary: { usedPercent: 0, resetsAt: null, windowDurationMins: 300 },
+      secondary: { usedPercent: 100, resetsAt: weekEnds, windowDurationMins: 10080 },
+      credits: null, individualLimit: null, spendControlReached: null,
+      resetCredits: null, buckets: [], defaultBucketKey: null,
+    });
+    const body = (await gateway.app.inject({ method: "GET", url: "/api/warmup" })).json();
+    const first = body.accounts.find((account: { id: string }) => account.id === "first");
+    // Kept apart from `eligible`: the account is fine, its week is just gone.
+    expect(first).toMatchObject({ eligible: true, weeklyExhausted: true, weeklyResetsAt: weekEnds });
+  });
 });

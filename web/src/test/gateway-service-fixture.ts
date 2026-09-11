@@ -308,6 +308,8 @@ export function createGatewayServiceFixture({
           eligible: account.enabled && account.authStatus === "ready",
           windowResetsAt: null,
           windowRunning: false,
+          weeklyExhausted: false,
+          weeklyResetsAt: null,
         })),
         recent: [],
       }

@@ -213,6 +213,9 @@ export interface WarmupAccountView {
   windowResetsAt: number | null
   /** Already counting, so warming it would buy nothing. */
   windowRunning: boolean
+  /** The week is spent: warming would be refused as well as pointless. */
+  weeklyExhausted: boolean
+  weeklyResetsAt: number | null
 }
 
 export interface WarmupProgressView {

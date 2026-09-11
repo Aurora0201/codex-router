@@ -33,6 +33,8 @@ function mount(view?: Partial<WarmupView>) {
         eligible: true,
         windowResetsAt: null,
         windowRunning: false,
+        weeklyExhausted: false,
+        weeklyResetsAt: null,
       })),
       recent: [],
       ...view,
@@ -80,6 +82,8 @@ describe("WarmupButton", () => {
         eligible: true,
         windowResetsAt: index === 0 ? Date.now() + HOUR : null,
         windowRunning: index === 0,
+        weeklyExhausted: false,
+        weeklyResetsAt: null,
       })),
       recent: [],
     })
@@ -109,6 +113,8 @@ describe("WarmupButton", () => {
         eligible: true,
         windowResetsAt: Date.now() + HOUR,
         windowRunning: true,
+        weeklyExhausted: false,
+        weeklyResetsAt: null,
       })),
       recent: [],
     })
@@ -117,6 +123,41 @@ describe("WarmupButton", () => {
     )
     await waitFor(() => expect(runButton()).toHaveTextContent("无需预热"))
     expect(runButton()).toBeDisabled()
+  })
+
+  it("leaves out an account whose week is spent, and says when it comes back", async () => {
+    const service: Fixture = createGatewayServiceFixture()
+    const accounts = service.snapshot.accounts.accounts
+    vi.spyOn(service, "getWarmup").mockResolvedValue({
+      settings: {
+        auto: false,
+        model: null,
+        effort: null,
+        message: "hi",
+        cooldownMs: 15 * 60_000,
+        dailyLimit: 6,
+      },
+      progress: { running: false, total: 0, done: 0, accountId: null },
+      accounts: accounts.map((account, index) => ({
+        id: account.id,
+        enrolled: true,
+        eligible: true,
+        windowResetsAt: null,
+        windowRunning: false,
+        weeklyExhausted: index === 1,
+        weeklyResetsAt: index === 1 ? Date.now() + 3 * 24 * HOUR : null,
+      })),
+      recent: [],
+    })
+    render(
+      <WarmupButton routing={service.snapshot.accounts} service={service} />
+    )
+    // Its five-hour window lapses all week long, but the account cannot serve
+    // anything until the week turns over — so it is not something to warm.
+    await waitFor(() => expect(runButton()).toHaveTextContent("预热 2 个账号"))
+    await userEvent.click(screen.getByRole("button", { name: "预热设置" }))
+    await waitFor(() => expect(rows()).toHaveLength(3))
+    expect(rows()[1]).toHaveTextContent(/周额度已用完/)
   })
 
   it("shows where a run has got to instead of a spinner", async () => {
