@@ -179,6 +179,12 @@ beforeAll(async () => {
       );
       return;
     }
+    if (body.includes(Buffer.from('"terminalThenClose":true'))) {
+      response.writeHead(200, { "content-type": "text/event-stream", "x-request-id": "terminal-close-evidence" });
+      response.write('data: {"type":"response.completed"}\n\n');
+      setTimeout(() => response.destroy(), 40);
+      return;
+    }
     if (body.includes(Buffer.from('"sseIncomplete":true'))) {
       response.writeHead(200, { "content-type": "text/event-stream" });
       response.end(
@@ -634,7 +640,7 @@ describe("HTTP, SSE, compact and models", () => {
       outcome: "rejected",
       failureSource: "upstream_protocol",
       failureStage: "terminal",
-      httpStatus: 401,
+      httpStatus: 200,
       protocolErrorCode: "unauthorized_after_stream",
     });
     const limited = await streamRequest(
@@ -681,7 +687,7 @@ describe("HTTP, SSE, compact and models", () => {
     ).toMatchObject({
       state: "rejected",
       outcome: "rejected",
-      httpStatus: undefined,
+      httpStatus: 200,
     });
     expect(
       logs.find((item) => item.protocolErrorCode === "future_private_code"),
@@ -763,12 +769,22 @@ describe("HTTP, SSE, compact and models", () => {
           cancelled.items.some(
             (entry) =>
               entry.errorCode === "client_cancelled" &&
-              entry.statusCode === undefined,
+              entry.httpStatus === 200,
           ),
         ).toBe(true);
       },
       { timeout: 2_000, interval: 20 },
     );
+  });
+  it("keeps a trusted terminal when the transport subsequently closes", async () => {
+    const response = await fetch(`${gatewayUrl}/backend-api/codex/responses`, {
+      method: "POST", headers: { "content-type": "application/json" }, body: '{"terminalThenClose":true}',
+    });
+    await response.text().catch(() => undefined);
+    const records = gateway.database.requestLog.query({ since: 0, transport: "http", limit: 100 }).items;
+    const record = records.find((entry) => entry.upstreamRequestId === "terminal-close-evidence");
+    expect(record).toMatchObject({ state: "completed", outcome: "success", httpStatus: 200 });
+    expect(record?.bytesOut).toBeGreaterThan(0);
   });
 });
 
