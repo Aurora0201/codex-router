@@ -3,7 +3,6 @@ export type AuthStatus =
   | "checking"
   | "ready"
   | "refreshing"
-  | "rate_limited"
   | "relogin_required"
   | "unsupported_fedramp"
   | "disabled"
@@ -49,6 +48,8 @@ export interface AccountRecord {
   /** Priority for automatic switching; null sorts after every ranked account. */
   autoSwitchRank: number | null;
   autoSwitchEnrolled: boolean;
+  /** Whether this account takes part in warm-up at all. */
+  warmupEnrolled: boolean;
   createdAt: number;
   updatedAt: number;
 }

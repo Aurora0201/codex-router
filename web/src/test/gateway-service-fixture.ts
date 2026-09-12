@@ -1,5 +1,6 @@
 import type {
   AccountView,
+  WarmupSettingsView,
   AutoSwitchSettingsView,
   GatewayService,
   GatewaySnapshot,
@@ -35,6 +36,15 @@ const account = (id: string, isActive = false): AccountView => ({
   },
 })
 
+const WARMUP: WarmupSettingsView = {
+  auto: false,
+  model: null,
+  effort: null,
+  message: "回复 OK 即可，不要解释。",
+  cooldownMs: 15 * 60_000,
+  dailyLimit: 6,
+}
+
 const AUTO_SWITCH: AutoSwitchSettingsView = {
   enabled: false,
   switchOn: "weekly",
@@ -62,6 +72,8 @@ export function createGatewayServiceFixture({
     account("account-3", activeAccountId === "account-3"),
   ]
   let autoSwitch: Partial<AutoSwitchSettingsView> = {}
+  let warmup: Partial<WarmupSettingsView> = {}
+  let warmupEnrolled: Record<string, boolean> = {}
   let login: LoginSessionView = {
     loginId: "login-1",
     authUrl: "https://auth.openai.test/codex",
@@ -285,6 +297,56 @@ export function createGatewayServiceFixture({
     async saveAutoSwitch(values) {
       autoSwitch = { ...autoSwitch, ...values }
       return { ...AUTO_SWITCH, ...autoSwitch }
+    },
+    async getWarmup() {
+      return {
+        settings: { ...WARMUP, ...warmup },
+        progress: { running: false, total: 0, done: 0, accountId: null },
+        accounts: accounts.map((account) => ({
+          id: account.id,
+          enrolled: warmupEnrolled[account.id] ?? true,
+          eligible: account.enabled && account.authStatus === "ready",
+          windowResetsAt: null,
+          windowRunning: false,
+          weeklyExhausted: false,
+          weeklyResetsAt: null,
+        })),
+        recent: [],
+      }
+    },
+    async getWarmupModels() {
+      return {
+        models: [
+          {
+            id: "gpt-fixture-default",
+            displayName: "Fixture Default",
+            isDefault: true,
+            defaultEffort: "medium",
+            efforts: [
+              { id: "low", description: "Fast" },
+              { id: "medium", description: "Balanced" },
+            ],
+          },
+          {
+            id: "gpt-fixture-mini",
+            displayName: "Fixture Mini",
+            isDefault: false,
+            defaultEffort: "low",
+            efforts: [{ id: "low", description: "Fast" }],
+          },
+        ],
+      }
+    },
+    async saveWarmup(values) {
+      warmup = { ...warmup, ...values }
+      return { ...WARMUP, ...warmup }
+    },
+    async saveWarmupEnrollment(input) {
+      warmupEnrolled = { ...warmupEnrolled, ...input.enrolled }
+      return { enrolled: input.enrolled }
+    },
+    async runWarmup() {
+      return { started: true, total: accounts.length }
     },
     async saveAutoSwitchPriority(input) {
       return {

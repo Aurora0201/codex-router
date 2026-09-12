@@ -5,6 +5,7 @@ import { CredentialReader } from "./credential-reader.js";
 import { object, parseRateLimitResponse, stringAt } from "./rate-limit-parser.js";
 import type { CredentialSnapshot, GatewayConfig, RateLimitSnapshot } from "../types.js";
 import { GatewayDatabase } from "../db/database.js";
+import { shortWindowState, shortWindowEndsAt } from "./quota-windows.js";
 
 /**
  * How stale a reading may be before a request triggers a fresh read. Auto
@@ -41,13 +42,14 @@ function accountMetadata(result: unknown): { mode: string | null; email: string 
 export class AccountStatusService {
   private readonly inFlight = new Map<string, { promise: Promise<AccountStatusRefresh>; refreshToken: boolean }>();
   private readonly backgroundTasks = new Set<Promise<boolean>>();
+  private readonly backgroundByAccount = new Map<string, Promise<boolean>>();
   private readonly lastAttemptAt = new Map<string, number>();
   private readonly reader = new CredentialReader();
   private readonly shutdownController = new AbortController();
   private closed = false;
 
   /**
-   * Called once every attempt settles, whichever path asked for it — the
+   * Called once every underlying attempt settles, whichever path asked for it — the
    * sweep, a request finding the numbers stale, or a 429 — and whether it
    * landed or not. Auto switching decides on these readings, so every one of
    * them is a moment to re-decide; hanging it off the sweep alone made the
@@ -69,7 +71,10 @@ export class AccountStatusService {
     const current = this.inFlight.get(accountId);
     if (current && (!options.refreshToken || current.refreshToken)) return current.promise;
     // A forced refresh must run after a weaker read, even if that read fails.
-    const operation = this.lock.run(accountId, () => this.refreshOnce(accountId, options));
+    const operation = this.lock.run(accountId, () => this.refreshOnce(accountId, options)).then(
+      (result) => { this.notify(accountId, true); return result; },
+      (error: unknown) => { this.notify(accountId, false); throw error; },
+    );
     this.inFlight.set(accountId, { promise: operation, refreshToken: options.refreshToken ?? false });
     void operation.finally(() => {
       if (this.inFlight.get(accountId)?.promise === operation) this.inFlight.delete(accountId);
@@ -87,13 +92,24 @@ export class AccountStatusService {
 
   refreshInBackground(accountId: string): Promise<boolean> {
     if (this.closed) return Promise.resolve(false);
-    const task = this.refreshWithRetry(accountId).then((ok) => {
-      if (!this.closed) this.onSettled(accountId, ok);
-      return ok;
-    });
+    const existing = this.backgroundByAccount.get(accountId);
+    if (existing) return existing;
+    const task = this.refreshWithRetry(accountId);
+    this.backgroundByAccount.set(accountId, task);
     this.backgroundTasks.add(task);
-    void task.finally(() => this.backgroundTasks.delete(task));
+    void task.finally(() => {
+      this.backgroundTasks.delete(task);
+      this.backgroundByAccount.delete(accountId);
+    }).catch(() => undefined);
     return task;
+  }
+
+  private notify(accountId: string, ok: boolean): void {
+    // Observers must not turn a successful credential refresh into a failure.
+    if (!this.closed) {
+      try { this.onSettled(accountId, ok); }
+      catch { /* Observer failures cannot invalidate committed credentials. */ }
+    }
   }
 
   private async refreshWithRetry(accountId: string): Promise<boolean> {
@@ -145,10 +161,14 @@ export class AccountStatusService {
         if (!outcome || !["reset", "alreadyRedeemed", "nothingToReset", "noCredit"].includes(outcome)) {
           throw new Error("rate_limit_reset_unknown_outcome");
         }
+        if (outcome === "reset") this.database.warmupLog.noteReset(accountId);
         await this.readAndPersist(accountId, client, false);
         return outcome;
       });
-    });
+    }).then(
+      (result) => { this.notify(accountId, true); return result; },
+      (error: unknown) => { this.notify(accountId, false); throw error; },
+    );
   }
 
   private async refreshOnce(accountId: string, options: { refreshToken?: boolean; checking?: boolean }): Promise<AccountStatusRefresh> {
@@ -180,6 +200,7 @@ export class AccountStatusService {
   }
 
   private async readAndPersist(accountId: string, client: AppServerClient, refreshToken: boolean): Promise<AccountStatusRefresh> {
+    const before = this.database.accounts.get(accountId);
     const official = accountMetadata(await client.call("account/read", { refreshToken }, 60_000));
     const limits = parseRateLimitResponse(await client.call("account/rateLimits/read", {}, 30_000));
     const credential = await this.reader.read(this.database.accounts.get(accountId)!.codexHome);
@@ -200,11 +221,21 @@ export class AccountStatusService {
       email: official.email ?? credential.email,
       planType: official.planType ?? limits.planType ?? credential.planType,
       authMode: official.mode,
-      authStatus: !this.database.accounts.get(accountId)?.enabled ? "disabled" : limits.rateLimitReachedType ? "rate_limited" : "ready",
+      // Being over a limit is a fact about quota, not about the credentials.
+      // It rides on `rateLimitReachedType`, which `updateRateLimits` above has
+      // just written from the upstream's own report; putting it here as well
+      // made an account with working credentials unselectable.
+      authStatus: !this.database.accounts.get(accountId)?.enabled ? "disabled" : "ready",
       authCheckedAt: now,
       authLastSuccessfulAt: now,
       authErrorCode: null,
     });
+    const after = this.database.accounts.get(accountId)!;
+    if (before && ["running", "expired"].includes(shortWindowState(before)) && shortWindowState(after) === "ready") {
+      this.database.warmupLog.noteReset(accountId);
+    }
+    const end = shortWindowEndsAt(after);
+    if (end !== null) this.database.warmupLog.confirmPending(accountId, end);
     return { credential, limits };
   }
 

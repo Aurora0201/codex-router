@@ -6,6 +6,7 @@ import { registerAccountRoutes } from "./account-routes.js";
 import { registerAccountLoginRoutes } from "./account-login-routes.js";
 import { registerActiveAccountRoutes } from "./active-account-routes.js";
 import { registerAutoSwitchRoutes } from "./auto-switch-routes.js";
+import { registerWarmupRoutes } from "./warmup-routes.js";
 import { registerSettingsRoutes } from "./settings-routes.js";
 import { registerStatsRoutes } from "./stats-routes.js";
 import { registerCodexRoutes } from "./codex-routes.js";
@@ -30,6 +31,7 @@ export async function registerAdminApi(
     registerActiveAccountRoutes(admin, ctx);
     registerSettingsRoutes(admin, ctx);
     registerAutoSwitchRoutes(admin, ctx);
+    registerWarmupRoutes(admin, ctx);
     registerStatsRoutes(admin, ctx);
     registerRequestLogRoutes(admin, ctx);
     registerCodexRoutes(admin, ctx, codexConfig);

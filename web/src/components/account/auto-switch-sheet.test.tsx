@@ -40,13 +40,8 @@ async function open(view?: Partial<AutoSwitchView>) {
       ...view,
     })
   }
-  const accounts = service.snapshot.accounts.accounts
   render(
-    <AutoSwitchButton
-      accounts={accounts}
-      activeAccountId={accounts[0].id}
-      service={service}
-    />
+    <AutoSwitchButton routing={service.snapshot.accounts} service={service} />
   )
   await userEvent.click(screen.getByRole("button", { name: /自动切换/ }))
   return service
@@ -231,13 +226,8 @@ describe("AutoSwitchButton", () => {
     const read = vi
       .spyOn(service, "getAutoSwitch")
       .mockRejectedValue(new Error("Route GET:/api/auto-switch not found"))
-    const accounts = service.snapshot.accounts.accounts
     render(
-      <AutoSwitchButton
-        accounts={accounts}
-        activeAccountId={accounts[0].id}
-        service={service}
-      />
+      <AutoSwitchButton routing={service.snapshot.accounts} service={service} />
     )
     // The background read failed before anyone opened anything, and that is
     // not worth a toast.
@@ -257,6 +247,64 @@ describe("AutoSwitchButton", () => {
     expect(screen.queryByText("网关没有回应这个设置")).toBeNull()
   })
 
+  it("picks its state back up on the next gateway tick after a failed read", async () => {
+    const service: Fixture = createGatewayServiceFixture()
+    const read = vi
+      .spyOn(service, "getAutoSwitch")
+      .mockRejectedValueOnce(new Error("Failed to fetch"))
+      .mockResolvedValue({
+        settings: SETTINGS,
+        candidateIds: service.snapshot.accounts.accounts.map(
+          (account) => account.id
+        ),
+        stalled: false,
+        recent: [],
+      })
+    const { rerender } = render(
+      <AutoSwitchButton routing={service.snapshot.accounts} service={service} />
+    )
+
+    // The gateway was still coming up when the page mounted, so the button
+    // knows nothing — and used to keep saying so until someone opened it.
+    await waitFor(() => expect(read).toHaveBeenCalledTimes(1))
+    expect(
+      document.querySelector("[data-slot=sheet-trigger]")
+    ).toHaveTextContent("自动切换")
+
+    // The gateway's next snapshot is a new object, and that is the beat.
+    rerender(
+      <AutoSwitchButton
+        routing={{ ...service.snapshot.accounts }}
+        service={service}
+      />
+    )
+    await waitFor(() =>
+      expect(
+        document.querySelector("[data-slot=sheet-trigger]")
+      ).toHaveTextContent("自动切换 · 已开")
+    )
+  })
+
+  it("drops the beat while the sheet is open, so a drag is not re-seated", async () => {
+    const service: Fixture = createGatewayServiceFixture()
+    const read = vi.spyOn(service, "getAutoSwitch")
+    const { rerender } = render(
+      <AutoSwitchButton routing={service.snapshot.accounts} service={service} />
+    )
+    await userEvent.click(screen.getByRole("button", { name: /自动切换/ }))
+    await waitFor(() => expect(rows()).toHaveLength(3))
+    const reads = read.mock.calls.length
+
+    rerender(
+      <AutoSwitchButton
+        routing={{ ...service.snapshot.accounts }}
+        service={service}
+      />
+    )
+    await waitFor(() => expect(rows()).toHaveLength(3))
+    expect(read).toHaveBeenCalledTimes(reads)
+  })
+
   it("groups every setting under a named section, none left floating", async () => {
     await open({})
     await waitFor(() => expect(rows()).toHaveLength(3))
@@ -266,7 +314,7 @@ describe("AutoSwitchButton", () => {
     expect(
       sections.map((section) => section.querySelector("h3")?.textContent)
     ).toEqual([
-      "运行方式",
+      "额度不足时自动换账号",
       "按哪个额度切换",
       "优先级",
       "触发与节奏",

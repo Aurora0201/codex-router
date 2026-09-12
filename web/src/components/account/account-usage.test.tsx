@@ -41,7 +41,7 @@ describe("QuotaMeter", () => {
     expect(screen.getByText("3 天 5 小时后重置")).toBeInTheDocument()
   })
 
-  it("keeps an exhausted window measurable and emphasises when it refills", () => {
+  it("keeps an exhausted window measurable without a third alarm on it", () => {
     render(
       <QuotaMeter
         window={{
@@ -57,7 +57,10 @@ describe("QuotaMeter", () => {
       "0"
     )
     expect(screen.getByText("0%")).toHaveClass("text-destructive")
-    expect(screen.getByText("3 小时后重置")).toHaveClass("text-foreground")
+    // The reading and the bar already say the window is empty. The reset line
+    // used to shout it a third time, which made cards holding identical
+    // numbers look unlike each other.
+    expect(screen.getByText("3 小时后重置")).not.toHaveClass("text-foreground")
   })
 
   it.each([

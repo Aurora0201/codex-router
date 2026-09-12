@@ -17,6 +17,9 @@ import type {
   StatsView,
   WebSocketConnectionLogFilters,
   WebSocketConnectionLogsResponse,
+  WarmupModelView,
+  WarmupSettingsView,
+  WarmupView,
   WebSocketConnectionView,
 } from "@/services/contracts"
 
@@ -221,6 +224,21 @@ export function createHttpGatewayService(): GatewayService {
     saveSettings: (values) =>
       request<SettingsView>("/api/settings", json("PATCH", values)),
     getAutoSwitch: () => request<AutoSwitchView>("/api/auto-switch"),
+    getWarmup: () => request<WarmupView>("/api/warmup"),
+    getWarmupModels: () =>
+      request<{ models: WarmupModelView[] }>("/api/warmup/models"),
+    saveWarmup: (values) =>
+      request<WarmupSettingsView>("/api/warmup", json("PATCH", values)),
+    saveWarmupEnrollment: (input) =>
+      request<{ enrolled: Record<string, boolean> }>(
+        "/api/warmup/enrollment",
+        json("PATCH", input)
+      ),
+    runWarmup: (input) =>
+      request<{ started: boolean; total: number }>(
+        "/api/warmup/run",
+        json("POST", input ?? {})
+      ),
     saveAutoSwitch: (values) =>
       request<AutoSwitchSettingsView>(
         "/api/auto-switch",

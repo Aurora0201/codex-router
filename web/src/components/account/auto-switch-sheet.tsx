@@ -27,6 +27,7 @@ import {
   ItemTitle,
 } from "@/components/ui/item"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Section } from "@/components/account/sheet-section"
 import {
   Empty,
   EmptyContent,
@@ -59,6 +60,7 @@ import { accountWindowSlots, remainingPercent } from "@/lib/account-state"
 import { formatRelativeTime, shortAccountId } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type {
+  AccountsResponse,
   AccountView,
   AllBelowBehaviour,
   AutoSwitchSettingsView,
@@ -101,37 +103,6 @@ function reasonLabel(entry: SwitchLogEntryView): string {
     return "5 小时额度低于阈值"
   }
   return REASON_LABEL[entry.reason]
-}
-
-/**
- * A block of related settings. The sheet is the panel, so a section is its one
- * inset: solid fill inside the outline, never an outline inside an outline.
- */
-function Section({
-  title,
-  icon: Icon,
-  hint,
-  children,
-}: {
-  title: string
-  icon: typeof GaugeIcon
-  hint?: string
-  children: ReactNode
-}) {
-  return (
-    <section className="rounded-xl bg-muted p-3">
-      <header className="flex h-6 items-center gap-2">
-        <Icon aria-hidden="true" className="size-4 text-muted-foreground" />
-        <h3 className="flex-1 text-sm font-semibold">{title}</h3>
-        {hint ? (
-          <span className="text-xs text-muted-foreground-subtle">{hint}</span>
-        ) : null}
-      </header>
-      {/* Matches the section's own padding, so the gap under the header and
-          the gap above the bottom edge read as one rhythm. */}
-      <div className="mt-3">{children}</div>
-    </section>
-  )
 }
 
 /**
@@ -323,17 +294,20 @@ function PriorityRow({
  * armed, and the sheet holding everything behind it.
  */
 export function AutoSwitchButton({
-  accounts,
-  activeAccountId,
+  routing,
   service,
-  disabled,
 }: {
-  accounts: AccountView[]
-  activeAccountId: string | null
+  /**
+   * The accounts and the routed one, exactly as the gateway last reported
+   * them. A new object arrives on every gateway tick, and that identity is
+   * the beat this button re-reads its own state on — see `beat` below.
+   */
+  routing: AccountsResponse
   service: GatewayService
-  disabled?: boolean
 }) {
   const { t } = useTranslation()
+  const { accounts, activeAccountId } = routing
+  const disabled = accounts.length === 0
   const [open, setOpen] = useState(false)
   const [state, setState] = useState<AutoSwitchView | null>(null)
   const [order, setOrder] = useState<string[]>([])
@@ -349,8 +323,22 @@ export function AutoSwitchButton({
     accountsRef.current = accounts
   }, [accounts])
 
-  // Read once so the button can say whether switching is armed, and again on
-  // every open so the ranking and the log are the gateway's, not a stale copy.
+  /**
+   * Auto-switch state is not part of the page's snapshot, so nothing else
+   * refreshes it. Without a beat the one read at mount is the only one there
+   * is, and a read that loses the race with a gateway coming back up leaves
+   * the button saying "off" for as long as the page stays open — the only
+   * way back was to open the sheet, which reads again.
+   *
+   * So it re-reads whenever the gateway hands the page a new set of accounts,
+   * which also keeps the armed/paused badge honest while the sheet is shut.
+   * Not while it is open, though: there its own state leads, and a re-read
+   * mid-drag re-seats the list under the hand moving it.
+   */
+  const beat = open ? null : routing
+
+  // Read on that beat, and again on every open so the ranking and the log are
+  // the gateway's rather than a stale copy.
   useEffect(() => {
     let cancelled = false
     void service
@@ -383,7 +371,7 @@ export function AutoSwitchButton({
     return () => {
       cancelled = true
     }
-  }, [open, service, attempt])
+  }, [open, service, attempt, beat])
 
   // FLIP: where each row sat before the order changed, so it can be played
   // back from there into its new seat instead of teleporting.
@@ -598,22 +586,25 @@ export function AutoSwitchButton({
             {t("正在载入…")}
           </p>
         ) : (
-          <ScrollArea className="min-h-0 flex-1">
+          <ScrollArea className="min-h-0 flex-1 [&_[data-slot=scroll-area-viewport]]:scroll-fade">
             <div className="flex flex-col gap-3 px-4 pb-6">
-              <Section title={t("运行方式")} icon={PowerIcon}>
-                <div className="grid divide-y divide-border">
-                  <SettingRow
-                    title={t("额度不足时自动换账号")}
-                    hint={t("按下面的顺序换到下一个够用的账号。")}
-                  >
-                    <Switch
-                      aria-label={t("额度不足时自动换账号")}
-                      checked={settings.enabled}
-                      onCheckedChange={(value) => patch({ enabled: value })}
-                    />
-                  </SettingRow>
-                </div>
-              </Section>
+              {/* The master switch is what the other four sections answer to,
+                  so it is the section's own heading rather than a lone row
+                  inside it — a heading that repeated the row underneath it
+                  left the switch centred on the row and 36px of heading
+                  stacked above it, which reads as a lopsided box. */}
+              <Section
+                title={t("额度不足时自动换账号")}
+                icon={PowerIcon}
+                description={t("按下面的顺序换到下一个够用的账号。")}
+                control={
+                  <Switch
+                    aria-label={t("额度不足时自动换账号")}
+                    checked={settings.enabled}
+                    onCheckedChange={(value) => patch({ enabled: value })}
+                  />
+                }
+              />
 
               <Section title={t("按哪个额度切换")} icon={GaugeIcon}>
                 {/* A segmented control on the section's own fill: the

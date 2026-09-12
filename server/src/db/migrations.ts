@@ -2,7 +2,7 @@ import type Database from "better-sqlite3";
 
 type SqliteDatabase = Database.Database;
 
-export const SCHEMA_VERSION = 19;
+export const SCHEMA_VERSION = 22;
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -451,6 +451,50 @@ export function migrate(db: SqliteDatabase): void {
       DROP INDEX IF EXISTS idx_request_log_started;
       DROP INDEX IF EXISTS idx_websocket_connection_started;
     `);
+  }
+
+  if (version < 20) {
+    const warmupColumns = tableColumns(db, "accounts");
+    if (!warmupColumns.has("warmup_enrolled")) {
+      db.exec("ALTER TABLE accounts ADD COLUMN warmup_enrolled INTEGER NOT NULL DEFAULT 1");
+    }
+    // Warm-up spends the user's quota, and the automatic mode spends it
+    // without being asked each time. Same reasoning as the switch log: the
+    // trace is part of the feature, not an optional log. It also carries the
+    // window before and after, because "did it succeed" is not the question —
+    // "did the window actually start" is.
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS account_warmup_log (
+        id TEXT PRIMARY KEY,
+        started_at INTEGER NOT NULL,
+        account_id TEXT NOT NULL,
+        trigger TEXT NOT NULL,
+        outcome TEXT NOT NULL,
+        model TEXT,
+        duration_ms INTEGER,
+        error_code TEXT,
+        window_before_resets_at INTEGER,
+        window_after_resets_at INTEGER
+      );
+      CREATE INDEX IF NOT EXISTS account_warmup_log_at ON account_warmup_log(started_at DESC);
+      CREATE INDEX IF NOT EXISTS account_warmup_log_account ON account_warmup_log(account_id, started_at DESC);
+    `);
+  }
+
+  if (version < 21) {
+    // `rate_limited` used to live in auth_status, where it also blocked manual
+    // selection: an account with perfectly good credentials could not be routed
+    // to because it was over a quota window. Quota rides on
+    // rate_limit_reached_type, which the limits refresh already writes, so the
+    // rows that carry the old value go back to what they actually are.
+    db.exec("UPDATE accounts SET auth_status = 'ready' WHERE auth_status = 'rate_limited'");
+  }
+
+  if (version < 22) {
+    db.exec(`CREATE TABLE IF NOT EXISTS account_warmup_state (
+      account_id TEXT PRIMARY KEY,
+      reset_at INTEGER NOT NULL
+    )`);
   }
 
   db.prepare(

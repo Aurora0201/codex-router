@@ -65,6 +65,13 @@ afterEach(async () => {
 });
 
 describe("AutoSwitchService", () => {
+  it("never relaxes the exhausted weekly window in highest fallback", () => {
+    account("a", { weeklyUsed: 100, rank: 1 });
+    account("b", { weeklyUsed: 100, rank: 2 });
+    active.select("a");
+    settings({ onAllBelow: "highest", triggerOn429: true });
+    expect(service.decide({ kind: "rate_limited", accountId: "a" })).toBeNull();
+  });
   it("does nothing at all while it is switched off", () => {
     account("a", { weeklyUsed: 99, rank: 1 });
     account("b", { rank: 2 });
@@ -348,5 +355,25 @@ describe("AutoSwitchService.stalled", () => {
     active.select("a");
     settings({ thresholdPercent: 25, onAllBelow: "pause" });
     expect(service.stalled()).toBe(false);
+  });
+  it("never switches onto an account whose week is spent", () => {
+    const current = account("current", { shortUsed: 99, weeklyUsed: 50, rank: 0 });
+    account("spent", { shortUsed: 0, weeklyUsed: 100, rank: 1 });
+    const roomy = account("roomy", { shortUsed: 10, weeklyUsed: 20, rank: 2 });
+    settings({ switchOn: "short", shortThresholdPercent: 5 });
+    active.select(current);
+
+    // On the five-hour window alone the spent account reads as completely free.
+    // Switching onto it was answered by the upstream with a 429.
+    expect(service.decide({ kind: "quota" })?.to).toBe(roomy);
+  });
+
+  it("counts a spent week as nowhere left to go", () => {
+    const current = account("current", { shortUsed: 99, weeklyUsed: 50, rank: 0 });
+    account("spent", { shortUsed: 0, weeklyUsed: 100, rank: 1 });
+    settings({ switchOn: "short", shortThresholdPercent: 5 });
+    active.select(current);
+
+    expect(service.stalled()).toBe(true);
   });
 });

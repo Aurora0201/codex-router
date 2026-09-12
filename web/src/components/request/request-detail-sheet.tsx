@@ -133,7 +133,7 @@ export function RequestDetailSheet({
             {t("仅包含允许记录的诊断元数据。")}
           </SheetDescription>
         </SheetHeader>
-        <ScrollArea className="min-h-0 flex-1">
+        <ScrollArea className="min-h-0 flex-1 [&_[data-slot=scroll-area-viewport]]:scroll-fade">
           <div className="flex flex-col gap-4 p-4 pt-1">
             {groups.map((group) => (
               <LogDetailGroup key={group.title} {...group} />

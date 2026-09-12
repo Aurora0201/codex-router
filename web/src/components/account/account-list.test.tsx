@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react"
+import { render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { describe, expect, it, vi } from "vitest"
 
@@ -175,13 +175,13 @@ describe("AccountList", () => {
         authStatus: "disabled",
       }),
       account({
-        id: "limited",
-        chatgptAccountId: "acct-limited",
-        authStatus: "rate_limited",
+        id: "broken",
+        chatgptAccountId: "acct-broken",
+        authStatus: "relogin_required",
       }),
     ])
 
-    for (const id of ["acct-off", "acct-limited"]) {
+    for (const id of ["acct-off", "acct-broken"]) {
       expect(
         screen.getByRole("radio", { name: `路由到 ${id}` })
       ).toHaveAttribute("aria-disabled", "true")
@@ -189,6 +189,26 @@ describe("AccountList", () => {
     expect(
       screen.getByRole("radio", { name: "路由到 acct-ready" })
     ).not.toHaveAttribute("aria-disabled", "true")
+  })
+
+  it("still lets you route to an account that is over a quota limit", () => {
+    // Being over a limit says nothing about the credentials, and it used to
+    // arrive as an auth status — so one account reading 0% was selectable and
+    // another reading 0% was not, depending only on whether upstream had said
+    // so yet. Quota never blocks the choice now.
+    renderList([
+      account({
+        id: "limited",
+        chatgptAccountId: "acct-limited",
+        rateLimitReachedType: "primary",
+        limits: quota([bucket({ primary: window(100, 300) })]),
+      }),
+    ])
+
+    expect(
+      screen.getByRole("radio", { name: "路由到 acct-limited" })
+    ).not.toHaveAttribute("aria-disabled", "true")
+    expect(screen.getByText("额度受限")).toBeInTheDocument()
   })
 
   it("keeps the order the server gave, whatever the accounts are doing", () => {
@@ -367,6 +387,56 @@ describe("AccountList", () => {
     expect(screen.queryByText("acct-ready")).not.toBeInTheDocument()
   })
 
+  it("says the redemption is under way instead of sitting silent", async () => {
+    const user = userEvent.setup()
+    let settle: () => void = () => undefined
+    const onConsumeReset = vi.fn(
+      () => new Promise<void>((resolve) => (settle = resolve))
+    )
+    const value = account({
+      limits: {
+        buckets: [bucket({ primary: window(20, 300) })],
+        defaultBucketKey: "codex",
+        checkedAt: Date.now(),
+        resetCredits: {
+          availableCount: 1,
+          credits: [
+            {
+              id: "credit-1",
+              resetType: "weekly",
+              status: "available",
+              grantedAt: Date.now(),
+              expiresAt: Date.UTC(2026, 7, 31),
+              title: "Weekly reset",
+              description: null,
+            },
+          ],
+        },
+      },
+    })
+    renderList([value], { onConsumeReset })
+
+    await user.click(screen.getByRole("button", { name: /acct-alpha/ }))
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: "使用重置券",
+      })
+    )
+    await user.click(screen.getByRole("button", { name: "确认使用" }))
+
+    // It is a round trip to the upstream. The dialog used to sit unchanged
+    // until it closed, which was long enough to wonder whether the click had
+    // registered at all.
+    const busy = await screen.findByRole("button", { name: /正在使用/ })
+    expect(busy).toBeDisabled()
+    expect(screen.getByRole("button", { name: "取消" })).toBeDisabled()
+
+    settle()
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: /正在使用/ })).toBeNull()
+    )
+  })
+
   it("opens the detail sheet from the account id and spends a reset credit once", async () => {
     const user = userEvent.setup()
     const onConsumeReset = vi.fn(async () => undefined)
@@ -412,5 +482,38 @@ describe("AccountList", () => {
       idempotencyKey: expect.any(String),
       creditId: "credit-1",
     })
+  })
+  it("says the routed account's condition without growing the band", () => {
+    const routed = account({ id: "acct-1", isActive: true })
+    const lines = () =>
+      Array.from(
+        document
+          .querySelector("[data-slot=route-identity]")!
+          .querySelectorAll("p")
+      ).map((line) => line.textContent)
+
+    const { rerender } = renderList([routed])
+    expect(lines()).toEqual(["当前请求路由", "acct-alpha"])
+
+    // A band that grew a third line when something went wrong moved the whole
+    // page down. The condition takes the caption's line instead: the icon and
+    // the position already say what the id below it is.
+    rerender(
+      <TooltipProvider>
+        <AccountList
+          accounts={[routed]}
+          busyId={null}
+          onSelect={vi.fn()}
+          onClearRoute={vi.fn()}
+          onAction={vi.fn()}
+          onConsumeReset={vi.fn()}
+          routeBlock={{
+            kind: "exhausted",
+            detail: "额度已耗尽 · 4 小时后恢复",
+          }}
+        />
+      </TooltipProvider>
+    )
+    expect(lines()).toEqual(["额度已耗尽 · 4 小时后恢复", "acct-alpha"])
   })
 })

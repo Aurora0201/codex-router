@@ -30,6 +30,7 @@ const ERROR_STATUS = new Map<string, number>([
   ["codex_config_backup_missing", 500], ["rate_limit_reset_unknown_outcome", 500],
   ["codex_auth_file_incompatible", 500], ["codex_auth_file_too_large", 500],
   ["account_status_service_closed", 503], ["account_login_service_closed", 503],
+  ["warmup_already_running", 409], ["warmup_service_closed", 503],
 ]);
 
 function apiError(error: unknown): { code: string; status: number } {

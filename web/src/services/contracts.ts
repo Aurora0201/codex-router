@@ -3,7 +3,6 @@ export type AuthStatus =
   | "checking"
   | "ready"
   | "refreshing"
-  | "rate_limited"
   | "relogin_required"
   | "unsupported_fedramp"
   | "disabled"
@@ -166,6 +165,73 @@ export interface AutoSwitchView {
   recent: SwitchLogEntryView[]
 }
 
+export interface WarmupSettingsView {
+  /** The gateway warming accounts by itself, which is spending without asking. */
+  auto: boolean
+  /** null means "whatever this account's own default model is". */
+  model: string | null
+  /** How hard the model thinks; null leaves the model's own default. */
+  effort: string | null
+  message: string
+  cooldownMs: number
+  dailyLimit: number
+}
+
+export interface WarmupModelView {
+  id: string
+  displayName: string
+  isDefault: boolean
+  /** Which efforts this model takes, in the catalog's own order. */
+  efforts: { id: string; description: string }[]
+  defaultEffort: string | null
+}
+
+export type WarmupSkipReason =
+  "window_running" | "cooldown" | "daily_limit" | "not_enrolled" | "not_ready"
+
+export type WarmupOutcome = "running" | "pending" | "warmed" | "skipped" | "failed"
+
+export interface WarmupLogEntryView {
+  id: string
+  startedAt: number
+  accountId: string
+  trigger: "manual" | "auto"
+  outcome: WarmupOutcome
+  model: string | null
+  durationMs: number | null
+  /** A classification, never the upstream's own words. */
+  errorCode: string | null
+  windowBeforeResetsAt: number | null
+  windowAfterResetsAt: number | null
+}
+
+export interface WarmupAccountView {
+  id: string
+  enrolled: boolean
+  /** Enabled and authenticated, so warm-up may touch it at all. */
+  eligible: boolean
+  windowResetsAt: number | null
+  /** Already counting, so warming it would buy nothing. */
+  windowRunning: boolean
+  /** The week is spent: warming would be refused as well as pointless. */
+  weeklyExhausted: boolean
+  weeklyResetsAt: number | null
+}
+
+export interface WarmupProgressView {
+  running: boolean
+  total: number
+  done: number
+  accountId: string | null
+}
+
+export interface WarmupView {
+  settings: WarmupSettingsView
+  progress: WarmupProgressView
+  accounts: WarmupAccountView[]
+  recent: WarmupLogEntryView[]
+}
+
 export interface LoginSessionView {
   loginId: string
   authUrl: string
@@ -218,6 +284,7 @@ export type GatewayResource =
   | "logs"
   | "websocketConnections"
   | "usage"
+  | "warmup"
 
 export type CodexUsageRange = "1d" | "7d" | "14d" | "30d" | "90d" | "all"
 export interface CodexUsageFilters {
@@ -514,6 +581,16 @@ export interface GatewayService {
     order?: string[]
     enrolled?: Record<string, boolean>
   }): Promise<{ candidateIds: string[] }>
+  getWarmup(): Promise<WarmupView>
+  getWarmupModels(): Promise<{ models: WarmupModelView[] }>
+  saveWarmup(values: Partial<WarmupSettingsView>): Promise<WarmupSettingsView>
+  saveWarmupEnrollment(input: {
+    enrolled: Record<string, boolean>
+  }): Promise<{ enrolled: Record<string, boolean> }>
+  runWarmup(input?: {
+    force?: boolean
+    accountIds?: string[]
+  }): Promise<{ started: boolean; total: number }>
   saveSettings(
     values: Partial<
       Pick<SettingsView, "requestMetadataLogging" | "theme" | "logLevel">

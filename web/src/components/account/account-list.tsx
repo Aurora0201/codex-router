@@ -12,6 +12,7 @@ import {
   TabsTab,
 } from "@/components/animate-ui/components/base/tabs"
 import { Button } from "@/components/ui/button"
+import { Spinner } from "@/components/ui/spinner"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -89,6 +90,8 @@ export function AccountList({
     credit: RateLimitResetCreditView
     key: string
   } | null>(null)
+  /** The redemption is a round trip to the upstream, not an instant. */
+  const [redeeming, setRedeeming] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const [fades, setFades] = useState({ top: false, bottom: false })
   useEffect(() => {
@@ -192,9 +195,23 @@ export function AccountList({
             >
               <RouteIcon aria-hidden="true" className="size-[18px]" />
             </span>
-            <div className="min-w-0">
-              <p className="text-xs text-muted-foreground-subtle">
-                {t("当前请求路由")}
+            <div data-slot="route-identity" className="min-w-0">
+              {/* The condition takes the caption's line rather than adding a
+                  third one. A band that grows when something goes wrong moves
+                  the whole page, and "当前请求路由" is the line worth losing:
+                  the icon and the position already say what the id below is,
+                  while the condition is the thing that has to be read. */}
+              <p
+                className={cn(
+                  "truncate text-xs",
+                  !routeBlock
+                    ? "text-muted-foreground-subtle"
+                    : routeBlock.kind === "unavailable"
+                      ? "font-medium text-destructive"
+                      : "font-medium text-warning"
+                )}
+              >
+                {routeBlock ? routeBlock.detail : t("当前请求路由")}
               </p>
               <p
                 className={cn(
@@ -206,21 +223,6 @@ export function AccountList({
                   ? shortAccountId(active.chatgptAccountId)
                   : t("尚未选择路由账号 · 请求使用 Codex 当前登录账号透传")}
               </p>
-              {/* The band is where the reader already looks for the routed
-                  account's condition, so the condition is said here rather
-                  than in a banner that pushed the whole page down. */}
-              {routeBlock ? (
-                <p
-                  className={cn(
-                    "mt-0.5 truncate text-xs font-medium",
-                    routeBlock.kind === "unavailable"
-                      ? "text-destructive"
-                      : "text-warning"
-                  )}
-                >
-                  {routeBlock.detail}
-                </p>
-              ) : null}
             </div>
           </div>
           {/* Readings on the left of the rule, the things you can do on the
@@ -395,7 +397,9 @@ export function AccountList({
 
       <AlertDialog
         open={resetting !== null}
-        onOpenChange={(open) => !open && setResetting(null)}
+        // Not dismissable mid-flight: the request is already with the upstream,
+        // and closing here would leave the outcome with nowhere to land.
+        onOpenChange={(open) => !open && !redeeming && setResetting(null)}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -407,19 +411,31 @@ export function AccountList({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>{t("取消")}</AlertDialogCancel>
+            <AlertDialogCancel disabled={redeeming}>
+              {t("取消")}
+            </AlertDialogCancel>
+            {/* It takes seconds, and the dialog used to sit there saying
+                nothing until it closed — long enough to wonder whether the
+                click had registered at all. */}
             <AlertDialogAction
-              onClick={() => {
-                if (!resetting) return
+              disabled={redeeming}
+              onClick={(event) => {
+                event.preventDefault()
+                if (!resetting || redeeming) return
+                setRedeeming(true)
                 void onConsumeReset(resetting.account, {
                   idempotencyKey: resetting.key,
                   creditId: resetting.credit.id,
                 })
-                  .then(() => setResetting(null))
                   .catch(() => undefined)
+                  .finally(() => {
+                    setRedeeming(false)
+                    setResetting(null)
+                  })
               }}
             >
-              {t("确认使用")}
+              {redeeming ? <Spinner data-icon="inline-start" /> : null}
+              {redeeming ? t("正在使用…") : t("确认使用")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
