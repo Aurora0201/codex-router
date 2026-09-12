@@ -157,7 +157,7 @@ export async function buildGateway(overrides: Partial<GatewayConfig> = {}, optio
     reEvaluateRouting(routable ? { kind: "quota" } : { kind: "unavailable", accountId });
     autoWarm();
   }, accountOperations);
-  const warmup = new AccountWarmupService(config, database, accountStatus, () => events.invalidate("warmup"));
+  const warmup = new AccountWarmupService(config, database, accountStatus, () => events.invalidate("warmup"), accountOperations);
   /**
    * A warm-up pass plus the reporting the service itself does not do. Quota
    * moves during a run, so the router is asked to look again once it is over —

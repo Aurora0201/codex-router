@@ -4,8 +4,16 @@ import path from "node:path";
 import type { AccountRecord, GatewayConfig } from "../types.js";
 import type { GatewayDatabase } from "../db/database.js";
 import type { WarmupTrigger } from "../db/repositories/warmup-log-repository.js";
+import { AccountOperationLock } from "./account-lock.js";
 import { AppServerClient, withAppServerClient } from "./app-server-client.js";
 import type { AccountStatusService } from "./account-status-service.js";
+import {
+  longWindowExhausted,
+  shortWindowEndsAt,
+  shortWindowResetsAt,
+  shortWindowRunning,
+} from "./quota-windows.js";
+export * from "./quota-windows.js";
 
 /** A model the user can pick for the warm-up turn. */
 export interface WarmupModel {
@@ -48,8 +56,6 @@ export interface WarmupProgress {
 /** One turn is a handful of seconds; a minute and a half means it is stuck. */
 const TURN_TIMEOUT_MS = 90_000;
 const DAY_MS = 24 * 3_600_000;
-/** Anything shorter than a day is the window that stops the next request. */
-const SHORT_WINDOW_MAX_MINS = 1440;
 
 /**
  * Upstream messages can carry prompt or response text, which never reaches the
@@ -68,81 +74,6 @@ function safeWarmupError(error: unknown): string {
 
 function object(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
-}
-
-function shortWindow(account: AccountRecord): { usedPercent: number | null; resetsAt: number | null } | null {
-  const windows = [
-    { mins: account.primaryWindowMinutes, usedPercent: account.primaryUsedPercent, resetsAt: account.primaryResetsAt },
-    { mins: account.secondaryWindowMinutes, usedPercent: account.secondaryUsedPercent, resetsAt: account.secondaryResetsAt },
-  ];
-  return windows.find((w) => typeof w.mins === "number" && w.mins > 0 && w.mins < SHORT_WINDOW_MAX_MINS) ?? null;
-}
-
-/** Whatever the upstream last said the short window resets at, as it said it. */
-export function shortWindowResetsAt(account: AccountRecord): number | null {
-  return shortWindow(account)?.resetsAt ?? null;
-}
-
-/**
- * True when the short window is actually counting, so warming it would buy
- * nothing.
- *
- * What makes a window count is that something has been spent in it, not that
- * its reset time is in the future. For a rested account the upstream reports
- * nothing spent and a reset time of *this reading plus five hours* — a
- * projection of when a window would end if one started now, which moves
- * forward with every read. Measured: two reads 218 seconds apart returned reset
- * times 218 seconds apart on an idle account, while an account with 46% spent
- * held its reset time exactly.
- *
- * Reading that projection as "still counting" meant a rested account looked
- * warm forever, and a machine that had been off all night — the case this
- * feature exists for — was the one case it never fired on.
- */
-export function shortWindowRunning(account: AccountRecord, now = Date.now()): boolean {
-  const window = shortWindow(account);
-  if (!window || typeof window.usedPercent !== "number" || window.usedPercent <= 0) return false;
-  return window.resetsAt !== null && window.resetsAt > now;
-}
-
-/**
- * When the short window really ends, or null when nothing has started one. The
- * projection an idle account reports is not a time worth showing or recording.
- */
-export function shortWindowEndsAt(account: AccountRecord, now = Date.now()): number | null {
-  return shortWindowRunning(account, now) ? shortWindowResetsAt(account) : null;
-}
-
-/**
- * The reading of the account's long (weekly) window, when there is one.
- */
-function longWindow(account: AccountRecord): { usedPercent: number | null; resetsAt: number | null } | null {
-  const windows = [
-    { mins: account.primaryWindowMinutes, usedPercent: account.primaryUsedPercent, resetsAt: account.primaryResetsAt },
-    { mins: account.secondaryWindowMinutes, usedPercent: account.secondaryUsedPercent, resetsAt: account.secondaryResetsAt },
-  ];
-  return windows.find((w) => typeof w.mins === "number" && w.mins >= SHORT_WINDOW_MAX_MINS) ?? null;
-}
-
-export function longWindowResetsAt(account: AccountRecord): number | null {
-  return longWindow(account)?.resetsAt ?? null;
-}
-
-/**
- * The week is spent, so the account cannot serve anything until it turns over.
- * The five-hour window still lapses and reads as warmable in the meantime, but
- * starting it buys nothing — and the turn that would start it is refused by
- * the same limit, so it is certain to fail as well as pointless.
- *
- * A reset time already behind us means the reading is from before the week
- * turned over, not that it is still spent: the next status refresh brings the
- * fresh number, and on that same refresh the lapsed five-hour window gets
- * warmed, which is exactly the moment it becomes worth doing.
- */
-export function longWindowExhausted(account: AccountRecord, now = Date.now()): boolean {
-  const week = longWindow(account);
-  if (!week || week.usedPercent === null || week.usedPercent < 100) return false;
-  return week.resetsAt === null || week.resetsAt > now;
 }
 
 /**
@@ -164,6 +95,13 @@ export class AccountWarmupService {
     private readonly database: GatewayDatabase,
     private readonly status: AccountStatusService,
     private readonly onProgress: (progress: WarmupProgress) => void = () => undefined,
+    /**
+     * Shared with the status service on purpose. Two `codex app-server`
+     * processes on one CODEX_HOME contend for the same SQLite files, and a
+     * warm-up turn is long enough for the five-minute status sweep to land on
+     * top of it.
+     */
+    private readonly lock = new AccountOperationLock(),
   ) {}
 
   close(): void {
@@ -321,8 +259,10 @@ export class AccountWarmupService {
     let errorCode: string | null = null;
 
     try {
-      model = await withAppServerClient(this.config, account.codexHome, (client) =>
-        this.sendTurn(client, settings, work));
+      // Held only around the turn: the refresh below goes through the same
+      // lock, and this one is not reentrant.
+      model = await this.lock.run(account.id, () =>
+        withAppServerClient(this.config, account.codexHome, (client) => this.sendTurn(client, settings, work)));
     } catch (error) {
       errorCode = safeWarmupError(error);
     }
@@ -366,7 +306,8 @@ export class AccountWarmupService {
     const threadId = typeof thread.threadId === "string" ? thread.threadId : String(object(thread.thread).id ?? "");
     if (!threadId) throw new Error("warmup_thread_not_started");
 
-    const completed = this.awaitTurn(client, threadId);
+    const waiting = this.awaitTurn(client, threadId);
+    let turnId: string | null = null;
     try {
       const started = object(await client.call("turn/start", {
         threadId,
@@ -375,10 +316,18 @@ export class AccountWarmupService {
         // model's own default, which is what "跟随模型默认" means.
         ...(effort ? { effort } : {}),
       }, 60_000));
+      const turn = object(started.turn);
+      turnId = typeof turn.id === "string" ? turn.id : null;
       const usedModel = typeof started.model === "string" ? started.model : null;
-      await completed;
+      await waiting.completed;
       return usedModel ?? model;
+    } catch (error) {
+      // Giving up on a turn does not stop it: it keeps running upstream, and
+      // goes on spending on an account nobody is watching any more.
+      if (turnId) await client.call("turn/interrupt", { threadId, turnId }, 10_000).catch(() => undefined);
+      throw error;
     } finally {
+      waiting.cancel();
       // Whatever happened, do not leave the thread holding the app-server open.
       await client.call("thread/archive", { threadId }, 10_000).catch(() => undefined);
     }
@@ -388,24 +337,35 @@ export class AccountWarmupService {
    * `turn/start` returns as soon as the turn exists; completion arrives as a
    * notification, and a failed turn arrives on that same notification with a
    * status rather than as an error.
+   *
+   * `cancel` matters as much as the promise. When `turn/start` itself fails
+   * nobody is left awaiting this, and a rejection surfacing a minute and a half
+   * later with no handler is not something a gateway should produce.
    */
-  private awaitTurn(client: AppServerClient, threadId: string): Promise<void> {
-    return new Promise<void>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        client.off("notification", listener);
-        reject(new Error("warmup_turn_timeout"));
-      }, TURN_TIMEOUT_MS);
+  private awaitTurn(client: AppServerClient, threadId: string): { completed: Promise<void>; cancel(): void } {
+    let settle: () => void = () => undefined;
+    const completed = new Promise<void>((resolve, reject) => {
       const listener = (method: string, params: unknown) => {
         if (method !== "turn/completed") return;
         const payload = object(params);
         if (payload.threadId !== threadId) return;
-        client.off("notification", listener);
-        clearTimeout(timer);
+        settle();
         const turn = object(payload.turn);
         if (turn.status === "completed") resolve();
         else reject(new Error(`warmup_turn_${String(turn.status ?? "unknown")}`));
       };
+      const timer = setTimeout(() => {
+        settle();
+        reject(new Error("warmup_turn_timeout"));
+      }, TURN_TIMEOUT_MS);
+      settle = () => {
+        clearTimeout(timer);
+        client.off("notification", listener);
+      };
       client.on("notification", listener);
     });
+    // Marks the rejection handled without taking it from whoever does await it.
+    completed.catch(() => undefined);
+    return { completed, cancel: () => settle() };
   }
 }

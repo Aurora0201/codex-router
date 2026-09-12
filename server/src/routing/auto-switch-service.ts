@@ -3,6 +3,7 @@ import type { AutoSwitchSettings } from "../db/repositories/settings-repository.
 import type { SwitchReason } from "../db/repositories/account-switch-log-repository.js";
 import type { AccountRecord } from "../types.js";
 import type { ActiveAccountService } from "./active-account-service.js";
+import { longWindowExhausted } from "../accounts/quota-windows.js";
 
 /**
  * What made the gateway look at the pool again. The trigger decides whether a
@@ -97,6 +98,18 @@ function isRoutable(account: AccountRecord): boolean {
   return account.enabled && account.authStatus === "ready";
 }
 
+/**
+ * Whether this account can actually take traffic.
+ *
+ * A spent week is not a threshold question. No basis makes an account servable
+ * once its week is gone, and with `switchOn: "short"` the five-hour window goes
+ * on reading fine while it is — which is how a switch landed on an account that
+ * answered the very next request with a 429.
+ */
+function canTakeTraffic(account: AccountRecord, settings: AutoSwitchSettings): boolean {
+  return !longWindowExhausted(account) && meetsThresholds(account, settings);
+}
+
 export class AutoSwitchService {
   constructor(
     private readonly database: GatewayDatabase,
@@ -136,7 +149,7 @@ export class AutoSwitchService {
 
     const healthy = ranked.filter((account) => {
       if (trigger.kind !== "quota" && account.id === trigger.accountId) return false;
-      return meetsThresholds(account, settings);
+      return canTakeTraffic(account, settings);
     });
 
     const evidence = (target: AccountRecord): Record<string, unknown> => {
@@ -165,7 +178,7 @@ export class AutoSwitchService {
     if (current && target.id === current.id) return null;
 
     if (trigger.kind === "quota" && current && isRoutable(current)) {
-      if (meetsThresholds(current, settings)) {
+      if (canTakeTraffic(current, settings)) {
         // The current account still serves. Only move for a better-ranked one,
         // and only when the user asked for that.
         if (!settings.switchBackToHigherPriority) return null;
@@ -201,7 +214,7 @@ export class AutoSwitchService {
 
   /**
    * Switching is on, and there is nowhere left to go: every account in the
-   * rotation is under its own threshold. Said out loud on the console, because
+   * rotation is under its own threshold, or has spent its week. Said out loud on the console, because
    * "暂停并提示" has to actually be a prompt.
    */
   stalled(): boolean {
@@ -209,7 +222,7 @@ export class AutoSwitchService {
     if (!settings.enabled) return false;
     const ranked = this.candidates();
     if (ranked.length === 0) return true;
-    return ranked.every((account) => !meetsThresholds(account, settings));
+    return ranked.every((account) => !canTakeTraffic(account, settings));
   }
 
   private reasonFor(trigger: SwitchTrigger): SwitchReason {

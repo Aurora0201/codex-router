@@ -238,6 +238,20 @@ describe("account warm-up", () => {
     expect(JSON.stringify(logged)).not.toContain("upstream said no")
   })
 
+  it("interrupts a turn it has given up on rather than leaving it running", async () => {
+    const { database, warmup, homes } = await fixture(1)
+    setShortWindow(database, "account-1", null)
+    await writeFile(path.join(homes[0], "force-turn-failure"), "1")
+
+    await warmup.run({ trigger: "manual" })
+    const asked = rpcCalls(await readFile(path.join(homes[0], "rpc.log"), "utf8"))
+    // Giving up on a turn does not stop it: it keeps running upstream and goes
+    // on spending on an account nobody is watching any more.
+    const interrupt = asked.find((call) => call.method === "turn/interrupt")
+    expect(interrupt).toBeDefined()
+    expect(interrupt?.params).toMatchObject({ threadId: "thread-1", turnId: "turn-1" })
+  })
+
   it("carries on to the next account after one fails", async () => {
     const { database, warmup, homes } = await fixture(2)
     for (const id of ["account-1", "account-2"]) setShortWindow(database, id, null)

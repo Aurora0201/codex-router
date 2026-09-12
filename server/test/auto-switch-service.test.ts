@@ -349,4 +349,24 @@ describe("AutoSwitchService.stalled", () => {
     settings({ thresholdPercent: 25, onAllBelow: "pause" });
     expect(service.stalled()).toBe(false);
   });
+  it("never switches onto an account whose week is spent", () => {
+    const current = account("current", { shortUsed: 99, weeklyUsed: 50, rank: 0 });
+    account("spent", { shortUsed: 0, weeklyUsed: 100, rank: 1 });
+    const roomy = account("roomy", { shortUsed: 10, weeklyUsed: 20, rank: 2 });
+    settings({ switchOn: "short", shortThresholdPercent: 5 });
+    active.select(current);
+
+    // On the five-hour window alone the spent account reads as completely free.
+    // Switching onto it was answered by the upstream with a 429.
+    expect(service.decide({ kind: "quota" })?.to).toBe(roomy);
+  });
+
+  it("counts a spent week as nowhere left to go", () => {
+    const current = account("current", { shortUsed: 99, weeklyUsed: 50, rank: 0 });
+    account("spent", { shortUsed: 0, weeklyUsed: 100, rank: 1 });
+    settings({ switchOn: "short", shortThresholdPercent: 5 });
+    active.select(current);
+
+    expect(service.stalled()).toBe(true);
+  });
 });
