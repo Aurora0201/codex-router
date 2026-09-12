@@ -168,6 +168,7 @@ export class AutoSwitchService {
     if (healthy.length === 0) {
       if (settings.onAllBelow !== "highest") return null;
       const best = [...ranked]
+        .filter((account) => !longWindowExhausted(account, now))
         .filter((account) => trigger.kind === "quota" || account.id !== trigger.accountId)
         .sort((a, b) => headroom(b, settings) - headroom(a, settings))[0];
       if (!best || best.id === current?.id) return null;

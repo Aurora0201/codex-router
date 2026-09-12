@@ -65,6 +65,13 @@ afterEach(async () => {
 });
 
 describe("AutoSwitchService", () => {
+  it("never relaxes the exhausted weekly window in highest fallback", () => {
+    account("a", { weeklyUsed: 100, rank: 1 });
+    account("b", { weeklyUsed: 100, rank: 2 });
+    active.select("a");
+    settings({ onAllBelow: "highest", triggerOn429: true });
+    expect(service.decide({ kind: "rate_limited", accountId: "a" })).toBeNull();
+  });
   it("does nothing at all while it is switched off", () => {
     account("a", { weeklyUsed: 99, rank: 1 });
     account("b", { rank: 2 });
