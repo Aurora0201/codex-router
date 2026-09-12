@@ -51,10 +51,13 @@ function rpcCalls(log: string): { method: string; params: Record<string, unknown
     .map((line) => JSON.parse(line) as { method: string; params: Record<string, unknown> })
 }
 
-/** Put an account's short window where the test needs it. */
+/**
+ * Put an account's short window where the test needs it. A reset time means a
+ * window that something has been spent in — which is what makes one count.
+ */
 function setShortWindow(database: GatewayDatabase, id: string, resetsAt: number | null) {
   database.accounts.updateRateLimits(id, {
-    primary: { usedPercent: 0, resetsAt, windowDurationMins: 300 },
+    primary: { usedPercent: resetsAt === null ? 0 : 40, resetsAt, windowDurationMins: 300 },
     secondary: { usedPercent: 0, resetsAt: Date.now() + 7 * 86_400_000, windowDurationMins: 10080 },
     credits: null,
     individualLimit: null,
@@ -72,7 +75,7 @@ function setWindows(
   windows: { shortResetsAt: number | null; weeklyUsed: number; weeklyResetsAt: number | null },
 ) {
   database.accounts.updateRateLimits(id, {
-    primary: { usedPercent: 0, resetsAt: windows.shortResetsAt, windowDurationMins: 300 },
+    primary: { usedPercent: windows.shortResetsAt === null ? 0 : 40, resetsAt: windows.shortResetsAt, windowDurationMins: 300 },
     secondary: { usedPercent: windows.weeklyUsed, resetsAt: windows.weeklyResetsAt, windowDurationMins: 10080 },
     credits: null,
     individualLimit: null,
@@ -92,12 +95,50 @@ afterEach(async () => {
 describe("account warm-up", () => {
   it("reads the short window rather than a slot position", () => {
     const soon = Date.now() + 3_600_000
-    const account = { primaryWindowMinutes: 10080, primaryResetsAt: soon, secondaryWindowMinutes: 300, secondaryResetsAt: soon } as never
+    const account = {
+      primaryWindowMinutes: 10080, primaryUsedPercent: 30, primaryResetsAt: soon,
+      secondaryWindowMinutes: 300, secondaryUsedPercent: 30, secondaryResetsAt: soon,
+    } as never
     // The five-hour window is whichever slot is shorter than a day, not
     // whichever one arrived first.
     expect(shortWindowRunning(account, Date.now())).toBe(true)
-    const expired = { primaryWindowMinutes: 300, primaryResetsAt: Date.now() - 1, secondaryWindowMinutes: 10080, secondaryResetsAt: soon } as never
+    const expired = {
+      primaryWindowMinutes: 300, primaryUsedPercent: 30, primaryResetsAt: Date.now() - 1,
+      secondaryWindowMinutes: 10080, secondaryUsedPercent: 30, secondaryResetsAt: soon,
+    } as never
     expect(shortWindowRunning(expired, Date.now())).toBe(false)
+  })
+
+  it("warms a rested account whose reset time is only a rolling projection", async () => {
+    const { database, warmup } = await fixture(1)
+    // What a rested account actually reports: nothing spent, and a reset time
+    // of this reading plus five hours, which moves forward on every read.
+    // Reading that as "counting" left a machine that had been off all night —
+    // the case the feature exists for — the one case it never fired on.
+    database.accounts.updateRateLimits("account-1", {
+      primary: { usedPercent: 0, resetsAt: Date.now() + 5 * 3_600_000, windowDurationMins: 300 },
+      secondary: { usedPercent: 20, resetsAt: Date.now() + 6 * 86_400_000, windowDurationMins: 10080 },
+      credits: null, individualLimit: null, spendControlReached: null,
+      resetCredits: null, buckets: [], defaultBucketKey: null,
+    })
+
+    expect(warmup.pending().map((a) => a.id)).toEqual(["account-1"])
+    const run = await warmup.run({ trigger: "auto" })
+    expect(run.results[0]).toMatchObject({ outcome: "warmed" })
+    // Nothing had started a window, so there was no earlier end to report.
+    expect(run.results[0].windowBeforeResetsAt).toBeNull()
+  })
+
+  it("still leaves a window alone once something has been spent in it", async () => {
+    const { database, warmup } = await fixture(1)
+    database.accounts.updateRateLimits("account-1", {
+      primary: { usedPercent: 46, resetsAt: Date.now() + 3_600_000, windowDurationMins: 300 },
+      secondary: { usedPercent: 20, resetsAt: Date.now() + 6 * 86_400_000, windowDurationMins: 10080 },
+      credits: null, individualLimit: null, spendControlReached: null,
+      resetCredits: null, buckets: [], defaultBucketKey: null,
+    })
+    const run = await warmup.run({ trigger: "auto" })
+    expect(run.results[0]).toMatchObject({ outcome: "skipped", skipped: "window_running" })
   })
 
   it("sends a turn on each account and records that the window started", async () => {

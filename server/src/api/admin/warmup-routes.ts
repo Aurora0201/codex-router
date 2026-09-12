@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { AdminContext } from "./context.js";
 import { apiAction, csrfProtect, jsonBody } from "./helpers.js";
-import { longWindowExhausted, longWindowResetsAt, shortWindowResetsAt, shortWindowRunning } from "../../accounts/account-warmup-service.js";
+import { longWindowExhausted, longWindowResetsAt, shortWindowEndsAt, shortWindowRunning } from "../../accounts/account-warmup-service.js";
 
 function readEnrollment(body: unknown): Record<string, boolean> {
   if (typeof body !== "object" || body === null) throw new Error("invalid_request");
@@ -45,7 +45,7 @@ export function registerWarmupRoutes(app: FastifyInstance, ctx: AdminContext): v
         id: account.id,
         enrolled: account.warmupEnrolled,
         eligible: account.enabled && account.authStatus === "ready",
-        windowResetsAt: shortWindowResetsAt(account),
+        windowResetsAt: shortWindowEndsAt(account, now),
         windowRunning: shortWindowRunning(account, now),
         // Said separately from `eligible`: the account itself is fine, it has
         // just spent its week, and the console should say when that ends

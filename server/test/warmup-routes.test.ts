@@ -55,7 +55,14 @@ describe("warm-up API", () => {
 
   it("says of every account whether its short window is still counting", async () => {
     gateway.database.accounts.updateRateLimits("first", {
-      primary: { usedPercent: 0, resetsAt: Date.now() + 3_600_000, windowDurationMins: 300 },
+      primary: { usedPercent: 40, resetsAt: Date.now() + 3_600_000, windowDurationMins: 300 },
+      secondary: null, credits: null, individualLimit: null, spendControlReached: null,
+      resetCredits: null, buckets: [], defaultBucketKey: null,
+    });
+    // A rested account reports nothing spent and a reset time of this reading
+    // plus five hours — a projection, not a window that is counting.
+    gateway.database.accounts.updateRateLimits("second", {
+      primary: { usedPercent: 0, resetsAt: Date.now() + 5 * 3_600_000, windowDurationMins: 300 },
       secondary: null, credits: null, individualLimit: null, spendControlReached: null,
       resetCredits: null, buckets: [], defaultBucketKey: null,
     });
@@ -66,6 +73,8 @@ describe("warm-up API", () => {
     // spend on a window that is already running.
     expect(first).toMatchObject({ enrolled: true, eligible: true, windowRunning: true });
     expect(second).toMatchObject({ enrolled: true, eligible: true, windowRunning: false });
+    // And it must not show the projection as though it were a window's end.
+    expect(second.windowResetsAt).toBeNull();
   });
 
   it("refuses a write without the CSRF proof", async () => {

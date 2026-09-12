@@ -70,24 +70,47 @@ function object(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
 }
 
-/**
- * The reset timestamp of the account's short window, or null when there is no
- * short window on record. A window that has already passed its reset is not
- * running any more, which is the whole reason this feature exists.
- */
-export function shortWindowResetsAt(account: AccountRecord): number | null {
+function shortWindow(account: AccountRecord): { usedPercent: number | null; resetsAt: number | null } | null {
   const windows = [
-    { mins: account.primaryWindowMinutes, resetsAt: account.primaryResetsAt },
-    { mins: account.secondaryWindowMinutes, resetsAt: account.secondaryResetsAt },
+    { mins: account.primaryWindowMinutes, usedPercent: account.primaryUsedPercent, resetsAt: account.primaryResetsAt },
+    { mins: account.secondaryWindowMinutes, usedPercent: account.secondaryUsedPercent, resetsAt: account.secondaryResetsAt },
   ];
-  const short = windows.find((w) => typeof w.mins === "number" && w.mins > 0 && w.mins < SHORT_WINDOW_MAX_MINS);
-  return short?.resetsAt ?? null;
+  return windows.find((w) => typeof w.mins === "number" && w.mins > 0 && w.mins < SHORT_WINDOW_MAX_MINS) ?? null;
 }
 
-/** True when the short window is still counting, so warming it would buy nothing. */
+/** Whatever the upstream last said the short window resets at, as it said it. */
+export function shortWindowResetsAt(account: AccountRecord): number | null {
+  return shortWindow(account)?.resetsAt ?? null;
+}
+
+/**
+ * True when the short window is actually counting, so warming it would buy
+ * nothing.
+ *
+ * What makes a window count is that something has been spent in it, not that
+ * its reset time is in the future. For a rested account the upstream reports
+ * nothing spent and a reset time of *this reading plus five hours* — a
+ * projection of when a window would end if one started now, which moves
+ * forward with every read. Measured: two reads 218 seconds apart returned reset
+ * times 218 seconds apart on an idle account, while an account with 46% spent
+ * held its reset time exactly.
+ *
+ * Reading that projection as "still counting" meant a rested account looked
+ * warm forever, and a machine that had been off all night — the case this
+ * feature exists for — was the one case it never fired on.
+ */
 export function shortWindowRunning(account: AccountRecord, now = Date.now()): boolean {
-  const resetsAt = shortWindowResetsAt(account);
-  return resetsAt !== null && resetsAt > now;
+  const window = shortWindow(account);
+  if (!window || typeof window.usedPercent !== "number" || window.usedPercent <= 0) return false;
+  return window.resetsAt !== null && window.resetsAt > now;
+}
+
+/**
+ * When the short window really ends, or null when nothing has started one. The
+ * projection an idle account reports is not a time worth showing or recording.
+ */
+export function shortWindowEndsAt(account: AccountRecord, now = Date.now()): number | null {
+  return shortWindowRunning(account, now) ? shortWindowResetsAt(account) : null;
 }
 
 /**
@@ -259,7 +282,7 @@ export class AccountWarmupService {
           results.push({
             accountId: account.id, outcome: "skipped", skipped: skip, errorCode: null,
             model: null, durationMs: null,
-            windowBeforeResetsAt: shortWindowResetsAt(account), windowAfterResetsAt: null,
+            windowBeforeResetsAt: shortWindowEndsAt(account), windowAfterResetsAt: null,
           });
           continue;
         }
@@ -293,7 +316,7 @@ export class AccountWarmupService {
     work: string,
   ): Promise<WarmupAccountResult> {
     const startedAt = Date.now();
-    const windowBeforeResetsAt = shortWindowResetsAt(account);
+    const windowBeforeResetsAt = shortWindowEndsAt(account);
     let model: string | null = null;
     let errorCode: string | null = null;
 
@@ -318,7 +341,7 @@ export class AccountWarmupService {
       durationMs: Date.now() - startedAt,
       errorCode,
       windowBeforeResetsAt,
-      windowAfterResetsAt: after ? shortWindowResetsAt(after) : null,
+      windowAfterResetsAt: after ? shortWindowEndsAt(after) : null,
     };
     this.database.warmupLog.record(entry);
     return { ...entry, skipped: null };
