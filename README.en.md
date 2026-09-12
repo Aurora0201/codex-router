@@ -26,7 +26,7 @@
 </p>
 
 <p align="center">
-  <a href="#quick-start">Quick start</a> · <a href="#features">Features</a> ·
+  <a href="#quick-start">Quick start</a> · <a href="#interface-preview">Screenshots</a> · <a href="#features">Features</a> ·
   <a href="#architecture">Architecture</a> · <a href="#privacy">Security and privacy</a> ·
   <a href="#cli">CLI</a> · <a href="#faq">FAQ</a>
 </p>
@@ -40,11 +40,33 @@ Codex Router runs a local transparent proxy between Codex CLI and the official C
 
 It is useful for regular Codex users managing independent accounts or diagnosing HTTP/SSE/WebSocket failures. Routine operations live in a local interface; switching the proxy identity does not require repeatedly replacing your primary Codex login file.
 
+Every preview below is rendered by the current frontend with synthetic demonstration data. No real email, account ID, request ID, local path, or credential is included.
+
+## Interface preview
+
+### Runtime status
+
 <p align="center">
-  <img alt="Codex Router admin console with demonstration data" src="assets/screenshots/admin-dashboard.png" width="1200">
+  <img alt="Codex Router runtime page showing takeover status, request outcomes, API availability, and WebSocket connections" src="assets/screenshots/admin-dashboard.png" width="1200">
 </p>
 
-<p align="center"><sub>Illustrative console preview; the current release may have a different layout.</sub></p>
+Confirm that Codex is routed through the gateway, then inspect request trends, outcome distribution, API availability, and live WebSockets in one view. Connections are stably grouped as transmitting, connecting/retiring, and idle, making the current health of the gateway easy to assess.
+
+### Account routing
+
+<p align="center">
+  <img alt="Codex Router account routing page showing isolated accounts, the active route, and quota windows" src="assets/screenshots/admin-accounts.png" width="1200">
+</p>
+
+Each account has an isolated identity directory and its own quota state, while the active route is explicitly marked. Authentication refresh, quota reads, automatic switching, and five-hour-window warm-up are available here, but every automatic spending feature requires explicit opt-in.
+
+### Request evidence
+
+<p align="center">
+  <img alt="Codex Router request log page showing outcome metrics, filters, and structured request records" src="assets/screenshots/admin-request-logs.png" width="1200">
+</p>
+
+Request logs and WebSocket connection diagnostics remain separate. Filter by time, outcome, transport, and failure evidence, then use the detail sheet to inspect HTTP status, protocol errors, diagnostic codes, failure source, and failure stage without reading prompts or response bodies.
 
 <a id="quick-start"></a>
 ## Quick start
