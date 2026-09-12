@@ -26,7 +26,7 @@
 </p>
 
 <p align="center">
-  <a href="#quick-start">快速开始</a> · <a href="#features">功能介绍</a> ·
+  <a href="#quick-start">快速开始</a> · <a href="#界面预览">界面预览</a> · <a href="#features">功能介绍</a> ·
   <a href="#architecture">工作原理</a> · <a href="#privacy">安全与隐私</a> ·
   <a href="#cli">命令行</a> · <a href="#faq">常见问题</a>
 </p>
@@ -40,11 +40,33 @@ Codex Router 在 Codex CLI 与官方 Codex 后端之间增加一个本地透明�
 
 它适合需要长期使用 Codex、管理独立账号，以及排查 HTTP/SSE/WebSocket 失败的用户。日常操作集中在一个本机界面中；无需为了切换代理身份反复替换主 Codex 登录文件。
 
+所有预览均由当前前端使用虚构演示数据生成，不包含真实邮箱、账号 ID、请求 ID、本地路径或凭据。
+
+## 界面预览
+
+### 运行状态
+
 <p align="center">
-  <img alt="使用演示数据的 Codex Router 管理后台" src="assets/screenshots/admin-dashboard.png" width="1200">
+  <img alt="Codex Router 运行状态页，展示接管状态、请求结果、API 可用性和 WebSocket 连接" src="assets/screenshots/admin-dashboard.png" width="1200">
 </p>
 
-<p align="center"><sub>管理后台示意，实际布局以当前版本为准。</sub></p>
+集中确认 Codex 是否由 Router 接管，并在同一视图查看请求趋势、结果分布、API 可用性与活动 WebSocket。连接按传输中、连接中/退役中、空闲稳定分组，适合快速判断网关当前是否健康。
+
+### 账号路由
+
+<p align="center">
+  <img alt="Codex Router 账号路由页，展示独立账号、当前路由和额度窗口" src="assets/screenshots/admin-accounts.png" width="1200">
+</p>
+
+每个账号拥有独立身份目录和额度状态；当前路由有明确标识。页面同时提供认证刷新、额度读取、自动切换和五小时窗口预热入口，但任何自动消费能力都需要用户主动启用。
+
+### 请求证据
+
+<p align="center">
+  <img alt="Codex Router 请求日志页，展示结果统计、筛选器和结构化请求记录" src="assets/screenshots/admin-request-logs.png" width="1200">
+</p>
+
+请求日志与 WebSocket 连接诊断相互独立。你可以按时间、结果、传输方式和错误证据筛选，再通过详情面板核对 HTTP 状态、协议错误码、诊断码、失败来源与失败阶段，而无需读取 Prompt 或响应正文。
 
 <a id="quick-start"></a>
 ## 快速开始

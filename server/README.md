@@ -30,6 +30,8 @@
   <img alt="Codex Router 运行状态管理后台" src="https://raw.githubusercontent.com/Aurora0201/codex-router/main/assets/screenshots/admin-dashboard.png" width="1200">
 </p>
 
+运行状态页集中展示接管链路、请求结果、API 可用性和活动 WebSocket；仓库文档还提供[账号路由](https://github.com/Aurora0201/codex-router#界面预览)与[请求证据](https://github.com/Aurora0201/codex-router#请求证据)界面说明。所有预览均使用虚构演示数据。
+
 ## 安装
 
 当前发布包支持 **Windows x64**，需要 **Node.js 24+**。
