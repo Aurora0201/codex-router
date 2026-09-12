@@ -2,6 +2,8 @@
 
 ## 文件职责重构（2026-09-12）
 
+- 第二步：HTTP 传输结束后的结果决策移入现有 `request-classification.ts` 的纯函数 `classifyHttpCompletion`，覆盖无终态、解析失败后终态、未知协议码及普通 HTTP；代理仅传入检查结果，不增加包装服务。实时首终态结算和 catch 分支保持原位。
+
 - `accounts/warmup-rpc.ts`：模型目录解析、单次 Turn 执行、通知等待与清理、安全错误归类；不访问数据库、不选择账号、不负责锁或调度。
 - `accounts/account-warmup-service.ts`：保留账号资格、共享锁、串行批次、进度和持久化确认；`WarmupModel` 从原入口继续导出，调用方无需迁移。
 - `proxy/response-metadata.ts`：集中提取 HTTP 白名单诊断响应头；独立测试锁定优先级和隐私边界。

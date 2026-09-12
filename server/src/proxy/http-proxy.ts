@@ -15,7 +15,7 @@ import {
   isCompactionRequest,
 } from "./headers.js";
 import {
-  classifyHttpStatus,
+  classifyHttpCompletion,
   classifyProtocolTerminal,
   clientCancellation,
   gatewayFailure,
@@ -172,21 +172,7 @@ export class HttpProxy {
         : null;
       if (inspector) await pipeline(upstream.body, counter, inspector, reply.raw);
       else await pipeline(upstream.body, counter, reply.raw);
-      let evidence = classifyHttpStatus(upstream.statusCode);
-      if (inspector) {
-        const terminal = inspector.terminal;
-        evidence = terminal
-          ? (classifyProtocolTerminal(
-              terminal.type ?? "",
-              terminal.errorCode ?? terminal.incompleteReason,
-              terminal.status,
-            ) ?? transportFailure("protocol_terminal_unrecognized", "terminal"))
-          : transportFailure(
-              inspector.parseFailed ? "protocol_event_parse_failed" : "protocol_terminal_missing",
-              "terminal",
-            );
-      }
-      finish(evidence);
+      finish(classifyHttpCompletion(upstream.statusCode, inspector));
       if (selectedAccount) this.options.usage.refreshIfStale(selectedAccount.id);
     } catch (error) {
       const rawCode = (error as Error).message;

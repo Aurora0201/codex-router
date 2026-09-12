@@ -1,4 +1,20 @@
 import type { FailureSource, FailureStage, RequestOutcome, RequestState } from "../types.js";
+import type { ServerFrameMetadata } from "./ws-metadata.js";
+
+/** Result after transport completion; null means a non-Responses HTTP endpoint. */
+export function classifyHttpCompletion(
+  status: number,
+  inspection: { terminal: ServerFrameMetadata | null; parseFailed: boolean } | null,
+): RequestEvidence {
+  if (!inspection) return classifyHttpStatus(status);
+  const { terminal, parseFailed } = inspection;
+  if (!terminal) {
+    return transportFailure(parseFailed ? "protocol_event_parse_failed" : "protocol_terminal_missing", "terminal");
+  }
+  return classifyProtocolTerminal(
+    terminal.type ?? "", terminal.errorCode ?? terminal.incompleteReason, terminal.status,
+  ) ?? transportFailure("protocol_terminal_unrecognized", "terminal");
+}
 
 export interface RequestEvidence {
   state: Exclude<RequestState, "running">;
