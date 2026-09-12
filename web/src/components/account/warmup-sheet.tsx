@@ -114,7 +114,9 @@ function LogRow({
               : "text-muted-foreground"
           )}
         >
-          {entry.outcome === "failed"
+          {entry.outcome === "running" ? t("预热进行中")
+            : entry.outcome === "pending" ? t("已发送，等待窗口确认")
+            : entry.outcome === "failed"
             ? t(ERROR_LABEL[entry.errorCode ?? ""] ?? "发送失败")
             : started
               ? t("窗口已开始 · {{time}} 重置", {

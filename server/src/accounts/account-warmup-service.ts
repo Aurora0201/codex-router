@@ -1,3 +1,5 @@
+import { listWarmupModels, safeWarmupError, sendWarmupTurn, type WarmupModel } from "./warmup-rpc.js";
+export type { WarmupModel } from "./warmup-rpc.js";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -5,31 +7,32 @@ import type { AccountRecord, GatewayConfig } from "../types.js";
 import type { GatewayDatabase } from "../db/database.js";
 import type { WarmupTrigger } from "../db/repositories/warmup-log-repository.js";
 import { AccountOperationLock } from "./account-lock.js";
-import { AppServerClient, withAppServerClient } from "./app-server-client.js";
+import { withAppServerClient } from "./app-server-client.js";
 import type { AccountStatusService } from "./account-status-service.js";
 import {
   longWindowExhausted,
   shortWindowEndsAt,
   shortWindowResetsAt,
   shortWindowRunning,
+  shortWindowState,
 } from "./quota-windows.js";
 export * from "./quota-windows.js";
 
-/** A model the user can pick for the warm-up turn. */
-export interface WarmupModel {
-  id: string;
-  displayName: string;
-  isDefault: boolean;
-  /** Which reasoning efforts this model takes, in the catalog's own order. */
-  efforts: { id: string; description: string }[];
-  defaultEffort: string | null;
-}
-
-export type WarmupSkipReason = "window_running" | "cooldown" | "daily_limit" | "not_enrolled" | "not_ready";
+export type WarmupSkipReason =
+  | "window_running"
+  | "cooldown"
+  | "daily_limit"
+  | "not_enrolled"
+  | "not_ready"
+  | "window_unknown"
+  | "no_short_window"
+  | "weekly_exhausted"
+  | "auto_disabled"
+  | "pending_confirmation";
 
 export interface WarmupAccountResult {
   accountId: string;
-  outcome: "warmed" | "skipped" | "failed";
+  outcome: "warmed" | "pending" | "skipped" | "failed";
   /** Why it was passed over, when it was. */
   skipped: WarmupSkipReason | null;
   errorCode: string | null;
@@ -53,28 +56,7 @@ export interface WarmupProgress {
   accountId: string | null;
 }
 
-/** One turn is a handful of seconds; a minute and a half means it is stuck. */
-const TURN_TIMEOUT_MS = 90_000;
 const DAY_MS = 24 * 3_600_000;
-
-/**
- * Upstream messages can carry prompt or response text, which never reaches the
- * database. What is stored is a classification, the same way a failed status
- * check stores one.
- */
-function safeWarmupError(error: unknown): string {
-  const message = error instanceof Error ? error.message.toLowerCase() : "";
-  if (/unauthor|\b401\b|relogin|refresh.?token|login.?required/.test(message)) return "relogin_required";
-  if (/\b429\b|rate.?limit|quota|usage.?limit/.test(message)) return "rate_limited";
-  if (/timeout|timed out/.test(message)) return "timeout";
-  if (/model/.test(message)) return "model_unavailable";
-  if (/codex_app_server_(exited|closed|not_started)/.test(message)) return "app_server_unavailable";
-  return "warmup_failed";
-}
-
-function object(value: unknown): Record<string, unknown> {
-  return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
-}
 
 /**
  * Sends one small turn on an account so its five-hour window starts counting.
@@ -104,8 +86,10 @@ export class AccountWarmupService {
     private readonly lock = new AccountOperationLock(),
   ) {}
 
-  close(): void {
+  async close(): Promise<void> {
     this.closed = true;
+    await this.active?.catch(() => undefined);
+    await this.lock.drain();
   }
 
   currentProgress(): WarmupProgress {
@@ -121,13 +105,18 @@ export class AccountWarmupService {
   candidates(now = Date.now()): AccountRecord[] {
     return this.database.accounts
       .list()
-      .filter((account) =>
-        account.warmupEnrolled && account.enabled && account.authStatus === "ready" && !longWindowExhausted(account, now));
+      .filter(
+        (account) =>
+          account.warmupEnrolled &&
+          account.enabled &&
+          account.authStatus === "ready" &&
+          !longWindowExhausted(account, now),
+      );
   }
 
   /** Of those, the ones whose short window is not already counting. */
   pending(now = Date.now()): AccountRecord[] {
-    return this.candidates(now).filter((account) => !shortWindowRunning(account, now));
+    return this.candidates(now).filter((account) => shortWindowState(account, now) === "ready");
   }
 
   /**
@@ -148,29 +137,15 @@ export class AccountWarmupService {
    * account cannot use falls back to that account's default at turn time.
    */
   async models(): Promise<WarmupModel[]> {
-    const account = this.candidates()[0] ?? this.database.accounts.list().find((a) => a.enabled && a.authStatus === "ready");
+    if (this.closed) throw new Error("warmup_service_closed");
+    const account =
+      this.candidates()[0] ?? this.database.accounts.list().find((a) => a.enabled && a.authStatus === "ready");
     if (!account) return [];
-    return withAppServerClient(this.config, account.codexHome, async (client) => {
-      const result = object(await client.call("model/list", { includeHidden: false }, 30_000));
-      const data = Array.isArray(result.data) ? result.data : [];
-      return data.map((entry) => {
-        const model = object(entry);
-        const id = typeof model.id === "string" ? model.id : "";
-        const efforts = Array.isArray(model.supportedReasoningEfforts) ? model.supportedReasoningEfforts : [];
-        return {
-          id,
-          displayName: typeof model.displayName === "string" ? model.displayName : id,
-          isDefault: model.isDefault === true,
-          efforts: efforts.map((value) => {
-            const effort = object(value);
-            return {
-              id: typeof effort.reasoningEffort === "string" ? effort.reasoningEffort : "",
-              description: typeof effort.description === "string" ? effort.description : "",
-            };
-          }).filter((effort) => effort.id.length > 0),
-          defaultEffort: typeof model.defaultReasoningEffort === "string" ? model.defaultReasoningEffort : null,
-        };
-      }).filter((model) => model.id.length > 0);
+    return this.lock.run(account.id, async () => {
+      const latest = this.database.accounts.get(account.id);
+      if (this.closed) throw new Error("warmup_service_closed");
+      if (!latest || !latest.enabled || latest.authStatus !== "ready") throw new Error("account_not_ready");
+      return withAppServerClient(this.config, latest.codexHome, listWarmupModels);
     });
   }
 
@@ -202,11 +177,14 @@ export class AccountWarmupService {
     this.onProgress({ ...progress });
   }
 
-  private async runInner(options: { trigger: WarmupTrigger; force?: boolean; accountIds?: string[] }): Promise<WarmupRunResult> {
-    const settings = this.database.settings.warmup();
+  private async runInner(options: {
+    trigger: WarmupTrigger;
+    force?: boolean;
+    accountIds?: string[];
+  }): Promise<WarmupRunResult> {
     const startedAt = Date.now();
     const wanted = new Set(options.accountIds ?? []);
-    const targets = this.candidates().filter((account) => wanted.size === 0 || wanted.has(account.id));
+    const targets = this.candidates().filter((account) => options.accountIds === undefined || wanted.has(account.id));
     const results: WarmupAccountResult[] = [];
 
     this.publish({ running: true, total: targets.length, done: 0, accountId: null });
@@ -215,16 +193,19 @@ export class AccountWarmupService {
       for (const account of targets) {
         if (this.closed) break;
         this.publish({ running: true, total: targets.length, done: results.length, accountId: account.id });
-        const skip = this.skipReason(account, settings, options);
-        if (skip) {
-          results.push({
-            accountId: account.id, outcome: "skipped", skipped: skip, errorCode: null,
-            model: null, durationMs: null,
-            windowBeforeResetsAt: shortWindowEndsAt(account), windowAfterResetsAt: null,
-          });
-          continue;
+        if (
+          options.trigger === "auto" &&
+          (Date.now() - (account.lastLimitsRefreshAt ?? 0) > 30_000 || shortWindowState(account) === "expired")
+        ) {
+          try {
+            await this.status.refresh(account.id);
+          } catch {
+            results.push(this.skipped(account.id, "window_unknown"));
+            continue;
+          }
         }
-        results.push(await this.warmOne(account, settings, options.trigger, work));
+        if (this.closed) break;
+        results.push(await this.warmOne(account.id, options, work));
       }
     } finally {
       await rm(work, { recursive: true, force: true }).catch(() => undefined);
@@ -237,135 +218,93 @@ export class AccountWarmupService {
     settings: ReturnType<GatewayDatabase["settings"]["warmup"]>,
     options: { trigger: WarmupTrigger; force?: boolean },
   ): WarmupSkipReason | null {
+    if (!account.enabled || account.authStatus !== "ready") return "not_ready";
+    if (!account.warmupEnrolled) return "not_enrolled";
+    if (longWindowExhausted(account)) return "weekly_exhausted";
+    if (options.trigger === "auto" && !settings.auto) return "auto_disabled";
     // Forcing is a person deciding to spend anyway; the guards that exist to
     // stop the gateway spending on its own still apply to the automatic pass.
     if (!options.force && shortWindowRunning(account)) return "window_running";
     if (options.trigger === "manual" && options.force) return null;
+    const state = shortWindowState(account);
+    if (state === "unavailable") return "no_short_window";
+    if (state !== "ready") return "window_unknown";
+    if (options.trigger === "auto" && Date.now() - (account.lastLimitsRefreshAt ?? 0) > 30_000) return "window_unknown";
+    if (this.database.warmupLog.hasPending(account.id)) return "pending_confirmation";
     const last = this.database.warmupLog.lastAttemptAt(account.id);
-    if (last !== null && Date.now() - last < settings.cooldownMs) return "cooldown";
-    if (this.database.warmupLog.countSince(account.id, Date.now() - DAY_MS, "auto") >= settings.dailyLimit) return "daily_limit";
+    const reset = this.database.warmupLog.resetAt(account.id);
+    if (last !== null && (reset === null || reset <= last) && Date.now() - last < settings.cooldownMs)
+      return "cooldown";
+    if (this.database.warmupLog.countSince(account.id, Date.now() - DAY_MS, "auto") >= settings.dailyLimit)
+      return "daily_limit";
     return null;
   }
 
   private async warmOne(
-    account: AccountRecord,
-    settings: ReturnType<GatewayDatabase["settings"]["warmup"]>,
-    trigger: WarmupTrigger,
+    accountId: string,
+    options: { trigger: WarmupTrigger; force?: boolean },
     work: string,
   ): Promise<WarmupAccountResult> {
-    const startedAt = Date.now();
-    const windowBeforeResetsAt = shortWindowEndsAt(account);
-    let model: string | null = null;
-    let errorCode: string | null = null;
-
+    // Validate again AFTER acquiring the lock; queued work may outlive an
+    // account's enrollment, credentials, directory or the auto setting.
+    const attempt = await this.lock.run(accountId, async () => {
+      const account = this.database.accounts.get(accountId);
+      if (this.closed || !account) return this.skipped(accountId, "not_ready");
+      const settings = this.database.settings.warmup();
+      const skip = this.skipReason(account, settings, options);
+      if (skip) return this.skipped(accountId, skip);
+      const entry = this.database.warmupLog.record({
+        accountId,
+        trigger: options.trigger,
+        startedAt: Date.now(),
+        outcome: "running",
+        model: settings.model,
+        errorCode: null,
+        durationMs: null,
+        windowBeforeResetsAt: shortWindowEndsAt(account),
+        windowAfterResetsAt: null,
+      });
+      try {
+        entry.model = await withAppServerClient(this.config, account.codexHome, (client) =>
+          sendWarmupTurn(client, settings, work),
+        );
+      } catch (error) {
+        entry.errorCode = safeWarmupError(error);
+      }
+      return entry;
+    });
+    if ("skipped" in attempt) return attempt;
+    // Release the account lock before the shared refresh (it is not reentrant).
+    let confirmed = false;
     try {
-      // Held only around the turn: the refresh below goes through the same
-      // lock, and this one is not reentrant.
-      model = await this.lock.run(account.id, () =>
-        withAppServerClient(this.config, account.codexHome, (client) => this.sendTurn(client, settings, work)));
-    } catch (error) {
-      errorCode = safeWarmupError(error);
+      await this.status.refresh(accountId);
+      confirmed = true;
+    } catch {
+      /* Preserve the attempt, not an invented success. */
     }
-
-    // Read the window back even when the turn failed: a 429 still says
-    // something about where this account stands, and a turn that failed after
-    // the model answered may well have started the window anyway.
-    await this.status.refresh(account.id).catch(() => undefined);
-    const after = this.database.accounts.get(account.id);
+    const after = this.database.accounts.get(accountId);
+    const end = confirmed && after ? shortWindowEndsAt(after) : null;
     const entry = {
-      startedAt,
-      accountId: account.id,
-      trigger,
-      outcome: (errorCode === null ? "warmed" : "failed") as "warmed" | "failed",
-      model,
-      durationMs: Date.now() - startedAt,
-      errorCode,
-      windowBeforeResetsAt,
-      windowAfterResetsAt: after ? shortWindowEndsAt(after) : null,
+      ...attempt,
+      outcome: (attempt.errorCode ? "failed" : end !== null ? "warmed" : "pending") as "failed" | "warmed" | "pending",
+      errorCode: attempt.errorCode ?? (end === null ? "window_confirmation_pending" : null),
+      durationMs: Date.now() - attempt.startedAt,
+      windowAfterResetsAt: end,
     };
-    this.database.warmupLog.record(entry);
+    this.database.warmupLog.finish(attempt.id, entry);
     return { ...entry, skipped: null };
   }
 
-  /** thread/start, then one turn, then wait for the turn to come back. */
-  private async sendTurn(
-    client: AppServerClient,
-    settings: { model: string | null; effort: string | null; message: string },
-    cwd: string,
-  ): Promise<string | null> {
-    const { model, effort, message } = settings;
-    const thread = object(await client.call("thread/start", {
-      ...(model ? { model } : {}),
-      // A model this subscription cannot use falls back to the account's own
-      // default rather than failing the warm-up over a picker choice.
-      allowProviderModelFallback: true,
-      cwd,
-      sandbox: "read-only",
-      approvalPolicy: "never",
-    }, 60_000));
-    const threadId = typeof thread.threadId === "string" ? thread.threadId : String(object(thread.thread).id ?? "");
-    if (!threadId) throw new Error("warmup_thread_not_started");
-
-    const waiting = this.awaitTurn(client, threadId);
-    let turnId: string | null = null;
-    try {
-      const started = object(await client.call("turn/start", {
-        threadId,
-        input: [{ type: "text", text: message }],
-        // Overrides the thread's effort for this turn. Omitted leaves the
-        // model's own default, which is what "跟随模型默认" means.
-        ...(effort ? { effort } : {}),
-      }, 60_000));
-      const turn = object(started.turn);
-      turnId = typeof turn.id === "string" ? turn.id : null;
-      const usedModel = typeof started.model === "string" ? started.model : null;
-      await waiting.completed;
-      return usedModel ?? model;
-    } catch (error) {
-      // Giving up on a turn does not stop it: it keeps running upstream, and
-      // goes on spending on an account nobody is watching any more.
-      if (turnId) await client.call("turn/interrupt", { threadId, turnId }, 10_000).catch(() => undefined);
-      throw error;
-    } finally {
-      waiting.cancel();
-      // Whatever happened, do not leave the thread holding the app-server open.
-      await client.call("thread/archive", { threadId }, 10_000).catch(() => undefined);
-    }
-  }
-
-  /**
-   * `turn/start` returns as soon as the turn exists; completion arrives as a
-   * notification, and a failed turn arrives on that same notification with a
-   * status rather than as an error.
-   *
-   * `cancel` matters as much as the promise. When `turn/start` itself fails
-   * nobody is left awaiting this, and a rejection surfacing a minute and a half
-   * later with no handler is not something a gateway should produce.
-   */
-  private awaitTurn(client: AppServerClient, threadId: string): { completed: Promise<void>; cancel(): void } {
-    let settle: () => void = () => undefined;
-    const completed = new Promise<void>((resolve, reject) => {
-      const listener = (method: string, params: unknown) => {
-        if (method !== "turn/completed") return;
-        const payload = object(params);
-        if (payload.threadId !== threadId) return;
-        settle();
-        const turn = object(payload.turn);
-        if (turn.status === "completed") resolve();
-        else reject(new Error(`warmup_turn_${String(turn.status ?? "unknown")}`));
-      };
-      const timer = setTimeout(() => {
-        settle();
-        reject(new Error("warmup_turn_timeout"));
-      }, TURN_TIMEOUT_MS);
-      settle = () => {
-        clearTimeout(timer);
-        client.off("notification", listener);
-      };
-      client.on("notification", listener);
-    });
-    // Marks the rejection handled without taking it from whoever does await it.
-    completed.catch(() => undefined);
-    return { completed, cancel: () => settle() };
+  private skipped(accountId: string, reason: WarmupSkipReason): WarmupAccountResult {
+    return {
+      accountId,
+      outcome: "skipped",
+      skipped: reason,
+      errorCode: null,
+      model: null,
+      durationMs: null,
+      windowBeforeResetsAt: null,
+      windowAfterResetsAt: null,
+    };
   }
 }

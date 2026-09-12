@@ -189,7 +189,7 @@ export interface WarmupModelView {
 export type WarmupSkipReason =
   "window_running" | "cooldown" | "daily_limit" | "not_enrolled" | "not_ready"
 
-export type WarmupOutcome = "warmed" | "skipped" | "failed"
+export type WarmupOutcome = "running" | "pending" | "warmed" | "skipped" | "failed"
 
 export interface WarmupLogEntryView {
   id: string

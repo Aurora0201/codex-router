@@ -22,6 +22,19 @@ export function shortWindowResetsAt(account: AccountRecord): number | null {
   return shortWindow(account)?.resetsAt ?? null;
 }
 
+export type ShortWindowState = "running" | "ready" | "expired" | "unknown" | "unavailable";
+
+export function shortWindowState(account: AccountRecord, now = Date.now()): ShortWindowState {
+  const window = shortWindow(account);
+  if (!window) {
+    return account.lastLimitsRefreshAt != null && longWindow(account) ? "unavailable" : "unknown";
+  }
+  if (window.usedPercent === null) return "unknown";
+  if (window.usedPercent === 0) return "ready";
+  if (window.resetsAt === null) return "unknown";
+  return window.resetsAt > now ? "running" : "expired";
+}
+
 /**
  * True when the short window is actually counting, so warming it would buy
  * nothing.

@@ -3,6 +3,8 @@ export const zhCN = {
 } as const
 
 export const en = {
+  预热进行中: "Warm-up in progress",
+  "已发送，等待窗口确认": "Sent, awaiting window confirmation",
   "{{account}} · 剩余 {{remaining}}": "{{account}} · {{remaining}} left",
   搜索请求: "Search requests",
   搜索连接: "Search connections",

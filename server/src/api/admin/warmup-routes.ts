@@ -68,6 +68,7 @@ export function registerWarmupRoutes(app: FastifyInstance, ctx: AdminContext): v
       const body = jsonBody(request);
       if (typeof body !== "object" || body === null) throw new Error("invalid_request");
       const settings = ctx.database.settings.patchWarmup(body);
+      ctx.warmupScheduler.refresh();
       ctx.events.invalidate("settings", "warmup");
       return settings;
     });
@@ -81,6 +82,7 @@ export function registerWarmupRoutes(app: FastifyInstance, ctx: AdminContext): v
       for (const [id, value] of Object.entries(enrolled)) {
         ctx.database.accounts.update(id, { warmupEnrolled: value });
       }
+      ctx.warmupScheduler.refresh();
       ctx.events.invalidate("accounts", "warmup");
       return { enrolled };
     });
@@ -98,7 +100,7 @@ export function registerWarmupRoutes(app: FastifyInstance, ctx: AdminContext): v
       // Answering before the run finishes: a turn per account is tens of
       // seconds, and progress belongs on the event stream rather than in a
       // request the console has to hold open.
-      void ctx.runWarmup({ trigger: "manual", force, accountIds });
+      void ctx.runWarmup({ trigger: "manual", force, accountIds }).catch(() => ctx.events.invalidate("warmup"));
       return { started: true, total: targets.length };
     });
   });

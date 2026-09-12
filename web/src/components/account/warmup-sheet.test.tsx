@@ -248,6 +248,19 @@ describe("WarmupButton", () => {
     expect(screen.getByText("上游限流")).toBeInTheDocument()
   })
 
+  it("distinguishes an in-flight attempt from a turn awaiting quota confirmation", async () => {
+    const common = { startedAt: Date.now(), accountId: "account-1", trigger: "auto" as const,
+      model: null, durationMs: null, errorCode: null, windowBeforeResetsAt: null, windowAfterResetsAt: null }
+    mount({ recent: [
+      { ...common, id: "running", outcome: "running" },
+      { ...common, id: "pending", outcome: "pending" },
+    ] })
+    await userEvent.click(screen.getByRole("button", { name: "预热设置" }))
+    expect(await screen.findByText("预热进行中")).toBeInTheDocument()
+    expect(screen.getByText("已发送，等待窗口确认")).toBeInTheDocument()
+    expect(screen.queryByText(/窗口已开始/)).not.toBeInTheDocument()
+  })
+
   it("offers each account's own default rather than insisting on a model", async () => {
     mount({})
     await userEvent.click(screen.getByRole("button", { name: "预热设置" }))

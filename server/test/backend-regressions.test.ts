@@ -57,6 +57,21 @@ function holdAccountRead() {
 }
 
 describe("backend lifecycle regressions", () => {
+  it("publishes direct refreshes, deduplicates background observers and publishes reset results", async () => {
+    const { config, database } = await fixture();
+    const settled = vi.fn();
+    const status = new AccountStatusService(config, database, settled);
+    cleanup.push(() => status.close());
+    await status.refresh("account");
+    expect(settled).toHaveBeenCalledTimes(1);
+    settled.mockClear();
+    await Promise.all([status.refreshInBackground("account"), status.refreshInBackground("account")]);
+    expect(settled).toHaveBeenCalledTimes(1);
+    settled.mockClear();
+    await status.consumeResetCredit("account", "safe-test-reset-key");
+    expect(settled).toHaveBeenCalledWith("account", true);
+    expect(database.warmupLog.resetAt("account")).not.toBeNull();
+  });
   it("runs a forced auth refresh after an in-flight quota read", async () => {
     const { status, home } = await fixture();
     await Promise.all([

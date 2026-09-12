@@ -2,7 +2,7 @@ import type Database from "better-sqlite3";
 
 type SqliteDatabase = Database.Database;
 
-export const SCHEMA_VERSION = 21;
+export const SCHEMA_VERSION = 22;
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -488,6 +488,13 @@ export function migrate(db: SqliteDatabase): void {
     // rate_limit_reached_type, which the limits refresh already writes, so the
     // rows that carry the old value go back to what they actually are.
     db.exec("UPDATE accounts SET auth_status = 'ready' WHERE auth_status = 'rate_limited'");
+  }
+
+  if (version < 22) {
+    db.exec(`CREATE TABLE IF NOT EXISTS account_warmup_state (
+      account_id TEXT PRIMARY KEY,
+      reset_at INTEGER NOT NULL
+    )`);
   }
 
   db.prepare(

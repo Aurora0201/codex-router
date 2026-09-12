@@ -1,7 +1,8 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
+import { AccountOperationLock } from "../src/accounts/account-lock.js"
 
 import { AccountStatusService } from "../src/accounts/account-status-service.js"
 import { AccountWarmupService, longWindowExhausted, shortWindowRunning } from "../src/accounts/account-warmup-service.js"
@@ -26,6 +27,7 @@ async function fixture(count = 2) {
     developerMode: true,
   })
   const database = new GatewayDatabase(config.databasePath)
+  database.settings.patchWarmup({ auto: true })
   databases.push(database)
   const homes: string[] = []
   for (let i = 0; i < count; i += 1) {
@@ -34,7 +36,7 @@ async function fixture(count = 2) {
     await mkdir(home, { recursive: true })
     await writeFile(path.join(home, "auth.json"), JSON.stringify({ tokens: { access_token: "a", account_id: id, refresh_token: "r" } }))
     database.accounts.insert({ id, codexHome: home })
-    database.accounts.update(id, { authStatus: "ready", chatgptAccountId: id })
+    database.accounts.update(id, { authStatus: "ready", chatgptAccountId: id, lastLimitsRefreshAt: Date.now() })
     homes.push(home)
   }
   const status = new AccountStatusService(config, database)
@@ -57,6 +59,7 @@ function rpcCalls(log: string): { method: string; params: Record<string, unknown
  */
 function setShortWindow(database: GatewayDatabase, id: string, resetsAt: number | null) {
   database.accounts.updateRateLimits(id, {
+    loadedAt: Date.now(),
     primary: { usedPercent: resetsAt === null ? 0 : 40, resetsAt, windowDurationMins: 300 },
     secondary: { usedPercent: 0, resetsAt: Date.now() + 7 * 86_400_000, windowDurationMins: 10080 },
     credits: null,
@@ -75,6 +78,7 @@ function setWindows(
   windows: { shortResetsAt: number | null; weeklyUsed: number; weeklyResetsAt: number | null },
 ) {
   database.accounts.updateRateLimits(id, {
+    loadedAt: Date.now(),
     primary: { usedPercent: windows.shortResetsAt === null ? 0 : 40, resetsAt: windows.shortResetsAt, windowDurationMins: 300 },
     secondary: { usedPercent: windows.weeklyUsed, resetsAt: windows.weeklyResetsAt, windowDurationMins: 10080 },
     credits: null,
@@ -93,6 +97,82 @@ afterEach(async () => {
 })
 
 describe("account warm-up", () => {
+  it("a confirmed reset bypasses old cooldown but never the daily ceiling", async () => {
+    const { database, warmup } = await fixture(1)
+    setShortWindow(database, "account-1", null)
+    const entry = { accountId: "account-1", trigger: "auto" as const, startedAt: Date.now() - 1000,
+      outcome: "warmed" as const, model: null, durationMs: 1, errorCode: null,
+      windowBeforeResetsAt: null, windowAfterResetsAt: null }
+    database.warmupLog.record(entry)
+    expect(warmup.autoTargets()).toHaveLength(0)
+    database.warmupLog.noteReset("account-1")
+    expect(warmup.autoTargets()).toHaveLength(1)
+    database.settings.patchWarmup({ dailyLimit: 1 })
+    expect(warmup.autoTargets()).toHaveLength(0)
+    expect((await warmup.run({ trigger: "auto" })).results[0]).toMatchObject({ skipped: "daily_limit" })
+  })
+  it("does not interpret an explicit empty selection as all accounts", async () => {
+    const { database, warmup } = await fixture(1)
+    setShortWindow(database, "account-1", null)
+    expect((await warmup.run({ trigger: "manual", accountIds: [] })).results).toEqual([])
+    expect(database.warmupLog.countSince("account-1", 0)).toBe(0)
+  })
+
+  it("rechecks disabled and unenrolled accounts after acquiring the lock", async () => {
+    const { config, database, status } = await fixture(1)
+    setShortWindow(database, "account-1", null)
+    const lock = new AccountOperationLock()
+    const gate = Promise.withResolvers<void>()
+    void lock.run("account-1", () => gate.promise)
+    const warmup = new AccountWarmupService(config, database, status, undefined, lock)
+    const running = warmup.run({ trigger: "manual" })
+    database.accounts.update("account-1", { enabled: false })
+    gate.resolve()
+    expect((await running).results[0]).toMatchObject({ skipped: "not_ready" })
+    expect(database.warmupLog.countSince("account-1", 0)).toBe(0)
+  })
+
+  it("does not send when the short window is unknown or auto is disabled", async () => {
+    const { database, warmup } = await fixture(1)
+    expect((await warmup.run({ trigger: "manual" })).results[0]).toMatchObject({ skipped: "window_unknown" })
+    setShortWindow(database, "account-1", null)
+    database.settings.patchWarmup({ auto: false })
+    expect((await warmup.run({ trigger: "auto" })).results[0]).toMatchObject({ skipped: "auto_disabled" })
+  })
+
+  it("keeps successful turns pending when the window cannot be confirmed", async () => {
+    const { database, warmup, status } = await fixture(1)
+    setShortWindow(database, "account-1", null)
+    const refresh = vi.spyOn(status, "refresh").mockRejectedValue(new Error("offline"))
+    expect((await warmup.run({ trigger: "manual" })).results[0]).toMatchObject({ outcome: "pending" })
+    expect(database.warmupLog.hasPending("account-1")).toBe(true)
+    expect((await warmup.run({ trigger: "auto" })).results[0]).toMatchObject({ skipped: "pending_confirmation" })
+    refresh.mockRestore()
+    await status.refresh("account-1")
+    expect(database.warmupLog.recent()[0].outcome).toBe("warmed")
+  })
+
+  it("preserves safety counts beyond the display cap and recovers interrupted attempts", async () => {
+    const { database } = await fixture(1)
+    const entry = { accountId: "account-1", trigger: "auto" as const, startedAt: Date.now(), outcome: "running" as const,
+      model: null, durationMs: null, errorCode: null, windowBeforeResetsAt: null, windowAfterResetsAt: null }
+    for (let i = 0; i < 210; i++) database.warmupLog.record(entry)
+    expect(database.warmupLog.recent(999)).toHaveLength(200)
+    expect(database.warmupLog.countSince("account-1", 0, "auto")).toBe(210)
+    database.warmupLog.interruptRunning()
+    expect(database.warmupLog.recent()[0]).toMatchObject({ outcome: "failed", errorCode: "gateway_process_interrupted" })
+  })
+
+  it("waits for the current run during close and starts no later account", async () => {
+    const { database, warmup } = await fixture(2)
+    for (const id of ["account-1", "account-2"]) setShortWindow(database, id, null)
+    const running = warmup.run({ trigger: "manual" })
+    await warmup.close()
+    await running
+    expect(warmup.isRunning()).toBe(false)
+    expect(database.warmupLog.countSince("account-2", 0)).toBe(0)
+    await expect(warmup.run({ trigger: "manual" })).rejects.toThrow("warmup_service_closed")
+  })
   it("reads the short window rather than a slot position", () => {
     const soon = Date.now() + 3_600_000
     const account = {
@@ -116,6 +196,7 @@ describe("account warm-up", () => {
     // Reading that as "counting" left a machine that had been off all night —
     // the case the feature exists for — the one case it never fired on.
     database.accounts.updateRateLimits("account-1", {
+      loadedAt: Date.now(),
       primary: { usedPercent: 0, resetsAt: Date.now() + 5 * 3_600_000, windowDurationMins: 300 },
       secondary: { usedPercent: 20, resetsAt: Date.now() + 6 * 86_400_000, windowDurationMins: 10080 },
       credits: null, individualLimit: null, spendControlReached: null,

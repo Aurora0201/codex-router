@@ -7,7 +7,7 @@ type SqliteDatabase = Database.Database;
 export const WARMUP_TRIGGERS = ["manual", "auto"] as const;
 export type WarmupTrigger = (typeof WARMUP_TRIGGERS)[number];
 
-export const WARMUP_OUTCOMES = ["warmed", "skipped", "failed"] as const;
+export const WARMUP_OUTCOMES = ["running", "pending", "warmed", "skipped", "failed"] as const;
 export type WarmupOutcome = (typeof WARMUP_OUTCOMES)[number];
 
 export interface WarmupLogEntry {
@@ -37,11 +37,7 @@ export interface WarmupLogEntry {
  * five-hour window actually start" is.
  */
 export class WarmupLogRepository {
-  /**
-   * Capped, unlike `request_log`, which has no retention at all and grew to
-   * thousands of rows. Warm-ups are rare enough that a few hundred is already
-   * more history than anyone reads.
-   */
+  /** Display cap only. Safety counters must never be pruned by a UI limit. */
   private static readonly KEEP = 200;
 
   constructor(private readonly db: SqliteDatabase) {}
@@ -67,13 +63,40 @@ export class WarmupLogRepository {
         entry.windowBeforeResetsAt,
         entry.windowAfterResetsAt,
       );
-    this.db
-      .prepare(
-        `DELETE FROM account_warmup_log WHERE id NOT IN (
-           SELECT id FROM account_warmup_log ORDER BY started_at DESC, id DESC LIMIT ?)`,
-      )
-      .run(WarmupLogRepository.KEEP);
     return { id, ...entry };
+  }
+
+  finish(id: string, entry: Pick<WarmupLogEntry, "outcome" | "model" | "durationMs" | "errorCode" | "windowAfterResetsAt">): void {
+    this.db.prepare(`UPDATE account_warmup_log SET outcome=?, model=?, duration_ms=?, error_code=?,
+      window_after_resets_at=? WHERE id=? AND outcome='running'`)
+      .run(entry.outcome, entry.model, entry.durationMs, entry.errorCode, entry.windowAfterResetsAt, id);
+  }
+
+  interruptRunning(): void {
+    this.db.prepare(`UPDATE account_warmup_log SET outcome='failed', error_code='gateway_process_interrupted'
+      WHERE outcome='running'`).run();
+  }
+
+  confirmPending(accountId: string, endsAt: number): void {
+    this.db.prepare(`UPDATE account_warmup_log SET outcome='warmed', error_code=NULL, window_after_resets_at=?
+      WHERE account_id=? AND outcome='pending' AND started_at >= ?`)
+      .run(endsAt, accountId, this.resetAt(accountId) ?? 0);
+  }
+
+  noteReset(accountId: string): void {
+    this.db.prepare(`INSERT INTO account_warmup_state(account_id, reset_at) VALUES (?, ?)
+      ON CONFLICT(account_id) DO UPDATE SET reset_at=excluded.reset_at`).run(accountId, Date.now());
+    this.db.prepare(`UPDATE account_warmup_log SET outcome='failed', error_code='window_reset_before_confirmation'
+      WHERE account_id=? AND outcome='pending'`).run(accountId);
+  }
+
+  resetAt(accountId: string): number | null {
+    const row = this.db.prepare("SELECT reset_at FROM account_warmup_state WHERE account_id=?").get(accountId) as { reset_at: number } | undefined;
+    return row?.reset_at ?? null;
+  }
+
+  hasPending(accountId: string): boolean {
+    return !!this.db.prepare("SELECT 1 FROM account_warmup_log WHERE account_id=? AND outcome='pending' LIMIT 1").get(accountId);
   }
 
   recent(limit = 20): WarmupLogEntry[] {

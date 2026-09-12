@@ -9,6 +9,7 @@ import { AccountOperationLock } from "./accounts/account-lock.js";
 import { AccountService } from "./accounts/account-service.js";
 import { AccountLoginService } from "./accounts/account-login-service.js";
 import { AccountWarmupService } from "./accounts/account-warmup-service.js";
+import { WarmupScheduler } from "./accounts/warmup-scheduler.js";
 import { AccountAuthService } from "./accounts/account-auth-service.js";
 import { AccountUsageService } from "./accounts/account-usage-service.js";
 import { AccountStatusService } from "./accounts/account-status-service.js";
@@ -43,16 +44,6 @@ export interface GatewayApp {
 
 export interface GatewayBuildOptions {
   backgroundTasks?: boolean;
-}
-
-function startUsageRefreshScheduler(status: AccountStatusService): NodeJS.Timeout {
-  const refreshAccounts = () => {
-    void status.refreshAll();
-  };
-  refreshAccounts();
-  const timer = setInterval(refreshAccounts, 5 * 60_000);
-  timer.unref();
-  return timer;
 }
 
 async function backfillChatgptAccountIds(database: GatewayDatabase): Promise<void> {
@@ -145,17 +136,17 @@ export async function buildGateway(overrides: Partial<GatewayConfig> = {}, optio
    * refresh is what reveals a lapsed window, and warming one needs the status
    * service to read the new window back.
    */
-  let autoWarm: () => void = () => undefined;
+  let warmupScheduler: WarmupScheduler | undefined;
   // Quota readings only change on a refresh, so that is the moment worth
   // re-deciding on — and a refresh that failed is the moment an account stops
   // being able to serve. The switch itself is the same select() a person
   // clicks.
   const accountStatus = new AccountStatusService(config, database, (accountId, ok) => {
-    events.invalidate("accounts");
+    events.invalidate("accounts", "warmup");
     const account = database.accounts.get(accountId);
     const routable = ok && account?.enabled === true && account.authStatus === "ready";
     reEvaluateRouting(routable ? { kind: "quota" } : { kind: "unavailable", accountId });
-    autoWarm();
+    warmupScheduler?.onStatus(accountId, ok);
   }, accountOperations);
   const warmup = new AccountWarmupService(config, database, accountStatus, () => events.invalidate("warmup"), accountOperations);
   /**
@@ -164,39 +155,18 @@ export async function buildGateway(overrides: Partial<GatewayConfig> = {}, optio
    * otherwise routing could sit on an account the warm-up just pushed under a
    * threshold.
    */
-  const runWarmup = async (options: { trigger: "manual" | "auto"; force?: boolean; accountIds?: string[] }): Promise<void> => {
-    try {
-      const result = await warmup.run(options);
+  warmupScheduler = new WarmupScheduler(database, accountStatus, warmup, (result) => {
+    if (result) {
       const warmed = result.results.filter((entry) => entry.outcome === "warmed").length;
       const failed = result.results.filter((entry) => entry.outcome === "failed").length;
-      app.log.info({ trigger: options.trigger, warmed, failed, total: result.results.length }, "warmup_run_finished");
-    } catch (error) {
-      // A second run asked for while one is going is the caller's answer to
-      // give, not something the gateway should fall over on.
-      if ((error as Error).message !== "warmup_already_running") {
-        app.log.warn({ err: error }, "warmup_run_failed");
-      }
-    } finally {
-      events.invalidate("accounts", "warmup");
-      reEvaluateRouting({ kind: "quota" });
+      app.log.info({ trigger: result.trigger, warmed, failed, total: result.results.length }, "warmup_run_finished");
+    } else {
+      app.log.warn({ diagnosticCode: "warmup_run_failed" }, "warmup_run_failed");
     }
-  };
-  /**
-   * A window that has lapsed is the moment worth warming, and a status refresh
-   * is when that becomes visible — including the first refresh after a logon,
-   * which is the case this exists for: the machine was off all night, so every
-   * five-hour window expired long ago.
-   *
-   * It stays off unless it is turned on. This is the gateway spending the
-   * user's quota without being asked each time, so the guards inside the
-   * service — a per-account cooldown and a daily ceiling counted from the log
-   * — are what keep a wrong decision from becoming an expensive one.
-   */
-  autoWarm = () => {
-    if (!backgroundTasks || !database.settings.warmup().auto) return;
-    if (warmup.isRunning() || warmup.autoTargets().length === 0) return;
-    void runWarmup({ trigger: "auto" });
-  };
+    events.invalidate("accounts", "warmup");
+    reEvaluateRouting({ kind: "quota" });
+  });
+  const runWarmup = (options: { trigger: "manual" | "auto"; force?: boolean; accountIds?: string[] }) => warmupScheduler!.run(options);
   const auth = new AccountAuthService(database, accountStatus);
   const usage = new AccountUsageService(accountStatus, backgroundTasks);
   const proxy = new HttpProxy({
@@ -211,14 +181,14 @@ export async function buildGateway(overrides: Partial<GatewayConfig> = {}, optio
     events.emitActivity({ type: "connection_updated", connectionId });
     events.invalidate("websocketConnections");
   });
-  const rateLimitTimer = backgroundTasks ? startUsageRefreshScheduler(accountStatus) : null;
+  if (backgroundTasks) warmupScheduler.start();
   const codexProcess = new CodexProcessMonitor(() => events.invalidate("codex"));
   if (backgroundTasks) await codexProcess.start();
   database.requestLog.onStarted = (id) => { events.emitActivity({ type: "request_started", id }); events.invalidate("logs"); };
   database.requestLog.onFinished = (id) => { events.emitActivity({ type: "request_finished", id }); events.invalidate("stats", "logs"); };
   database.websocketConnectionLog.onUpdated = (connectionId) => { events.emitActivity({ type: "connection_updated", connectionId }); events.invalidate("logs"); };
 
-  const adminContext = { config, database, accounts, auth, usage, accountStatus, autoSwitch, reEvaluateRouting, warmup, runWarmup, logins, activeAccounts, csrf, startedAt, events, codexProcess, websocketConnections, codexUsage };
+  const adminContext = { config, database, accounts, auth, usage, accountStatus, autoSwitch, reEvaluateRouting, warmup, warmupScheduler, runWarmup, logins, activeAccounts, csrf, startedAt, events, codexProcess, websocketConnections, codexUsage };
   registerLocalStatusRoutes(app, adminContext);
   await registerAdminApi(app, adminContext, codexConfig);
   await registerWebSocketProxy(app, { upstreamBaseUrl: config.upstreamBaseUrl, activeAccounts, auth, usage, database, websocketConnections });
@@ -247,7 +217,10 @@ export async function buildGateway(overrides: Partial<GatewayConfig> = {}, optio
   // Before Fastify begins waiting on connections, not after: an event stream
   // stays open by design and would otherwise hold the shutdown until the CLI
   // gave up on it.
-  app.addHook("preClose", async () => events.endStreams());
+  app.addHook("preClose", async () => {
+    events.endStreams();
+    await warmupScheduler.close();
+  });
 
   let closed = false;
   // Fastify runs onClose only after the server has stopped accepting requests;
@@ -256,7 +229,6 @@ export async function buildGateway(overrides: Partial<GatewayConfig> = {}, optio
   app.addHook("onClose", async () => {
     if (closed) return;
     closed = true;
-    if (rateLimitTimer) clearInterval(rateLimitTimer);
     await accountStatus.close();
     await codexProcess.close();
     await codexUsage.close();

@@ -35,6 +35,7 @@ export class GatewayDatabase {
     this.websocketConnectionLog = new WebSocketConnectionLogRepository(this.raw);
     this.accountSwitchLog = new AccountSwitchLogRepository(this.raw);
     this.warmupLog = new WarmupLogRepository(this.raw);
+    this.warmupLog.interruptRunning();
     this.requestLog.interruptRunning();
     this.activeAccountId = this.readActiveAccountId();
   }

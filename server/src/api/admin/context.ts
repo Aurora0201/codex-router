@@ -8,6 +8,7 @@ import { AccountLoginService } from "../../accounts/account-login-service.js";
 import { ActiveAccountService } from "../../routing/active-account-service.js";
 import type { AutoSwitchService } from "../../routing/auto-switch-service.js";
 import type { AccountWarmupService } from "../../accounts/account-warmup-service.js";
+import type { WarmupScheduler } from "../../accounts/warmup-scheduler.js";
 import type { CsrfGuard } from "../../security/csrf.js";
 import type { AdminEventHub } from "./admin-events.js";
 import type { CodexProcessMonitor } from "../../codex/codex-process.js";
@@ -27,6 +28,7 @@ export interface AdminContext {
   /** Ask the router to look at the pool again, the way a refresh would. */
   reEvaluateRouting(trigger: Parameters<AutoSwitchService["evaluate"]>[0]): void;
   warmup: AccountWarmupService;
+  warmupScheduler: WarmupScheduler;
   /**
    * Start a warm-up pass and see it through, including the reporting the run
    * itself does not do: invalidating the console's view and letting the router
