@@ -9,6 +9,11 @@
 <h1 align="center">@aurora0201/codex-router</h1>
 
 <p align="center">
+  <a href="https://github.com/Aurora0201/codex-router/blob/main/README.md">完整中文文档</a> ·
+  <a href="https://github.com/Aurora0201/codex-router/blob/main/README.en.md">Full English documentation</a>
+</p>
+
+<p align="center">
   面向 Codex CLI 的本机多账号路由器与透明代理。
   <br>
   隔离管理账号，按需开启自动切换与预热，并保留不含数据面正文的结构化请求证据。
